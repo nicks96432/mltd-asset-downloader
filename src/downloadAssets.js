@@ -28,7 +28,9 @@ const downloadAssets = async (assetList, args, i18n) => {
         } catch (e) {}
     for (const assetVersion of downloadList) {
         const outputPath = path.join(args.outputPath, assetVersion);
-        logUpdate(sprintf(i18n.downloadAssets, outputPath));
+        if (args.checksum)
+            logUpdate(sprintf(i18n.checksummingAssets, outputPath));
+        else logUpdate(sprintf(i18n.downloadingAssets, outputPath));
         if (!args.dryRun && !args.checksum)
             try {
                 await fs.mkdir(outputPath, { recursive: true });
@@ -42,10 +44,12 @@ const downloadAssets = async (assetList, args, i18n) => {
         await Promise.map(
             assetList[assetVersion],
             async assetListItem => {
-                let dataURL = `https://d3k5923sb1sy5k.cloudfront.net/${assetVersion}/production/`;
+                let dataURL =
+                    "https://d3k5923sb1sy5k.cloudfront.net/" +
+                    `${assetVersion}/production/`;
                 assetVersion < 70000
-                    ? (dataURL += `2017v1`)
-                    : (dataURL += `2018v1`);
+                    ? (dataURL += "2017v1")
+                    : (dataURL += "2018v1");
                 dataURL += `/Android/${assetListItem.file}`;
                 if (!args.dryRun || args.checksum)
                     try {
@@ -82,8 +86,16 @@ const downloadAssets = async (assetList, args, i18n) => {
             },
             { concurrency: parseInt(args.batchSize, 10) }
         );
+
         bar.stop();
-        logUpdate(sprintf(`${i18n.downloadAssets} ${i18n.done}`, outputPath));
+        if (args.checksum)
+            logUpdate(
+                sprintf(`${i18n.checksummingAssets} ${i18n.done}`, outputPath)
+            );
+        else
+            logUpdate(
+                sprintf(`${i18n.downloadingAssets} ${i18n.done}`, outputPath)
+            );
         logUpdate.done();
     }
 };

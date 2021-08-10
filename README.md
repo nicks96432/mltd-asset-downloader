@@ -41,3 +41,5 @@ yarn build
 ## License
 
 Licensed under [MIT](LICENSE).
+
+The copyright of anything that downloaded from this program belongs to Bandai Namco Entertainment.

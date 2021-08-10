@@ -14,27 +14,30 @@ const getAssetList = async (args, i18n) => {
     let manifestList = [];
     logUpdate(args.latest ? i18n.getLatestManifest : i18n.getManifestList);
     const res = await fetchWithRetry(
-        `https://api.matsurihi.me/mltd/v1/zh/version/${
-            args.latest ? "latest" : "assets"
-        }`
+        "https://api.matsurihi.me/mltd/v1/zh/version/" +
+            `${args.latest ? "latest" : "assets"}`
     );
     if (!args.latest) {
         (await res.json()).forEach(manifest => {
-            let dataURL = `https://d3k5923sb1sy5k.cloudfront.net/${manifest.version}/production/`;
-            manifest.version < 70000
-                ? (dataURL += "2017v1")
-                : (dataURL += "2018v1");
+            let dataURL = "https://d3k5923sb1sy5k.cloudfront.net/";
+            dataURL += `${manifest.version}/production/`;
+            dataURL += manifest.version < 70000 ? "2017v1" : "2018v1";
             dataURL += `/Android/${manifest.indexName}`;
-            manifestList.push({ ...manifest, dataURL });
+            manifestList.push({
+                ...manifest,
+                dataURL
+            });
         });
     } else {
         const manifest = (await res.json()).res;
-        let dataURL = `https://d3k5923sb1sy5k.cloudfront.net/${manifest.version}/production/`;
-        manifest.version < 70000
-            ? (dataURL += "2017v1")
-            : (dataURL += "2018v1");
+        let dataURL = "https://d3k5923sb1sy5k.cloudfront.net/";
+        dataURL += `${manifest.version}/production/`;
+        dataURL += manifest.version < 70000 ? "2017v1" : "2018v1";
         dataURL += `/Android/${manifest.indexName}`;
-        manifestList.push({ ...manifest, dataURL });
+        manifestList.push({
+            ...manifest,
+            dataURL
+        });
     }
     logUpdate(
         `${args.latest ? i18n.getLatestManifest : i18n.getManifestList} ${
@@ -43,7 +46,6 @@ const getAssetList = async (args, i18n) => {
     );
     logUpdate.done();
 
-    logUpdate(i18n.downloadManifest);
     let downloaded;
     if (args.checksum)
         try {
@@ -51,7 +53,7 @@ const getAssetList = async (args, i18n) => {
                 await import("fs/promises")
             ).readdir(args.outputPath);
             manifestList = manifestList.filter(manifest =>
-                downloaded.includes(manifest)
+                downloaded.includes(manifest.version.toString())
             );
         } catch (e) {
             if (e.code === "EACCES") {
@@ -60,12 +62,14 @@ const getAssetList = async (args, i18n) => {
             }
             manifestList = [];
         }
+
+    logUpdate(i18n.downloadingManifest);
     const bar = new SingleBar(
         {
             clearOnComplete: true,
-            format: `${chalk.red(
-                "{bar}"
-            )} {file} (asset {version}) | {value}/{total}`
+            format:
+                chalk.red("{bar}") +
+                " {file} (asset {version}) | {value}/{total}"
         },
         Presets.shades_classic
     );
@@ -97,10 +101,13 @@ const getAssetList = async (args, i18n) => {
                     version: manifest.version
                 });
         },
-        { concurrency: parseInt(args.batchSize, 10) }
+        {
+            concurrency: parseInt(args.batchSize, 10)
+        }
     );
+
     if (!args.latest) bar.stop();
-    logUpdate(`${i18n.downloadManifest} ${i18n.done}`);
+    logUpdate(`${i18n.downloadingManifest} ${i18n.done}`);
     logUpdate.done();
     return assetList;
 };

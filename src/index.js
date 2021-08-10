@@ -27,7 +27,11 @@ const main = async () => {
         .option("--latest", i18n.cliLatest)
         .option("--dry-run", i18n.cliDryRun)
         .option("--checksum", i18n.cliChecksum)
-        .option("-b, --batch-size <size>", i18n.cliBatchSize, os.cpus().length)
+        .option(
+            "-b, --batch-size <size>",
+            i18n.cliBatchSize,
+            os.cpus().length.toString()
+        )
         .option("-o, --output-path <path>", i18n.cliOutputPath, "assets")
         .helpOption("-h, --help", i18n.cliHelp)
         .parse()
