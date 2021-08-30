@@ -5,7 +5,7 @@ import packageInfo from "../package.json";
 import getAssetList from "./getAssetList.js";
 import downloadAssets from "./downloadAssets.js";
 
-const supportLocales = ["en-US", "zh-TW"];
+const supportLocales = ["en-US", "zh-TW", "ko-KR"];
 
 const main = async () => {
     let locale = Intl.DateTimeFormat().resolvedOptions().locale;

@@ -45,7 +45,7 @@ const downloadAssets = async (assetList, args, i18n) => {
             assetList[assetVersion],
             async assetListItem => {
                 let dataURL =
-                    "https://d3k5923sb1sy5k.cloudfront.net/" +
+                    "https://d1jbhqydw6nrn1.cloudfront.net/" +
                     `${assetVersion}/production/`;
                 assetVersion < 70000
                     ? (dataURL += "2017v1")
