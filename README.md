@@ -1,6 +1,6 @@
 # MLTD-asset-downloader
 
-English | [繁體中文](README.zh-TW.md)
+English | [繁體中文](README.zh-TW.md) | [한국어](README.ko-KR.md)
 
 JavaScript based Game asset downloader for THE IDOLM@STER MILLION LIVE! Theater Days (MLTD).
 
