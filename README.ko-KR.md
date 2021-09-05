@@ -1,6 +1,6 @@
 # 밀리시타(한섭)-에셋-다운로더
 
-English | [繁體中文](README.zh-TW.md) | [한국어](README.ko-KR.md)
+[English](README.md) | [繁體中文](README.zh-TW.md) | 한국어
 
 자바스크립트 기반 THE IDOLM@STER MILLION LIVE! Theater Days (MLTD) 게임 에셋 다운로더.
 
