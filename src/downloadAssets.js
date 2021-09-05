@@ -44,12 +44,8 @@ const downloadAssets = async (assetList, args, i18n) => {
         await Promise.map(
             assetList[assetVersion],
             async assetListItem => {
-                let dataURL =
-                    "https://d1jbhqydw6nrn1.cloudfront.net/" +
-                    `${assetVersion}/production/`;
-                assetVersion < 70000
-                    ? (dataURL += "2017v1")
-                    : (dataURL += "2018v1");
+                let dataURL = args.dataURLBase + `${assetVersion}/production/`;
+                dataURL += assetVersion < 70000 ? "2017v1" : "2018v1";
                 dataURL += `/Android/${assetListItem.file}`;
                 if (!args.dryRun || args.checksum)
                     try {

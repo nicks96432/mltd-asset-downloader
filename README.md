@@ -6,8 +6,6 @@ JavaScript based Game asset downloader for THE IDOLM@STER MILLION LIVE! Theater 
 
 ## Usage
 
-sorry for my poor English translation  
-
 ```console
 $ ./mltd-asset-downloader --help
 Usage: mltd-asset-downloader [options]
@@ -20,7 +18,8 @@ Options:
   --dry-run                 don't download to disk. This may be helpful to test your network speed ¯\_(ツ)_/¯
   --checksum                don't download any file and check all downloaded files
   -b, --batch-size <size>   batch size of downloading file, default CPU cores count (default: 8)
-  -o, --output-path <path>  downloaded path (default: "assets")
+  -o, --output-path <path>  downloaded path (default: "./assets")
+  -L, --locale <locale>     the language of the assets to download, supporting Chinese and Korean now (choices: "zh", "ko")
   -h, --help                display this help
 ```
 

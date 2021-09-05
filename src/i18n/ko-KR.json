@@ -8,6 +8,7 @@
     "cliDryRun": "디스크에 다운로드 하지 않습니다. 인터넷 속도 테스트에 도움이 될지도 모르겠네요 ¯\\_(ツ)_/¯",
     "cliHelp": "이 도움말 표시",
     "cliLatest": "모든 대화형 프롬프트를 건너뛰고 바로 최신 에셋을 다운로드 합니다.",
+    "cliLocale": "the language of the assets to download, supporting Chinese and Korean now",
     "cliOutputPath": "다운로드 경로",
     "cliUsage": "[옵션]",
     "cliVersion": "버전 출력",

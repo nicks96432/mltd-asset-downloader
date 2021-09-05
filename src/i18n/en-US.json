@@ -8,6 +8,7 @@
     "cliDryRun": "don't download to disk. This may be helpful to test your network speed ¯\\_(ツ)_/¯",
     "cliHelp": "display this help",
     "cliLatest": "skip all interactive prompts and download latest assets directly",
+    "cliLocale": "the language of the assets to download, supporting Chinese and Korean now",
     "cliOutputPath": "downloaded path",
     "cliUsage": "[options]",
     "cliVersion": "output the version number",

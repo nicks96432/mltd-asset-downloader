@@ -8,6 +8,7 @@
     "cliDryRun": "不要把檔案存到硬碟裡。這個功能可能在測網速的時候有用 ¯\\_(ツ)_/¯",
     "cliHelp": "顯示這個說明",
     "cliLatest": "跳過所有選項並直接下載最新版遊戲資源",
+    "cliLocale": "要下載的資源的語言，目前支援中文及韓文",
     "cliOutputPath": "存檔路徑",
     "cliUsage": "[選項]",
     "cliVersion": "印出版本號",

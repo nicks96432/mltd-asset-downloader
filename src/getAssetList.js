@@ -12,14 +12,18 @@ import {
 
 const getAssetList = async (args, i18n) => {
     let manifestList = [];
+
     logUpdate(args.latest ? i18n.getLatestManifest : i18n.getManifestList);
     const res = await fetchWithRetry(
-        "https://api.matsurihi.me/mltd/v1/ko/version/" +
-            `${args.latest ? "latest" : "assets"}`
+        `https://api.matsurihi.me/mltd/v1/${args.locale}/version/${
+            args.latest ? "latest" : "assets"
+        }`
     );
+    const result = await res.json();
+
     if (!args.latest) {
-        (await res.json()).forEach(manifest => {
-            let dataURL = "https://d1jbhqydw6nrn1.cloudfront.net/";
+        result.forEach(manifest => {
+            let dataURL = args.dataURLBase;
             dataURL += `${manifest.version}/production/`;
             dataURL += manifest.version < 70000 ? "2017v1" : "2018v1";
             dataURL += `/Android/${manifest.indexName}`;
@@ -29,8 +33,8 @@ const getAssetList = async (args, i18n) => {
             });
         });
     } else {
-        const manifest = (await res.json()).res;
-        let dataURL = "https://d1jbhqydw6nrn1.cloudfront.net/";
+        const manifest = result.res;
+        let dataURL = args.dataURLBase;
         dataURL += `${manifest.version}/production/`;
         dataURL += manifest.version < 70000 ? "2017v1" : "2018v1";
         dataURL += `/Android/${manifest.indexName}`;
@@ -40,9 +44,8 @@ const getAssetList = async (args, i18n) => {
         });
     }
     logUpdate(
-        `${args.latest ? i18n.getLatestManifest : i18n.getManifestList} ${
+        (args.latest ? i18n.getLatestManifest : i18n.getManifestList) +
             i18n.done
-        }`
     );
     logUpdate.done();
 
