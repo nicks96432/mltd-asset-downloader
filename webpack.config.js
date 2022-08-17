@@ -1,21 +1,14 @@
 const path = require("path");
 
 module.exports = {
-	target: "node",
-	entry: {
-		index: "./src",
-	},
-	output: {
-		path: path.join(__dirname, "/dist"),
-		filename: "mltd-asset-downloader.js",
-	},
-	module: {
-		rules: [
-			{
-				test: /\.js$/,
-				exclude: /node_modules/,
-			},
-		],
-	},
-	resolve: { extensions: [".js"] },
+  mode: "production",
+  target: "node",
+  entry: { index: "./src/index.js" },
+  output: {
+    path: path.join(__dirname, "/build"),
+    filename: "[name].bundle.js",
+    clean: true,
+  },
+
+  resolve: { extensions: [".js"] },
 };

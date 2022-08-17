@@ -1,8 +1,8 @@
-# MLTD遊戲資源下載器
+# MLTD 遊戲資源下載器
 
 [English](README.md) | 繁體中文 | [한국어](README.ko-KR.md)
 
-使用Javascript製作的偶像大師 百萬人演唱會！ 劇場時光 (MLTD) 遊戲資源下載器
+使用 Javascript 製作的偶像大師 百萬人演唱會！ 劇場時光 (MLTD) 遊戲資源下載器
 
 ## 用法
 
