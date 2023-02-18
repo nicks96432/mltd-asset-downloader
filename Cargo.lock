@@ -327,6 +327,7 @@ dependencies = [
  "env_logger",
  "log",
  "mltd-asset-download",
+ "mltd-asset-extract",
  "mltd-core",
  "rayon",
 ]
@@ -343,6 +344,15 @@ dependencies = [
  "rayon",
  "rmp-serde",
  "ureq",
+]
+
+[[package]]
+name = "mltd-asset-extract"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "num_cpus",
+ "rayon",
 ]
 
 [[package]]

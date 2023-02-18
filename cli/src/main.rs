@@ -1,5 +1,6 @@
 use clap::Parser;
 use mltd_asset_download::*;
+use mltd_asset_extract::*;
 
 #[derive(Parser)]
 #[command(author, version, about, arg_required_else_help(true))]
@@ -16,6 +17,9 @@ struct Cli {
 enum Command {
     /// Download assets from MLTD asset server
     Download(DownloaderArgs),
+
+    /// Extract media from MLTD assets
+    Extract(ExtractorArgs),
 }
 
 fn main() {
@@ -28,5 +32,6 @@ fn main() {
 
     match args.command {
         Command::Download(d) => downloader(&d),
+        Command::Extract(e) => extractor(&e),
     }
 }
