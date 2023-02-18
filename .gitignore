@@ -1,2 +1,5 @@
 /assets
 /target
+**/build
+
+.vscode

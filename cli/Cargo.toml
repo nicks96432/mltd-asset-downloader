@@ -1,0 +1,24 @@
+[package]
+authors.workspace = true
+categories = ["command-line-utilities"]
+description = "A CLI made for assets in THE iDOLM@STER® MILLION LIVE! THEATER DAYS (MLTD)"
+edition.workspace = true
+homepage = "https://github.com/nicks96432/mltd-asset-downloader"
+keywords = ["downloader", "MLTD", "mirishita", "theaterdays", "unpack"]
+license.workspace = true
+name = "mltd"
+readme = "README.md"
+repository.workspace = true
+version = "2.0.0"
+
+[dependencies]
+clap = { workspace = true }
+clap-verbosity-flag = "2.0.0"
+env_logger = { workspace = true }
+log = { workspace = true }
+mltd-asset-download = { path = "../download" }
+mltd-core = { path = "../core" }
+rayon = { workspace = true }
+
+[features]
+debug = ["mltd-asset-download/debug"]

@@ -1,0 +1,27 @@
+[package]
+authors.workspace = true
+description = "Download assets from MLTD asset server"
+edition.workspace = true
+license.workspace = true
+name = "mltd-asset-download"
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+indicatif = { workspace = true }
+log = { workspace = true }
+mltd-core = { path = "../core" }
+num_cpus = { workspace = true }
+rayon = { workspace = true }
+rmp-serde = "1.1.1"
+
+[dependencies.clap]
+features = ["derive"]
+workspace = true
+
+[dependencies.ureq]
+features = ["json", "native-certs"]
+version = "2.6.2"
+
+[features]
+debug = []

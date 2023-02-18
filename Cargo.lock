@@ -319,19 +319,40 @@ dependencies = [
 ]
 
 [[package]]
-name = "mltd-asset-downloader"
-version = "0.1.0"
+name = "mltd"
+version = "2.0.0"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
  "env_logger",
+ "log",
+ "mltd-asset-download",
+ "mltd-core",
+ "rayon",
+]
+
+[[package]]
+name = "mltd-asset-download"
+version = "0.1.0"
+dependencies = [
+ "clap",
  "indicatif",
  "log",
+ "mltd-core",
  "num_cpus",
  "rayon",
  "rmp-serde",
- "serde",
  "ureq",
+]
+
+[[package]]
+name = "mltd-core"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "env_logger",
+ "log",
+ "serde",
 ]
 
 [[package]]

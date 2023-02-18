@@ -1,56 +1,44 @@
-use clap::Parser;
-use mltd_asset_downloader::*;
+mod fetch;
+
+use mltd_core::utils::{create_dir, error_exit};
 use rayon::prelude::{ParallelBridge, ParallelIterator};
+use std::path::PathBuf;
 
-const ASSET_URL_BASE: &'static str = "https://td-assets.bn765.com";
-const MATSURI_URL: &'static str = "https://api.matsurihi.me/api/mltd/v2";
+#[derive(Debug, clap::Args)]
+#[command(author, version, about, arg_required_else_help(true))]
+pub struct DownloaderArgs {
+    /// Keep the manifest file in the output directory
+    #[arg(long, default_value_t = false)]
+    keep_manifest: bool,
 
-const UNITY_VERSION: &'static str = "2020.3.32f1";
+    /// The output path
+    #[arg(short, long, value_name = "DIR", default_value_os_t = [".", "assets"].iter().collect())]
+    output: PathBuf,
 
-fn main() {
-    let args: Args = Args::parse();
-    utils::init_logger(args.verbose.log_level_filter());
+    /// The os variant to download
+    #[arg(value_enum, value_name = "VARIANT")]
+    os_variant: mltd_core::OsVariant,
 
-    log::debug!("setting the number of threads to use");
+    /// The number of threads to use
+    #[arg(short = 'P', long, value_name = "CPUS", default_value_t = num_cpus::get())]
+    parallel: usize,
+}
 
-    let thread_pool_builder = rayon::ThreadPoolBuilder::new().num_threads(args.parallel);
-    if let Err(e) = thread_pool_builder.build_global() {
-        utils::error_exit("cannot set the number of threads to use", Some(&e));
-    }
-
+pub fn downloader(args: &DownloaderArgs) {
     log::debug!("getting version from matsurihi.me");
 
-    let version_url = format!("{}/{}", MATSURI_URL, "version/latest");
-    let version_req = ureq::get(&version_url).query("prettyPrint", "false");
-    utils::trace_request(&version_req);
-
-    let version_res = version_req.call().unwrap_or_else(|e| {
-        utils::error_exit("cannot get the latest version from matsurihi.me", Some(&e))
+    let (manifest_name, manifest_version) = fetch::get_version().unwrap_or_else(|e| {
+        error_exit(
+            "cannot get the latest version from matsurihi.me",
+            Some(e.as_ref()),
+        )
     });
-    log::trace!("");
-    utils::trace_response(&version_res);
-
-    let version_json = version_res
-        .into_json::<ureq::serde_json::Value>()
-        .unwrap_or_else(|e| utils::error_exit("cannot deserialize version json", Some(&e)));
-
-    let manifest_name = version_json["asset"]["indexName"]
-        .as_str()
-        .unwrap_or_else(|| utils::error_exit("cannot parse asset.indexName", None));
-    let manifest_version = version_json["asset"]["version"]
-        .as_u64()
-        .unwrap_or_else(|| utils::error_exit("cannot parse asset.version", None));
 
     log::info!(
         "the latest version is {}, manifest file {}",
         manifest_version,
         manifest_name
     );
-
-    log::debug!("creating output directory");
-
-    #[cfg(not(feature = "debug"))]
-    utils::create_dir(&args.output);
 
     log::debug!("reading manifest from MLTD asset server");
 
@@ -61,25 +49,19 @@ fn main() {
 
     let agent = agent_builder.build();
 
-    let asset_url_base = format!(
-        "{}/{}/production/2018/{}",
-        ASSET_URL_BASE, manifest_version, args.os_variant
-    );
+    let asset_url_base = format!("/{}/production/2018/{}", manifest_version, args.os_variant);
 
     let manifest_url = format!("{}/{}", asset_url_base, manifest_name);
-    let manifest_req = agent
-        .get(&manifest_url)
-        .set("Accept", "*/*")
-        .set("X-Unity-Version", UNITY_VERSION);
-    utils::trace_request(&manifest_req);
+    let manifest_res = fetch::fetch_asset(&agent, &manifest_url)
+        .unwrap_or_else(|e| error_exit("cannot get manifest file from MLTD server", Some(&e)));
 
-    let manifest_res = manifest_req.call().unwrap_or_else(|e| {
-        utils::error_exit("cannot get manifest file from MLTD server", Some(&e))
-    });
-    utils::trace_response(&manifest_res);
+    log::debug!("creating output directory");
 
-    let manifest = rmp_serde::from_read::<_, Manifest>(manifest_res.into_reader())
-        .unwrap_or_else(|e| utils::error_exit("cannot decode manifest", Some(&e)));
+    #[cfg(not(feature = "debug"))]
+    create_dir(&args.output);
+
+    let manifest = rmp_serde::from_read::<_, mltd_core::Manifest>(manifest_res.into_reader())
+        .unwrap_or_else(|e| error_exit("cannot decode manifest", Some(&e)));
 
     let asset_count = manifest[0].len();
     let asset_total_size = manifest[0].iter().map(|entry| entry.1.size).sum();
@@ -95,7 +77,7 @@ fn main() {
     let output_path = args.output.join(manifest_version.to_string());
 
     #[cfg(not(feature = "debug"))]
-    utils::create_dir(&output_path);
+    create_dir(&output_path);
 
     log::debug!("setting progress bar");
 
@@ -140,6 +122,14 @@ fn main() {
     let downloaded_count = std::sync::atomic::AtomicU64::new(0);
     let total_progress_bar = multi_progress
         .add(indicatif::ProgressBar::new(asset_total_size).with_style(total_progress_bar_style));
+
+    log::debug!("setting the number of threads to use");
+
+    let thread_pool_builder = rayon::ThreadPoolBuilder::new().num_threads(args.parallel);
+    if let Err(e) = thread_pool_builder.build_global() {
+        mltd_core::utils::error_exit("cannot set the number of threads to use", Some(&e));
+    }
+
     log::debug!("start downloading assets");
 
     let iter = manifest[0].iter().par_bridge();
@@ -152,21 +142,14 @@ fn main() {
         progress_bar.set_style(progress_bar_style.clone());
         progress_bar.set_message(filename.clone());
 
-        let asset_url = format!("{}/{}", &asset_url_base, entry.filename);
-        let asset_req = agent
-            .get(&asset_url)
-            .set("Accept", "*/*")
-            .set("X-Unity-Version", UNITY_VERSION);
-        utils::trace_request(&asset_req);
-
-        let result = asset_req.call();
-        if let Err(e) = result {
-            multi_progress.suspend(|| log::warn!("cannot download {}: {}", filename, e));
-            return;
-        }
-
-        let asset_res = result.unwrap();
-        utils::trace_response(&asset_res);
+        let asset_url = format!("{}/{}", asset_url_base, entry.filename);
+        let asset_res = match fetch::fetch_asset(&agent, &asset_url) {
+            Ok(res) => res,
+            Err(e) => {
+                multi_progress.suspend(|| log::warn!("cannot download {}: {}", filename, e));
+                return;
+            }
+        };
 
         let asset_path = output_path.join(filename);
 
@@ -175,7 +158,7 @@ fn main() {
 
         #[cfg(not(feature = "debug"))]
         let asset_file = std::fs::File::create(&asset_path)
-            .unwrap_or_else(|e| utils::error_exit("cannot create file", Some(&e)));
+            .unwrap_or_else(|e| error_exit("cannot create file", Some(&e)));
 
         let mut writer = progress_bar.wrap_write(asset_file);
 
@@ -191,7 +174,7 @@ fn main() {
     });
 
     if let Err(e) = multi_progress.clear() {
-        log::error!("cannot clear multi_progress, {}", e);
+        log::warn!("cannot clear multi_progress, {}", e);
     }
 
     log::info!("download complete");
