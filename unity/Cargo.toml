@@ -1,0 +1,35 @@
+[package]
+authors.workspace = true
+description = "Rust bindings for UABE"
+edition.workspace = true
+name = "unity"
+license.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+byteorder = "1.4.3"
+env_logger = { workspace = true }
+log = { workspace = true }
+mltd-core = { path = "../core" }
+
+[dependencies.lz4_flex]
+default-features = false
+features = ["checked-decode"]
+optional = true
+version = "0.10.0"
+
+[dependencies.lzham]
+features = ["static"]
+optional = true
+version = "0.1.1"
+
+[dependencies.xz2]
+optional = true
+version = "0.1.7"
+
+[features]
+default = ["lz4"]
+lz4 = ["dep:lz4_flex"]
+lzma = ["dep:xz2"]
+lzham = ["dep:lzham"]

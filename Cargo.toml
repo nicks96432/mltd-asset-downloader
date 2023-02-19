@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli", "core", "download", "extract"]
+members = ["cli", "core", "download", "extract", "unity"]
 
 [workspace.package]
 authors = ["我可能很廢"]
