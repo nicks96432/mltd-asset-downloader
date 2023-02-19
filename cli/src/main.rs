@@ -1,5 +1,9 @@
 use clap::Parser;
+
+#[cfg(feature = "download")]
 use mltd_asset_download::*;
+
+#[cfg(feature = "extract")]
 use mltd_asset_extract::*;
 
 #[derive(Parser)]
@@ -15,9 +19,11 @@ struct Cli {
 
 #[derive(clap::Subcommand)]
 enum Command {
+    #[cfg(feature = "download")]
     /// Download assets from MLTD asset server
     Download(DownloaderArgs),
 
+    #[cfg(feature = "extract")]
     /// Extract media from MLTD assets
     Extract(ExtractorArgs),
 }
@@ -31,7 +37,10 @@ fn main() {
         .init();
 
     match args.command {
+        #[cfg(feature = "download")]
         Command::Download(d) => downloader(&d),
+
+        #[cfg(feature = "extract")]
         Command::Extract(e) => extractor(&e),
     }
 }
