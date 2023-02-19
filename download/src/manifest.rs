@@ -1,6 +1,9 @@
-pub mod utils;
+use clap::ValueEnum;
+use serde::Deserialize;
+use std::collections::HashMap;
+use std::fmt::{Display, Formatter, Result};
 
-#[derive(Clone, Debug, clap::ValueEnum)]
+#[derive(Clone, Debug, ValueEnum)]
 pub enum OsVariant {
     Android,
     IOS,
@@ -24,8 +27,8 @@ impl OsVariant {
     }
 }
 
-impl std::fmt::Display for OsVariant {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for OsVariant {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{}", self.as_str())
     }
 }
@@ -33,7 +36,7 @@ impl std::fmt::Display for OsVariant {
 /// Type of an entry in the manifest file.
 ///
 /// The order of the members matters because it's deserialized from an array.
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct ManifestEntry {
     /// SHA1 hash of the file.
     pub hash: String,
@@ -45,4 +48,4 @@ pub struct ManifestEntry {
     pub size: u64,
 }
 
-pub type Manifest = [std::collections::HashMap<String, ManifestEntry>; 1];
+pub type Manifest = [HashMap<String, ManifestEntry>; 1];

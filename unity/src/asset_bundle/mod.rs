@@ -143,11 +143,12 @@ impl AssetBundle {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
-    use std::sync::Once;
-
     use crate::error::UnityError;
     use crate::AssetBundle;
+    use mltd_utils::log_formatter;
+    use std::fs::File;
+    use std::io::Cursor;
+    use std::sync::Once;
 
     static INIT: Once = Once::new();
 
@@ -156,7 +157,7 @@ mod tests {
             env_logger::builder()
                 .is_test(true)
                 .filter_module(env!("CARGO_PKG_NAME"), log::LevelFilter::Trace)
-                .format(mltd_core::utils::log_formatter)
+                .format(log_formatter)
                 .init()
         })
     }
@@ -165,7 +166,7 @@ mod tests {
     fn test_from_reader() -> Result<(), UnityError> {
         setup();
 
-        let mut file = std::fs::File::open("/mnt/e/MLTD/assets/875600/001har_name.unity3d")?;
+        let mut file = File::open("/mnt/e/MLTD/assets/875600/001har_name.unity3d")?;
         AssetBundle::from_reader(&mut file)?;
 
         Ok(())
@@ -175,7 +176,7 @@ mod tests {
     fn test_write() -> Result<(), UnityError> {
         setup();
 
-        let mut file = std::fs::File::open("/mnt/e/MLTD/assets/875600/001har_name.unity3d")?;
+        let mut file = File::open("/mnt/e/MLTD/assets/875600/001har_name.unity3d")?;
         let expect = AssetBundle::from_reader(&mut file)?;
 
         let mut buf = Vec::new();

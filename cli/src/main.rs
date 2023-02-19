@@ -1,4 +1,5 @@
 use clap::Parser;
+use mltd_utils::log_formatter;
 
 #[cfg(feature = "download")]
 use mltd_asset_download::*;
@@ -33,7 +34,7 @@ fn main() {
 
     env_logger::Builder::new()
         .filter_module(env!("CARGO_PKG_NAME"), args.verbose.log_level_filter())
-        .format(mltd_core::utils::log_formatter)
+        .format(log_formatter)
         .init();
 
     match args.command {

@@ -1,0 +1,18 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+name = "mltd-utils"
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies.env_logger]
+optional = true
+workspace = true
+
+[dependencies.log]
+workspace = true
+
+[features]
+default = ["log_formatter"]
+log_formatter = ["dep:env_logger"]

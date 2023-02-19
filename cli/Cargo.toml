@@ -16,7 +16,7 @@ clap = { workspace = true }
 clap-verbosity-flag = "2.0.0"
 env_logger = { workspace = true }
 log = { workspace = true }
-mltd-core = { path = "../core" }
+mltd-utils = { path = "../utils" }
 rayon = { workspace = true }
 
 [dependencies.mltd-asset-download]

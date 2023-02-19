@@ -372,7 +372,7 @@ dependencies = [
  "log",
  "mltd-asset-download",
  "mltd-asset-extract",
- "mltd-core",
+ "mltd-utils",
  "rayon",
 ]
 
@@ -383,10 +383,11 @@ dependencies = [
  "clap",
  "indicatif",
  "log",
- "mltd-core",
+ "mltd-utils",
  "num_cpus",
  "rayon",
  "rmp-serde",
+ "serde",
  "ureq",
 ]
 
@@ -400,13 +401,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "mltd-core"
+name = "mltd-utils"
 version = "0.1.0"
 dependencies = [
- "clap",
  "env_logger",
  "log",
- "serde",
 ]
 
 [[package]]
@@ -757,7 +756,7 @@ dependencies = [
  "log",
  "lz4_flex",
  "lzham",
- "mltd-core",
+ "mltd-utils",
  "xz2",
 ]
 

@@ -10,7 +10,6 @@ version = "0.1.0"
 [dependencies]
 indicatif = { workspace = true }
 log = { workspace = true }
-mltd-core = { path = "../core" }
 num_cpus = { workspace = true }
 rayon = { workspace = true }
 rmp-serde = "1.1.1"
@@ -18,6 +17,14 @@ rmp-serde = "1.1.1"
 [dependencies.clap]
 features = ["derive"]
 workspace = true
+
+[dependencies.mltd-utils]
+default_features = false
+path = "../utils"
+
+[dependencies.serde]
+features = ["derive"]
+version = "1.0.152"
 
 [dependencies.ureq]
 features = ["json", "native-certs"]
