@@ -104,6 +104,20 @@ impl AssetBundleHeader {
         Ok(CompressionMethod::try_from(value)?)
     }
 
+    /// Returns whether the bundle file has [`InfoBlock`].
+    ///
+    /// [`InfoBlock`]: crate::InfoBlock
+    pub fn has_info_block(&self) -> bool {
+        self.flags & 0x40 != 0
+    }
+
+    /// Returns whether the [`InfoBlock`] is at the end of this bundle file.
+    ///
+    /// [`InfoBlock`]: crate::InfoBlock
+    pub fn info_block_end(&self) -> bool {
+        self.flags & 0x80 != 0
+    }
+
     pub fn write<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         writer.write_all(&self.signature)?;
         writer.write_u32::<BigEndian>(self.version)?;

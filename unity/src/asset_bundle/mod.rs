@@ -9,7 +9,7 @@ use crate::{
     error::UnityError,
 };
 use std::{
-    io::{Cursor, Read, Seek, Write},
+    io::{Cursor, Read, Seek, SeekFrom, Write},
     mem::size_of,
 };
 
@@ -42,6 +42,7 @@ impl AssetBundle {
     pub fn from_reader<R: Read + Seek>(reader: &mut R) -> Result<Self, UnityError> {
         // asset bundle header
         let header = AssetBundleHeader::from_reader(reader)?;
+        assert!(header.has_info_block());
         log::trace!("header:\n{:#?}", header);
 
         // decompress info block
@@ -59,9 +60,19 @@ impl AssetBundle {
         let compression_method = header.compression_method()?;
         log::trace!("info block compression method: {:?}", compression_method);
 
+        if header.info_block_end() {
+            let offset = -i64::try_from(compressed_size)?;
+            reader.seek(SeekFrom::End(offset))?;
+        }
+
         // info block
         let buf = Decompressor::new(compression_method).decompress(&buf, decompressed_size)?;
         let info_block = InfoBlock::from_reader(&mut Cursor::new(buf))?;
+
+        if header.info_block_end() {
+            let offset = u64::try_from(size_of::<AssetBundleHeader>())?;
+            reader.seek(SeekFrom::Start(offset))?;
+        }
 
         // data block
         let iter = info_block.block_infos.iter();
