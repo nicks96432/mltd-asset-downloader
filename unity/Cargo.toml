@@ -1,6 +1,6 @@
 [package]
 authors.workspace = true
-description = "Rust bindings for UABE"
+description = "A library to parse unity asset bundles"
 edition.workspace = true
 name = "unity"
 license.workspace = true
@@ -11,9 +11,6 @@ version = "0.1.0"
 byteorder = "1.4.3"
 env_logger = { workspace = true }
 log = { workspace = true }
-
-[dev-dependencies]
-mltd-utils = { path = "../utils" }
 
 [dependencies.lz4_flex]
 default-features = false
@@ -29,6 +26,13 @@ version = "0.1.1"
 [dependencies.xz2]
 optional = true
 version = "0.1.7"
+
+[dev-dependencies.ctor]
+version = "0.1.26"
+
+[dev-dependencies.mltd-utils]
+features = ["log", "rand"]
+path = "../utils"
 
 [features]
 default = ["lz4"]

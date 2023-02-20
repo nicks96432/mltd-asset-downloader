@@ -1,9 +1,13 @@
 mod create_dir;
 mod error_exit;
-mod log_formatter;
+mod log;
+mod rand;
 
-pub use create_dir::*;
-pub use error_exit::*;
+pub use self::create_dir::*;
+pub use self::error_exit::*;
 
-#[cfg(feature = "log_formatter")]
-pub use log_formatter::*;
+#[cfg(feature = "log")]
+pub use self::log::*;
+
+#[cfg(feature = "rand")]
+pub use self::rand::*;

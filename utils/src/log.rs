@@ -1,6 +1,9 @@
-#![cfg(feature = "log_formatter")]
+#![cfg(feature = "log")]
 
-use {env_logger::fmt::Formatter, log::Record, std::io::Result, std::io::Write};
+use env_logger::fmt::Formatter;
+use log::Record;
+use std::io::Result;
+use std::io::Write;
 
 pub fn log_formatter(buf: &mut Formatter, record: &Record) -> Result<()> {
     let color_code = match record.level() {
@@ -25,3 +28,16 @@ pub fn log_formatter(buf: &mut Formatter, record: &Record) -> Result<()> {
         color_code, level, space, timestamp, target, body
     )
 }
+
+#[macro_export]
+macro_rules! init_test_logger {
+    () => {
+        let _ = env_logger::builder()
+            .is_test(true)
+            .filter_module(env!("CARGO_PKG_NAME"), log::LevelFilter::Trace)
+            .format(mltd_utils::log_formatter)
+            .try_init();
+    };
+}
+
+pub use init_test_logger;

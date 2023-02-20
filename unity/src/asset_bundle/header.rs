@@ -1,146 +1,121 @@
-use crate::asset_bundle::ReadExact;
-use crate::compression::CompressionMethod;
 use crate::error::UnityError;
+use crate::macros::impl_try_from_into_vec;
+use crate::traits::{ReadExact, UnityIO};
+use crate::{AssetBundleFlags, AssetBundleVersion};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use std::fmt::Debug;
+use std::fmt::Display;
 use std::io::{Read, Seek, Write};
+use std::str::FromStr;
 
-#[repr(C, packed)]
-#[derive(Clone, Copy, PartialEq)]
-pub struct AssetBundleHeader {
-    pub signature: [u8; 8],
-    pub version: u32,
-    pub min_version: [u8; 6],
-    pub build_version: [u8; 12],
-    pub bundle_size: u64,
-    pub compressed_info_block_size: u32,
-    pub decompressed_info_block_size: u32,
-    pub flags: u32,
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AssetBundleSignature {
+    UnityFS,
+    UnityWeb,
+    UnityRaw,
+    UnityArchive,
 }
 
-impl Debug for AssetBundleHeader {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let version = self.version;
-        let bundle_size = self.bundle_size;
-        let compressed_info_block_size = self.compressed_info_block_size;
-        let decompressed_info_block_size = self.decompressed_info_block_size;
-        let flags = self.flags;
+#[derive(Debug, Clone, PartialEq)]
+pub struct AssetBundleHeader {
+    pub signature: AssetBundleSignature,
+    pub version: u32,
+    pub version_player: String,
+    pub version_engine: AssetBundleVersion,
+}
 
-        f.debug_struct("AssetBundleHeader")
-            .field("signature", &String::from_utf8_lossy(&self.signature))
-            .field("version", &version)
-            .field("min_version", &String::from_utf8_lossy(&self.min_version))
-            .field(
-                "build_version",
-                &String::from_utf8_lossy(&self.build_version),
-            )
-            .field("bundle_size", &bundle_size)
-            .field("compressed_info_block_size", &compressed_info_block_size)
-            .field(
-                "decompressed_info_block_size",
-                &decompressed_info_block_size,
-            )
-            .field("flags", &format!("{:08x}", flags))
-            .finish()
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct UnityFSHeader {
+    pub bundle_size: u64,
+    pub compressed_size: u32,
+    pub decompressed_size: u32,
+    pub flags: AssetBundleFlags,
+}
+
+impl FromStr for AssetBundleSignature {
+    type Err = UnityError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "UnityFS" => Ok(Self::UnityFS),
+            "UnityWeb" => Ok(Self::UnityWeb),
+            "UnityRaw" => Ok(Self::UnityRaw),
+            "UnityArchive" => Ok(Self::UnityArchive),
+            _ => Err(UnityError::InvalidSignature),
+        }
     }
 }
 
-impl AssetBundleHeader {
-    const SIGNATURE: &[u8; 8] = b"UnityFS\0";
-
-    /// Reads the struct from `reader`, assuming that the data start
-    /// from current position.
-    ///
-    /// # Errors
-    ///
-    /// This function will return [`UnityError::FileError`] if `reader` is unavailable.
-    ///
-    /// This function will return [`UnityError::InvalidSignature`] if the signature is invalid.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use std::fs::File;
-    /// use unity::AssetBundleHeader;
-    /// use unity::UnityError;
-    ///
-    /// fn main() -> Result<(), UnityError> {
-    ///     let mut file = File::open("bundle.unity3d")?;
-    ///     let header = AssetBundleHeader::from_reader(&mut file)?;
-    ///
-    ///     assert_eq!(header.signature, *b"UnityFS\0");
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
-    pub fn from_reader<R: Read + Seek>(reader: &mut R) -> Result<Self, UnityError> {
-        let signature = reader.read_str::<8>()?;
-        log::trace!("signature: {}", String::from_utf8_lossy(&signature));
-
-        if signature != *Self::SIGNATURE {
-            return Err(UnityError::InvalidSignature);
+impl Display for AssetBundleSignature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnityFS => write!(f, "UnityFS"),
+            Self::UnityWeb => write!(f, "UnityWeb"),
+            Self::UnityRaw => write!(f, "UnityRaw"),
+            Self::UnityArchive => write!(f, "UnityArchive"),
         }
+    }
+}
+
+impl UnityIO for AssetBundleHeader {
+    fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, UnityError> {
+        let signature = reader.read_string()?;
+        log::trace!("signature: {}", signature);
 
         Ok(Self {
-            signature,
+            signature: AssetBundleSignature::from_str(&signature)?,
             version: reader.read_u32::<BigEndian>()?,
-            min_version: reader.read_str::<6>()?,
-            build_version: reader.read_str::<12>()?,
-            bundle_size: reader.read_u64::<BigEndian>()?,
-            compressed_info_block_size: reader.read_u32::<BigEndian>()?,
-            decompressed_info_block_size: reader.read_u32::<BigEndian>()?,
-            flags: reader.read_u32::<BigEndian>()?,
+            version_player: reader.read_string()?,
+            version_engine: AssetBundleVersion::from_str(&reader.read_string()?)?,
         })
     }
 
-    /// Returns the compression method of this [`AssetBundleHeader`].
-    ///
-    /// # Errors
-    ///
-    /// This function will return [`UnityError::UnknownCompressionMethod`] if
-    /// the compression method is unknown.
-    pub fn compression_method(&self) -> Result<CompressionMethod, UnityError> {
-        let value = u32::from(self.flags & 0x3f);
-        Ok(CompressionMethod::try_from(value)?)
-    }
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), UnityError> {
+        writer.write_all(self.signature.to_string().as_bytes())?;
+        writer.write_u8(0)?;
 
-    /// Returns whether the bundle file has [`InfoBlock`].
-    ///
-    /// [`InfoBlock`]: crate::InfoBlock
-    pub fn has_info_block(&self) -> bool {
-        self.flags & 0x40 != 0
-    }
-
-    /// Returns whether the [`InfoBlock`] is at the end of this bundle file.
-    ///
-    /// [`InfoBlock`]: crate::InfoBlock
-    pub fn info_block_end(&self) -> bool {
-        self.flags & 0x80 != 0
-    }
-
-    pub fn write<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        writer.write_all(&self.signature)?;
         writer.write_u32::<BigEndian>(self.version)?;
-        writer.write_all(&self.min_version)?;
-        writer.write_all(&self.build_version)?;
-        writer.write_u64::<BigEndian>(self.bundle_size)?;
-        writer.write_u32::<BigEndian>(self.compressed_info_block_size)?;
-        writer.write_u32::<BigEndian>(self.decompressed_info_block_size)?;
-        writer.write_u32::<BigEndian>(self.flags)?;
+
+        writer.write_all(self.version_player.as_bytes())?;
+        writer.write_u8(0)?;
+
+        writer.write_all(self.version_engine.to_string().as_bytes())?;
+        writer.write_u8(0)?;
 
         Ok(())
     }
+}
+
+impl UnityIO for UnityFSHeader {
+    fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, UnityError> {
+        Ok(Self {
+            bundle_size: reader.read_u64::<BigEndian>()?,
+            compressed_size: reader.read_u32::<BigEndian>()?,
+            decompressed_size: reader.read_u32::<BigEndian>()?,
+            flags: AssetBundleFlags::new(reader.read_u32::<BigEndian>()?),
+        })
+    }
+
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), UnityError> {
+        writer.write_u64::<BigEndian>(self.bundle_size)?;
+        writer.write_u32::<BigEndian>(self.compressed_size)?;
+        writer.write_u32::<BigEndian>(self.decompressed_size)?;
+        writer.write_u32::<BigEndian>(self.flags.bits)?;
+
+        Ok(())
+    }
+}
+
+impl_try_from_into_vec!(AssetBundleHeader);
+impl_try_from_into_vec!(UnityFSHeader);
+
+#[cfg(test)]
+#[ctor::ctor]
+fn init() {
+    mltd_utils::init_test_logger!();
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
     fn test_from_reader() {
-        todo!()
-    }
-
-    #[test]
-    fn test_compression_method() {
-        todo!()
     }
 }

@@ -19,7 +19,7 @@ features = ["derive"]
 workspace = true
 
 [dependencies.mltd-utils]
-default_features = false
+default-features = false
 path = "../utils"
 
 [dependencies.serde]

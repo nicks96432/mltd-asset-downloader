@@ -1,11 +1,11 @@
-use crate::asset_bundle::ReadExact;
 use crate::compression::CompressionMethod;
 use crate::error::UnityError;
+use crate::macros::impl_try_from_into_vec;
+use crate::traits::{ReadExact, UnityIO};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::fmt::Debug;
 use std::io::{Read, Seek, Write};
 
-#[repr(C, packed)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AssetBlockInfo {
     pub decompressed_size: u32,
@@ -13,37 +13,21 @@ pub struct AssetBlockInfo {
     pub flags: u16,
 }
 
-#[repr(C, packed)]
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AssetPathInfo {
     pub offset: u64,
     pub decompressed_size: u64,
     pub flags: u32,
-    pub path: [u8; 37],
+    pub path: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InfoBlock {
-    pub hash: [u8; 16],
+    pub decompressed_hash: [u8; 16],
     pub block_count: u32,
     pub block_infos: Vec<AssetBlockInfo>,
     pub path_count: u32,
     pub path_infos: Vec<AssetPathInfo>,
-}
-
-impl Debug for AssetPathInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let offset = self.offset;
-        let decompressed_size = self.decompressed_size;
-        let flags = self.flags;
-
-        f.debug_struct("AssetPathInfo")
-            .field("offset", &offset)
-            .field("decompressed_size", &decompressed_size)
-            .field("flags", &flags)
-            .field("path", &String::from_utf8_lossy(&self.path))
-            .finish()
-    }
 }
 
 impl AssetBlockInfo {
@@ -53,41 +37,6 @@ impl AssetBlockInfo {
             compressed_size: 0u32,
             flags: 0u16,
         }
-    }
-
-    /// Reads the struct from `reader`, assuming that the data start
-    /// from current position.
-    ///
-    /// # Errors
-    ///
-    /// This function will return [`UnityError::FileError`] if `reader`
-    /// is unavailable.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use std::io::Cursor;
-    /// use unity::AssetBlockInfo;
-    ///
-    /// let mut file = Cursor::new(vec![0u8; 10]);
-    /// let header = AssetBlockInfo::from_reader(&mut file).unwrap();
-    ///
-    /// let decompressed_size = header.decompressed_size;
-    /// assert_eq!(decompressed_size, 0);
-    /// ```
-    pub fn from_reader<R: Read + Seek>(reader: &mut R) -> Result<Self, UnityError> {
-        Ok(Self {
-            decompressed_size: reader.read_u32::<BigEndian>()?,
-            compressed_size: reader.read_u32::<BigEndian>()?,
-            flags: reader.read_u16::<BigEndian>()?,
-        })
-    }
-    pub fn write<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        writer.write_u32::<BigEndian>(self.decompressed_size)?;
-        writer.write_u32::<BigEndian>(self.compressed_size)?;
-        writer.write_u16::<BigEndian>(self.flags)?;
-
-        Ok(())
     }
 
     /// Returns the compression method of the data block of
@@ -103,50 +52,52 @@ impl AssetBlockInfo {
     }
 }
 
+impl UnityIO for AssetBlockInfo {
+    fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, UnityError> {
+        Ok(Self {
+            decompressed_size: reader.read_u32::<BigEndian>()?,
+            compressed_size: reader.read_u32::<BigEndian>()?,
+            flags: reader.read_u16::<BigEndian>()?,
+        })
+    }
+
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), UnityError> {
+        writer.write_u32::<BigEndian>(self.decompressed_size)?;
+        writer.write_u32::<BigEndian>(self.compressed_size)?;
+        writer.write_u16::<BigEndian>(self.flags)?;
+
+        Ok(())
+    }
+}
+
 impl AssetPathInfo {
     pub fn new() -> Self {
         Self {
             offset: 0u64,
             decompressed_size: 0u64,
             flags: 0u32,
-            path: [0u8; 37],
+            path: String::with_capacity(37),
         }
     }
+}
 
-    /// Reads the struct from `reader`, assuming that the data start
-    /// from current position.
-    ///
-    /// # Errors
-    ///
-    /// This function will return [`UnityError::FileError`] if `reader`
-    /// is unavailable.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use std::io::Cursor;
-    /// use unity::AssetPathInfo;
-    ///
-    /// let mut file = Cursor::new(vec![0u8; 57]);
-    /// let header = AssetPathInfo::from_reader(&mut file).unwrap();
-    ///
-    /// let decompressed_size = header.decompressed_size;
-    /// assert_eq!(decompressed_size, 0);
-    /// ```
-    pub fn from_reader<R: Read + Seek>(reader: &mut R) -> Result<Self, UnityError> {
+impl UnityIO for AssetPathInfo {
+    fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, UnityError> {
         Ok(Self {
             offset: reader.read_u64::<BigEndian>()?,
             decompressed_size: reader.read_u64::<BigEndian>()?,
             flags: reader.read_u32::<BigEndian>()?,
-            path: reader.read_str::<37>()?,
+            path: reader.read_string()?,
         })
     }
 
-    pub fn write<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), UnityError> {
         writer.write_u64::<BigEndian>(self.offset)?;
         writer.write_u64::<BigEndian>(self.decompressed_size)?;
         writer.write_u32::<BigEndian>(self.flags)?;
-        writer.write_all(&self.path)?;
+
+        writer.write_all(self.path.as_bytes())?;
+        writer.write_u8(0)?;
 
         Ok(())
     }
@@ -155,44 +106,26 @@ impl AssetPathInfo {
 impl InfoBlock {
     pub fn new() -> Self {
         Self {
-            hash: [0u8; 16],
+            decompressed_hash: [0u8; 16],
             block_count: 1u32,
             block_infos: vec![AssetBlockInfo::new()],
             path_count: 0u32,
             path_infos: Vec::new(),
         }
     }
+}
 
-    /// Reads the struct from `reader`, assuming that the **decompressed** data
-    /// start from current position.
-    ///
-    /// # Errors
-    ///
-    /// This function will return [`UnityError::FileError`] if `reader`
-    /// is unavailable.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use std::io::Cursor;
-    /// use unity::InfoBlock;
-    ///
-    /// let mut file = Cursor::new(vec![0u8; 24]);
-    /// let header = InfoBlock::from_reader(&mut file).unwrap();
-    ///
-    /// let path_count = header.path_count;
-    /// assert_eq!(path_count, 0);
-    /// ```
-    pub fn from_reader<R: Read + Seek>(reader: &mut R) -> Result<Self, UnityError> {
-        let hash = reader.read_str::<16>()?;
-        log::trace!("hash: {:x?}", hash);
+impl UnityIO for InfoBlock {
+    fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, UnityError> {
+        let decompressed_hash = reader.read_exact_bytes::<16>()?;
+        log::trace!("hash: {:?}", decompressed_hash);
 
         let block_count = reader.read_u32::<BigEndian>()?;
         log::trace!("{} asset block info(s)", block_count);
 
-        let mut block_infos = Vec::<AssetBlockInfo>::with_capacity(block_count.try_into()?);
+        let mut block_infos = Vec::<AssetBlockInfo>::with_capacity(usize::try_from(block_count)?);
         for i in 0..block_count {
-            let block_info = AssetBlockInfo::from_reader(reader)?;
+            let block_info = AssetBlockInfo::read(reader)?;
             log::trace!("asset block info {}:\n{:#?}", i, block_info);
             block_infos.push(block_info);
         }
@@ -201,15 +134,15 @@ impl InfoBlock {
         let path_count = reader.read_u32::<BigEndian>()?;
         log::trace!("{} asset path info(s)", path_count);
 
-        let mut path_infos = Vec::<AssetPathInfo>::with_capacity(path_count.try_into()?);
+        let mut path_infos = Vec::<AssetPathInfo>::with_capacity(usize::try_from(path_count)?);
         for i in 0..path_count {
-            let path_info = AssetPathInfo::from_reader(reader)?;
+            let path_info = AssetPathInfo::read(reader)?;
             log::trace!("asset path info {}:\n{:#?}", i, path_info);
             path_infos.push(path_info);
         }
 
         Ok(Self {
-            hash,
+            decompressed_hash,
             block_count,
             block_infos,
             path_count,
@@ -217,11 +150,8 @@ impl InfoBlock {
         })
     }
 
-    pub fn write<W>(&self, writer: &mut W) -> std::io::Result<()>
-    where
-        W: Write,
-    {
-        writer.write_all(&self.hash)?;
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), UnityError> {
+        writer.write_all(&self.decompressed_hash)?;
         writer.write_u32::<BigEndian>(self.block_count)?;
         for block_info in self.block_infos.iter() {
             block_info.write(writer)?;
@@ -235,22 +165,118 @@ impl InfoBlock {
     }
 }
 
+impl_try_from_into_vec!(AssetBlockInfo);
+impl_try_from_into_vec!(AssetPathInfo);
+impl_try_from_into_vec!(InfoBlock);
+
+#[cfg(test)]
+#[ctor::ctor]
+fn init() {
+    mltd_utils::init_test_logger!();
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::UnityError;
+    use crate::traits::ReadExact;
+    use crate::{traits::UnityIO, AssetBlockInfo, UnityError};
+    use crate::{AssetPathInfo, InfoBlock};
+    use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+    use mltd_utils::{rand_ascii_string, rand_bytes, rand_range};
+    use std::io::{copy, Seek, SeekFrom};
+    use std::mem::size_of;
 
     #[test]
-    fn test_asset_block_info() -> Result<(), UnityError> {
-        todo!()
+    fn test_asset_block_info_read() -> Result<(), UnityError> {
+        const SIZE: usize = size_of::<AssetBlockInfo>();
+        let mut reader = rand_bytes(SIZE);
+        let got = AssetBlockInfo::read(&mut reader)?;
+        reader.set_position(0);
+
+        assert_eq!(reader.read_u32::<BigEndian>()?, got.decompressed_size);
+        assert_eq!(reader.read_u32::<BigEndian>()?, got.compressed_size);
+        assert_eq!(reader.read_u16::<BigEndian>()?, got.flags);
+
+        Ok(())
     }
 
     #[test]
-    fn test_asset_path_info() -> Result<(), UnityError> {
-        todo!()
+    fn test_asset_path_info_read() -> Result<(), UnityError> {
+        const SIZE: usize = size_of::<AssetPathInfo>() - size_of::<String>();
+        let mut reader = rand_bytes(SIZE);
+        reader.seek(SeekFrom::End(0))?;
+        copy(&mut rand_ascii_string(40), &mut reader)?;
+        reader.set_position(0);
+
+        let got = AssetPathInfo::read(&mut reader)?;
+        reader.set_position(0);
+
+        assert_eq!(got.offset, reader.read_u64::<BigEndian>()?);
+        assert_eq!(got.decompressed_size, reader.read_u64::<BigEndian>()?);
+        assert_eq!(got.flags, reader.read_u32::<BigEndian>()?);
+        assert_eq!(got.path, reader.read_string()?);
+
+        Ok(())
     }
 
     #[test]
-    fn test_info_block() -> Result<(), UnityError> {
-        todo!()
+    fn test_info_block_read() -> Result<(), UnityError> {
+        let mut reader = rand_bytes(16); // uncompressed hash
+        reader.set_position(16);
+
+        let block_count = rand_range(1u32..5u32);
+        reader.write_u32::<BigEndian>(block_count)?;
+
+        let mut block_infos = Vec::new();
+        for _ in 0..block_count {
+            const SIZE: usize = size_of::<AssetBlockInfo>();
+            let mut buf = rand_bytes(SIZE);
+
+            block_infos.push(AssetBlockInfo::read(&mut buf)?);
+            buf.set_position(0);
+
+            copy(&mut buf, &mut reader)?;
+
+            assert_eq!(buf.into_inner().len(), SIZE);
+        }
+
+        let expected = u64::try_from(size_of::<AssetBlockInfo>())? * u64::from(block_count);
+        assert_eq!(reader.position(), expected + 16);
+
+        let path_count = rand_range(2u32..10u32);
+        reader.write_u32::<BigEndian>(path_count)?;
+
+        let mut path_infos = Vec::new();
+        for _ in 0..path_count {
+            const SIZE: usize = size_of::<AssetPathInfo>() - size_of::<String>();
+            let mut buf = rand_bytes(SIZE);
+            buf.set_position(u64::try_from(SIZE)?);
+
+            let mut path = rand_ascii_string(rand_range(30..40));
+            copy(&mut path, &mut buf)?;
+            buf.set_position(0);
+
+            path_infos.push(AssetPathInfo::read(&mut buf)?);
+            buf.set_position(0);
+
+            copy(&mut buf, &mut reader)?;
+
+            assert_eq!(buf.into_inner().len(), SIZE + path.into_inner().len());
+        }
+        reader.set_position(0);
+
+        let got = InfoBlock::read(&mut reader)?;
+        reader.set_position(0);
+
+        assert_eq!(got.decompressed_hash, reader.read_exact_bytes::<16>()?);
+        assert_eq!(got.block_count, block_count);
+        for i in 0..usize::try_from(block_count)? {
+            assert_eq!(got.block_infos[i], block_infos[i]);
+        }
+        assert_eq!(got.path_count, path_count);
+        for i in 0..usize::try_from(path_count)? {
+            assert_eq!(got.path_infos[i], path_infos[i]);
+        }
+
+        Ok(())
     }
 }
