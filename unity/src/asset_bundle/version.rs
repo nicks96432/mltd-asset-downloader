@@ -70,3 +70,17 @@ impl AssetBundleVersion {
             || (self.major == 2020 && self >= &AssetBundleVersion::from_str("2020.3.34f1").unwrap())
     }
 }
+
+#[cfg(test)]
+#[ctor::ctor]
+fn init() {
+    mltd_utils::init_test_logger!();
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_asset_bundle_version_read() {
+        todo!()
+    }
+}

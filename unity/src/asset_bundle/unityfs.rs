@@ -155,30 +155,38 @@ fn init() {
 
 #[cfg(test)]
 mod tests {
-    use crate::error::UnityError;
     use crate::traits::UnityIO;
     use crate::UnityFSBundle;
     use std::fs::File;
     use std::io::Cursor;
+    use std::path::Path;
 
     #[test]
-    fn test_read() -> Result<(), UnityError> {
-        let mut file = File::open("/mnt/e/MLTD/assets/875600/001har_name.unity3d")?;
-        UnityFSBundle::read(&mut file)?;
-
-        Ok(())
+    fn test_read() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("test.unity3d");
+        let mut file = File::open(path).unwrap();
+        UnityFSBundle::read(&mut file).unwrap();
     }
 
     #[test]
-    fn test_write() -> Result<(), UnityError> {
-        let mut file = File::open("/mnt/e/MLTD/assets/875600/001har_name.unity3d")?;
-        let expect = UnityFSBundle::read(&mut file)?;
+    fn test_write() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("test.unity3d");
+        let mut file = File::open(path).unwrap();
+        let expect = UnityFSBundle::read(&mut file).unwrap();
 
         let mut buf = Vec::new();
-        expect.write(&mut buf)?;
-        log::trace!("before: {}, after: {}", file.metadata()?.len(), buf.len());
+        expect.write(&mut buf).unwrap();
+        log::trace!(
+            "before: {}, after: {}",
+            file.metadata().unwrap().len(),
+            buf.len()
+        );
 
-        let got = UnityFSBundle::read(&mut Cursor::new(&buf))?;
+        let got = UnityFSBundle::read(&mut Cursor::new(&buf)).unwrap();
 
         assert_eq!(expect.bundle_header, got.bundle_header);
 
@@ -212,7 +220,5 @@ mod tests {
         );
 
         assert_eq!(expect.data, got.data);
-
-        Ok(())
     }
 }
