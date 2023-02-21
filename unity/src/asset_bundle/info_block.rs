@@ -31,6 +31,8 @@ pub struct InfoBlock {
 }
 
 impl AssetBlockInfo {
+    pub const BASE_SIZE: usize = 10;
+
     pub fn new() -> Self {
         Self {
             decompressed_size: 0u32,
@@ -71,12 +73,14 @@ impl UnityIO for AssetBlockInfo {
 }
 
 impl AssetPathInfo {
+    pub const BASE_SIZE: usize = 20;
+
     pub fn new() -> Self {
         Self {
             offset: 0u64,
             decompressed_size: 0u64,
             flags: 0u32,
-            path: String::with_capacity(37),
+            path: String::new(),
         }
     }
 }
@@ -178,105 +182,107 @@ fn init() {
 #[cfg(test)]
 mod tests {
     use crate::traits::ReadExact;
-    use crate::{traits::UnityIO, AssetBlockInfo, UnityError};
+    use crate::{traits::UnityIO, AssetBlockInfo};
     use crate::{AssetPathInfo, InfoBlock};
     use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
     use mltd_utils::{rand_ascii_string, rand_bytes, rand_range};
     use std::io::{copy, Seek, SeekFrom};
-    use std::mem::size_of;
 
     #[test]
-    fn test_asset_block_info_read() -> Result<(), UnityError> {
-        const SIZE: usize = size_of::<AssetBlockInfo>();
+    fn test_asset_block_info_read() {
+        const SIZE: usize = AssetBlockInfo::BASE_SIZE;
         let mut reader = rand_bytes(SIZE);
-        let got = AssetBlockInfo::read(&mut reader)?;
+        let got = AssetBlockInfo::read(&mut reader).unwrap();
         reader.set_position(0);
 
-        assert_eq!(reader.read_u32::<BigEndian>()?, got.decompressed_size);
-        assert_eq!(reader.read_u32::<BigEndian>()?, got.compressed_size);
-        assert_eq!(reader.read_u16::<BigEndian>()?, got.flags);
-
-        Ok(())
+        assert_eq!(
+            reader.read_u32::<BigEndian>().unwrap(),
+            got.decompressed_size
+        );
+        assert_eq!(reader.read_u32::<BigEndian>().unwrap(), got.compressed_size);
+        assert_eq!(reader.read_u16::<BigEndian>().unwrap(), got.flags);
     }
 
     #[test]
-    fn test_asset_path_info_read() -> Result<(), UnityError> {
-        const SIZE: usize = size_of::<AssetPathInfo>() - size_of::<String>();
+    fn test_asset_path_info_read() {
+        const SIZE: usize = AssetPathInfo::BASE_SIZE;
         let mut reader = rand_bytes(SIZE);
-        reader.seek(SeekFrom::End(0))?;
-        copy(&mut rand_ascii_string(40), &mut reader)?;
+        reader.seek(SeekFrom::End(0)).unwrap();
+        copy(&mut rand_ascii_string(40), &mut reader).unwrap();
         reader.set_position(0);
 
-        let got = AssetPathInfo::read(&mut reader)?;
+        let got = AssetPathInfo::read(&mut reader).unwrap();
         reader.set_position(0);
 
-        assert_eq!(got.offset, reader.read_u64::<BigEndian>()?);
-        assert_eq!(got.decompressed_size, reader.read_u64::<BigEndian>()?);
-        assert_eq!(got.flags, reader.read_u32::<BigEndian>()?);
-        assert_eq!(got.path, reader.read_string()?);
-
-        Ok(())
+        assert_eq!(got.offset, reader.read_u64::<BigEndian>().unwrap());
+        assert_eq!(
+            got.decompressed_size,
+            reader.read_u64::<BigEndian>().unwrap()
+        );
+        assert_eq!(got.flags, reader.read_u32::<BigEndian>().unwrap());
+        assert_eq!(got.path, reader.read_string().unwrap());
     }
 
     #[test]
-    fn test_info_block_read() -> Result<(), UnityError> {
+    fn test_info_block_read() {
         let mut reader = rand_bytes(16); // uncompressed hash
         reader.set_position(16);
 
         let block_count = rand_range(1u32..5u32);
-        reader.write_u32::<BigEndian>(block_count)?;
+        reader.write_u32::<BigEndian>(block_count).unwrap();
 
         let mut block_infos = Vec::new();
         for _ in 0..block_count {
-            const SIZE: usize = size_of::<AssetBlockInfo>();
+            const SIZE: usize = AssetBlockInfo::BASE_SIZE;
             let mut buf = rand_bytes(SIZE);
 
-            block_infos.push(AssetBlockInfo::read(&mut buf)?);
+            block_infos.push(AssetBlockInfo::read(&mut buf).unwrap());
             buf.set_position(0);
 
-            copy(&mut buf, &mut reader)?;
+            copy(&mut buf, &mut reader).unwrap();
 
             assert_eq!(buf.into_inner().len(), SIZE);
         }
 
-        let expected = u64::try_from(size_of::<AssetBlockInfo>())? * u64::from(block_count);
-        assert_eq!(reader.position(), expected + 16);
+        let expected = u64::try_from(AssetBlockInfo::BASE_SIZE).unwrap() * u64::from(block_count);
+        assert_eq!(reader.position(), expected + 20);
 
         let path_count = rand_range(2u32..10u32);
-        reader.write_u32::<BigEndian>(path_count)?;
+        reader.write_u32::<BigEndian>(path_count).unwrap();
 
         let mut path_infos = Vec::new();
         for _ in 0..path_count {
-            const SIZE: usize = size_of::<AssetPathInfo>() - size_of::<String>();
+            const SIZE: usize = AssetPathInfo::BASE_SIZE;
             let mut buf = rand_bytes(SIZE);
-            buf.set_position(u64::try_from(SIZE)?);
+            buf.set_position(u64::try_from(SIZE).unwrap());
 
             let mut path = rand_ascii_string(rand_range(30..40));
-            copy(&mut path, &mut buf)?;
+            copy(&mut path, &mut buf).unwrap();
             buf.set_position(0);
 
-            path_infos.push(AssetPathInfo::read(&mut buf)?);
+            path_infos.push(AssetPathInfo::read(&mut buf).unwrap());
             buf.set_position(0);
 
-            copy(&mut buf, &mut reader)?;
+            copy(&mut buf, &mut reader).unwrap();
 
             assert_eq!(buf.into_inner().len(), SIZE + path.into_inner().len());
         }
         reader.set_position(0);
 
-        let got = InfoBlock::read(&mut reader)?;
+        let got = InfoBlock::read(&mut reader).unwrap();
         reader.set_position(0);
 
-        assert_eq!(got.decompressed_hash, reader.read_exact_bytes::<16>()?);
+        assert_eq!(
+            got.decompressed_hash,
+            reader.read_exact_bytes::<16>().unwrap()
+        );
         assert_eq!(got.block_count, block_count);
-        for i in 0..usize::try_from(block_count)? {
+        for i in 0..usize::try_from(block_count).unwrap() {
             assert_eq!(got.block_infos[i], block_infos[i]);
         }
         assert_eq!(got.path_count, path_count);
-        for i in 0..usize::try_from(path_count)? {
+        for i in 0..usize::try_from(path_count).unwrap() {
             assert_eq!(got.path_infos[i], path_infos[i]);
         }
-
-        Ok(())
     }
 }
