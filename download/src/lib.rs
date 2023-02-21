@@ -1,17 +1,16 @@
 mod fetch;
 mod manifest;
 
+use self::manifest::*;
 use crate::fetch::{fetch_asset, get_manifest_version};
-use indicatif::{
-    BinaryBytes, MultiProgress, MultiProgressAlignment, ProgressBar, ProgressFinish, ProgressStyle,
-};
-use manifest::*;
+use indicatif::{BinaryBytes, ProgressBar, ProgressFinish, ProgressStyle};
+use indicatif::{MultiProgress, MultiProgressAlignment};
 use mltd_utils::{create_dir, error_exit};
 use rayon::current_thread_index;
 use rayon::prelude::{ParallelBridge, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 use std::fs::File;
-use std::io::copy;
+use std::io::{copy, Cursor};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use ureq::AgentBuilder;
@@ -21,15 +20,19 @@ use ureq::AgentBuilder;
 pub struct DownloaderArgs {
     /// Keep the manifest file in the output directory
     #[arg(long, default_value_t = false)]
-    keep_manifest: bool,
+    manifest: bool,
 
-    /// The output path
-    #[arg(short, long, value_name = "DIR", default_value_os_t = [".", "assets"].iter().collect())]
-    output: PathBuf,
+    /// Download the manifest file only, don't download any assets
+    #[arg(long, default_value_t = false)]
+    manifest_only: bool,
 
     /// The os variant to download
     #[arg(value_enum, value_name = "VARIANT")]
     os_variant: OsVariant,
+
+    /// The output path
+    #[arg(short, long, value_name = "DIR", default_value_os_t = [".", "assets"].iter().collect())]
+    output: PathBuf,
 
     /// The number of threads to use
     #[arg(short = 'P', long, value_name = "CPUS", default_value_t = num_cpus::get())]
@@ -72,7 +75,13 @@ pub fn downloader(args: &DownloaderArgs) {
     #[cfg(not(feature = "debug"))]
     create_dir(&args.output);
 
-    let manifest = rmp_serde::from_read::<_, Manifest>(manifest_res.into_reader())
+    let mut buf = Vec::new();
+    copy(&mut manifest_res.into_reader(), &mut buf)
+        .unwrap_or_else(|e| error_exit("cnnoot read response to buf", Some(&e)));
+    let buf = buf;
+    let mut reader = Cursor::new(buf);
+
+    let manifest = rmp_serde::from_read::<_, Manifest>(&mut reader.clone())
         .unwrap_or_else(|e| error_exit("cannot decode manifest", Some(&e)));
 
     let asset_count = manifest[0].len();
@@ -90,6 +99,19 @@ pub fn downloader(args: &DownloaderArgs) {
 
     #[cfg(not(feature = "debug"))]
     create_dir(&output_path);
+
+    if args.manifest || args.manifest_only {
+        log::debug!("create manifest file");
+        let mut file = File::create(output_path.join(manifest_name))
+            .unwrap_or_else(|e| error_exit("cannot create file", Some(&e)));
+        copy(&mut reader, &mut file)
+            .unwrap_or_else(|e| error_exit("cannot write manifest to file", Some(&e)));
+    }
+
+    if args.manifest_only {
+        log::info!("download complete");
+        return;
+    }
 
     log::debug!("setting progress bar");
 
