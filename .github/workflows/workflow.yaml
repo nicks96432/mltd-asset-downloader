@@ -94,12 +94,12 @@ jobs:
         if: 'contains("windows", ${{ runner.os }})'
         uses: actions/upload-artifact@v3
         with:
-          name: mltd-${{ steps.vars.hash.hash }}-windows
+          name: mltd-${{ steps.hash.outputs.hash }}-windows
           path: target/release/mltd.exe
 
       - name: Publish artifacts
         if: '!contains("windows", ${{ runner.os }})'
         uses: actions/upload-artifact@v3
         with:
-          name: mltd-${{ steps.vars.hash.hash }}-${{ runner.os }}
+          name: mltd-${{ steps.hash.outputs.hash }}-${{ runner.os }}
           path: target/release/mltd
