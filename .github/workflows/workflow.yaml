@@ -6,10 +6,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check out
+        uses: actions/checkout@v3
+
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          components: clippy
+          components: rustfmt, clippy
           override: true
           profile: minimal
           toolchain: nightly
@@ -25,9 +28,6 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Check out
-        uses: actions/checkout@v3
 
       - name: Lint
         run: |
@@ -60,10 +60,12 @@ jobs:
         os: [macos-latest, ubuntu-latest, windows-latest]
 
     steps:
+      - name: Check out
+        uses: actions/checkout@v3
+
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          components: clippy
           override: true
           profile: minimal
           toolchain: stable
@@ -80,15 +82,24 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Check out
-        uses: actions/checkout@v3
-
       - name: Build
         run: |
           cargo build --release
 
+      - name: Get git commit hash
+        id: hash
+        run: echo "hash=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
       - name: Publish artifacts
+        if: 'contains("windows", ${{ runner.os }})'
         uses: actions/upload-artifact@v3
         with:
-          name: mltd
-          path: target/release/mltd*
+          name: mltd-${{ steps.vars.hash.hash }}-windows
+          path: target/release/mltd.exe
+
+      - name: Publish artifacts
+        if: '!contains("windows", ${{ runner.os }})'
+        uses: actions/upload-artifact@v3
+        with:
+          name: mltd-${{ steps.vars.hash.hash }}-${{ runner.os }}
+          path: target/release/mltd
