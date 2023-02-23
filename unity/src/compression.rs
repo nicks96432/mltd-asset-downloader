@@ -3,10 +3,10 @@ use crate::{error::CompressionError, UnityError};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CompressionMethod {
     None = 0,
-    LZMA,
-    LZ4,
-    LZ4HC,
-    LZHAM,
+    Lzma,
+    Lz4,
+    Lz4hc,
+    Lzham,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -25,10 +25,10 @@ impl TryFrom<u32> for CompressionMethod {
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(CompressionMethod::None),
-            1 => Ok(CompressionMethod::LZMA),
-            2 => Ok(CompressionMethod::LZ4),
-            3 => Ok(CompressionMethod::LZ4HC),
-            4 => Ok(CompressionMethod::LZHAM),
+            1 => Ok(CompressionMethod::Lzma),
+            2 => Ok(CompressionMethod::Lz4),
+            3 => Ok(CompressionMethod::Lz4hc),
+            4 => Ok(CompressionMethod::Lzham),
             _ => Err(UnityError::UnknownCompressionMethod),
         }
     }
@@ -44,14 +44,14 @@ impl Compressor {
             CompressionMethod::None => Ok(Vec::from(buf)),
 
             #[cfg(feature = "lz4")]
-            CompressionMethod::LZ4 | CompressionMethod::LZ4HC => {
+            CompressionMethod::Lz4 | CompressionMethod::Lz4hc => {
                 use lz4_flex::compress;
 
                 Ok(compress(buf))
             }
 
             #[cfg(feature = "lzma")]
-            CompressionMethod::LZMA => {
+            CompressionMethod::Lzma => {
                 use std::io::Read;
                 use xz2::read::XzEncoder;
 
@@ -65,7 +65,7 @@ impl Compressor {
             }
 
             #[cfg(feature = "lzham")]
-            CompressionMethod::LZHAM => {
+            CompressionMethod::Lzham => {
                 use lzham::compress;
                 use std::io::{BufReader, Cursor};
 
@@ -97,14 +97,14 @@ impl Decompressor {
             CompressionMethod::None => Ok(Vec::from(buf)),
 
             #[cfg(feature = "lz4")]
-            CompressionMethod::LZ4 | CompressionMethod::LZ4HC => {
+            CompressionMethod::Lz4 | CompressionMethod::Lz4hc => {
                 use lz4_flex::decompress;
 
                 Ok(decompress(buf, output_size)?)
             }
 
             #[cfg(feature = "lzma")]
-            CompressionMethod::LZMA => {
+            CompressionMethod::Lzma => {
                 use std::io::Read;
                 use xz2::read::XzDecoder;
 
@@ -118,7 +118,7 @@ impl Decompressor {
             }
 
             #[cfg(feature = "lzham")]
-            CompressionMethod::LZHAM => {
+            CompressionMethod::Lzham => {
                 use lzham::decompress;
                 use std::io::{BufReader, Cursor};
 
@@ -169,24 +169,24 @@ mod tests {
     #[cfg(feature = "lz4")]
     #[test]
     fn test_lz4() -> Result<(), UnityError> {
-        test_compress(CompressionMethod::LZ4)
+        test_compress(CompressionMethod::Lz4)
     }
 
     #[cfg(feature = "lz4")]
     #[test]
     fn test_lz4hc() -> Result<(), UnityError> {
-        test_compress(CompressionMethod::LZ4HC)
+        test_compress(CompressionMethod::Lz4hc)
     }
 
     #[cfg(feature = "lzma")]
     #[test]
     fn test_lzma() -> Result<(), UnityError> {
-        test_compress(CompressionMethod::LZMA)
+        test_compress(CompressionMethod::Lzma)
     }
 
     #[cfg(feature = "lzham")]
     #[test]
     fn test_lzham() -> Result<(), UnityError> {
-        test_compress(CompressionMethod::LZHAM)
+        test_compress(CompressionMethod::Lzham)
     }
 }

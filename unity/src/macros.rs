@@ -1,3 +1,13 @@
+macro_rules! impl_default {
+    ($type:ident) => {
+        impl Default for $type {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+    };
+}
+
 macro_rules! impl_from_file_error {
     ($type:ident) => {
         impl From<$type> for crate::UnityError {
@@ -8,7 +18,7 @@ macro_rules! impl_from_file_error {
     };
 }
 
-macro_rules! impl_from {
+macro_rules! impl_from_for_error {
     ($type:ident) => {
         impl From<$type> for crate::UnityError {
             fn from(value: $type) -> Self {
@@ -41,6 +51,7 @@ macro_rules! impl_try_from_into_vec {
     };
 }
 
-pub(crate) use impl_from;
+pub(crate) use impl_default;
 pub(crate) use impl_from_file_error;
+pub(crate) use impl_from_for_error;
 pub(crate) use impl_try_from_into_vec;

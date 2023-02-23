@@ -12,6 +12,7 @@ log = { workspace = true }
 rmp-serde = "1.1.1"
 serde = { workspace = true }
 serde_tuple = "0.5.0"
+ureq = { workspace = true }
 
 [dependencies.clap]
 features = ["derive"]
@@ -28,11 +29,6 @@ version = "1.0.93"
 [dependencies.serde_yaml]
 version = "0.9.17"
 optional = true
-
-[dependencies.ureq]
-default-features = false
-features = ["json"]
-workspace = true
 
 [dev-dependencies]
 ctor = { workspace = true }

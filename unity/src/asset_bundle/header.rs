@@ -1,5 +1,5 @@
 use crate::error::UnityError;
-use crate::macros::impl_try_from_into_vec;
+use crate::macros::{impl_default, impl_try_from_into_vec};
 use crate::traits::{ReadExact, UnityIO};
 use crate::{AssetBundleFlags, AssetBundleVersion};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
@@ -116,6 +116,8 @@ impl UnityIO for UnityFSHeader {
         Ok(())
     }
 }
+
+impl_default!(UnityFSHeader);
 
 impl_try_from_into_vec!(AssetBundleHeader);
 impl_try_from_into_vec!(UnityFSHeader);
