@@ -7,6 +7,9 @@ use mltd_asset_download::*;
 #[cfg(feature = "extract")]
 use mltd_asset_extract::*;
 
+#[cfg(feature = "manifest")]
+use mltd_asset_manifest::*;
+
 #[derive(Parser)]
 #[command(author, version, about, arg_required_else_help(true))]
 #[command(propagate_version = true)]
@@ -27,6 +30,9 @@ enum Command {
     #[cfg(feature = "extract")]
     /// Extract media from MLTD assets
     Extract(ExtractorArgs),
+
+    #[cfg(feature = "manifest")]
+    Manifest(ManifestArgs),
 }
 
 fn main() {
@@ -39,9 +45,20 @@ fn main() {
 
     match args.command {
         #[cfg(feature = "download")]
-        Command::Download(d) => downloader(&d),
+        Command::Download(d) => {
+            if let Err(e) = download_assets(&d) {
+                log::error!("asset download failed: {}", e);
+            }
+        }
 
         #[cfg(feature = "extract")]
-        Command::Extract(e) => extractor(&e),
+        Command::Extract(e) => extract_media(&e),
+
+        #[cfg(feature = "manifest")]
+        Command::Manifest(m) => {
+            if let Err(e) = download_manifest(&m) {
+                log::error!("manifest download failed: {}", e)
+            }
+        }
     }
 }

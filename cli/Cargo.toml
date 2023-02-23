@@ -9,7 +9,7 @@ license.workspace = true
 name = "mltd"
 readme = "README.md"
 repository.workspace = true
-version = "2.0.0"
+version = "2.0.0-beta"
 
 [dependencies]
 clap = { workspace = true }
@@ -27,8 +27,13 @@ path = "../download"
 optional = true
 path = "../extract"
 
+[dependencies.mltd-asset-manifest]
+optional = true
+path = "../manifest"
+
 [features]
-default = ["download", "extract"]
+default = ["download", "extract", "manifest"]
 download = ["mltd-asset-download"]
 debug = ["download", "mltd-asset-download/debug"]
 extract = ["dep:mltd-asset-extract"]
+manifest = ["dep:mltd-asset-manifest"]

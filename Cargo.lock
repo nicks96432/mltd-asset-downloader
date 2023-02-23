@@ -252,6 +252,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashbrown"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
+
+[[package]]
 name = "heck"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -280,6 +286,16 @@ checksum = "e14ddfc70884202db2244c223200c204c2bda1bc6e0998d11b5e024d657209e6"
 dependencies = [
  "unicode-bidi",
  "unicode-normalization",
+]
+
+[[package]]
+name = "indexmap"
+version = "1.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1885e79c1fc4b10f0e172c475f458b7f7b93061064d98c3293e98c5ba0c8b399"
+dependencies = [
+ "autocfg",
+ "hashbrown",
 ]
 
 [[package]]
@@ -385,7 +401,7 @@ dependencies = [
 
 [[package]]
 name = "mltd"
-version = "2.0.0"
+version = "2.0.0-beta"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -393,6 +409,7 @@ dependencies = [
  "log",
  "mltd-asset-download",
  "mltd-asset-extract",
+ "mltd-asset-manifest",
  "mltd-utils",
  "rayon",
 ]
@@ -404,10 +421,10 @@ dependencies = [
  "clap",
  "indicatif",
  "log",
+ "mltd-asset-manifest",
  "mltd-utils",
  "num_cpus",
  "rayon",
- "rmp-serde",
  "serde",
  "ureq",
 ]
@@ -422,6 +439,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "mltd-asset-manifest"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "ctor",
+ "env_logger",
+ "log",
+ "mltd-utils",
+ "rmp-serde",
+ "serde",
+ "serde_json",
+ "serde_tuple",
+ "serde_yaml",
+ "ureq",
+]
+
+[[package]]
 name = "mltd-utils"
 version = "0.1.0"
 dependencies = [
@@ -429,6 +463,7 @@ dependencies = [
  "log",
  "rand",
  "rand_xoshiro",
+ "ureq",
 ]
 
 [[package]]
@@ -763,6 +798,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_tuple"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4f025b91216f15a2a32aa39669329a475733590a015835d1783549a56d09427"
+dependencies = [
+ "serde",
+ "serde_tuple_macros",
+]
+
+[[package]]
+name = "serde_tuple_macros"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4076151d1a2b688e25aaf236997933c66e18b870d0369f8b248b8ab2be630d7e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "serde_yaml"
+version = "0.9.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fb06d4b6cdaef0e0c51fa881acb721bed3c924cfaa71d9c94a3b771dfdf6567"
+dependencies = [
+ "indexmap",
+ "itoa",
+ "ryu",
+ "serde",
+ "unsafe-libyaml",
+]
+
+[[package]]
 name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -828,6 +897,12 @@ dependencies = [
  "mltd-utils",
  "xz2",
 ]
+
+[[package]]
+name = "unsafe-libyaml"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc7ed8ba44ca06be78ea1ad2c3682a43349126c8818054231ee6f4748012aed2"
 
 [[package]]
 name = "untrusted"

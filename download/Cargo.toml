@@ -12,23 +12,26 @@ indicatif = { workspace = true }
 log = { workspace = true }
 num_cpus = { workspace = true }
 rayon = { workspace = true }
-rmp-serde = "1.1.1"
 
 [dependencies.clap]
 features = ["derive"]
 workspace = true
 
+[dependencies.mltd-asset-manifest]
+path = "../manifest"
+
 [dependencies.mltd-utils]
 default-features = false
+features = ["request"]
 path = "../utils"
 
 [dependencies.serde]
 features = ["derive"]
-version = "1.0.152"
+workspace = true
 
 [dependencies.ureq]
 features = ["json", "native-certs"]
-version = "2.6.2"
+workspace = true
 
 [features]
 debug = []
