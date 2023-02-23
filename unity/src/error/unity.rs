@@ -1,5 +1,5 @@
-use crate::macros::impl_from;
 use crate::macros::impl_from_file_error;
+use crate::macros::impl_from_for_error;
 use crate::{CompressionError, FileError};
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result};
@@ -36,5 +36,5 @@ impl_from_file_error!(IOError);
 impl_from_file_error!(Utf8Error);
 impl_from_file_error!(CompressionError);
 
-impl_from!(TryFromIntError);
-impl_from!(ParseIntError);
+impl_from_for_error!(TryFromIntError);
+impl_from_for_error!(ParseIntError);

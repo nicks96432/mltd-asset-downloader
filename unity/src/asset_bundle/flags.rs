@@ -27,8 +27,8 @@ impl AssetBundleFlags {
     /// This function will return [`UnityError::UnknownCompressionMethod`] if
     /// the compression method is unknown.
     pub fn compression_method(&self) -> Result<CompressionMethod, UnityError> {
-        let value = u32::from(self.bits & 0x3f);
-        Ok(CompressionMethod::try_from(value)?)
+        let value = self.bits & 0x3f;
+        CompressionMethod::try_from(value)
     }
 
     /// Returns whether the block info and asset info in

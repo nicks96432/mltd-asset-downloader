@@ -92,7 +92,7 @@ pub fn download_assets(args: &DownloaderArgs) -> Result<(), DownloadError> {
     log::debug!("setting the number of threads to use");
 
     let thread_pool_builder = ThreadPoolBuilder::new().num_threads(args.parallel);
-    if let Err(_) = thread_pool_builder.build_global() {
+    if thread_pool_builder.build_global().is_err() {
         return Err(DownloadError::ThreadPoolError);
     }
 

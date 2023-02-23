@@ -123,7 +123,7 @@ impl UnityIO for UnityFSBundle {
         let compressed_info_block = compressor.compress(&buf)?;
 
         // modify header according to the sized of compressed size
-        let mut unityfs_header = self.unityfs_header.clone();
+        let mut unityfs_header = self.unityfs_header;
         let compressed_len = u32::try_from(compressed_info_block.len())?;
         let decompressed_len = u32::try_from(buf.len())?;
         unityfs_header.compressed_size = compressed_len;

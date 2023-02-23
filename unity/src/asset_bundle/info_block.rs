@@ -1,6 +1,6 @@
 use crate::compression::CompressionMethod;
 use crate::error::UnityError;
-use crate::macros::impl_try_from_into_vec;
+use crate::macros::{impl_default, impl_try_from_into_vec};
 use crate::traits::{ReadExact, UnityIO};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::fmt::Debug;
@@ -50,7 +50,7 @@ impl AssetBlockInfo {
     /// the compression method is unknown.
     pub fn compression_method(&self) -> Result<CompressionMethod, UnityError> {
         let value = u32::from(self.flags & 0x3f);
-        Ok(CompressionMethod::try_from(value)?)
+        CompressionMethod::try_from(value)
     }
 }
 
@@ -168,6 +168,10 @@ impl UnityIO for InfoBlock {
         Ok(())
     }
 }
+
+impl_default!(AssetBlockInfo);
+impl_default!(AssetPathInfo);
+impl_default!(InfoBlock);
 
 impl_try_from_into_vec!(AssetBlockInfo);
 impl_try_from_into_vec!(AssetPathInfo);
