@@ -1,0 +1,76 @@
+name: Build
+
+on:
+  push:
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build project
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          override: true
+          profile: minimal
+          toolchain: stable
+
+      - name: Set up cargo cache
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: |
+          cargo build --release
+
+      - name: Get git commit hash (Windows)
+        if: ${{ contains('Windows', runner.os) }}
+        id: hash
+        run: echo "hash=$("${{ github.sha }}".SubString(0, 10))" >> $env:GITHUB_OUTPUT
+
+      - name: Get git commit hash
+        if: ${{ !contains('Windows', runner.os) }}
+        id: hash
+        run: echo "hash=${GITHUB_SHA:0:10}" >> $GITHUB_OUTPUT
+
+      - name: Rename artifact (Windows)
+        if: ${{ contains('Windows', runner.os) }}
+        run: mv target/release/mltd.exe mltd-git-${{ steps.hash.outputs.hash }}-Windows.exe
+
+      - name: Rename artifact
+        if: ${{ !contains('Windows', runner.os) }}
+        run: mv target/release/mltdmltd-git-${{ steps.hash.outputs.hash }}-Windows
+
+      - name: Publish artifact (Windows)
+        if: ${{ contains('Windows', runner.os) }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: mltd-git-${{ steps.hash.outputs.hash }}-Windows.exe
+          path: mltd-git-${{ steps.hash.outputs.hash }}-Windows.exe
+
+      - name: Publish artifact
+        if: ${{ !contains('Windows', runner.os) }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: mltd-git-${{ steps.hash.outputs.hash }}-${{ runner.os }}
+          path: mltd-git-${{ steps.hash.outputs.hash }}-${{ runner.os }}
