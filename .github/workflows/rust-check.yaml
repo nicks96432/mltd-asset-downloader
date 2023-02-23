@@ -1,13 +1,5 @@
-name: Check
-
 on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
-
-env:
-  CARGO_TERM_COLOR: always
+  workflow_call:
 
 jobs:
   check:
@@ -27,7 +19,7 @@ jobs:
           components: rustfmt, clippy
           override: true
           profile: minimal
-          toolchain: stable
+          toolchain: nightly
 
       - name: Set up cargo cache
         uses: actions/cache@v3
