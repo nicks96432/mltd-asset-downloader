@@ -114,7 +114,7 @@ impl UnityIO for UnityFSBundle {
             let data = compressor.compress(&self.data[cur..end])?;
             block_info.compressed_size = u32::try_from(data.len())?;
             data_buf.push(data);
-            cur += end;
+            cur = end;
         }
 
         // compress info block
@@ -201,22 +201,40 @@ mod tests {
             got.info_block.decompressed_hash
         );
         assert_eq!(expect.info_block.block_count, got.info_block.block_count);
-        assert_eq!(expect.info_block.block_count, 1);
+        assert_eq!(expect.info_block.block_count, 3);
+
         assert_eq!(
             expect.info_block.block_infos[0].decompressed_size,
             got.info_block.block_infos[0].decompressed_size
         );
-        assert!(expect.info_block.block_infos[0].flags == got.info_block.block_infos[0].flags);
+        assert_eq!(
+            expect.info_block.block_infos[0].flags,
+            got.info_block.block_infos[0].flags
+        );
+
+        assert_eq!(
+            expect.info_block.block_infos[1].decompressed_size,
+            got.info_block.block_infos[1].decompressed_size
+        );
+        assert_eq!(
+            expect.info_block.block_infos[1].flags,
+            got.info_block.block_infos[1].flags
+        );
+
+        assert_eq!(
+            expect.info_block.block_infos[2].decompressed_size,
+            got.info_block.block_infos[2].decompressed_size
+        );
+        assert_eq!(
+            expect.info_block.block_infos[2].flags,
+            got.info_block.block_infos[2].flags
+        );
 
         assert_eq!(expect.info_block.path_count, got.info_block.path_count);
-        assert_eq!(expect.info_block.path_count, 2);
+        assert_eq!(expect.info_block.path_count, 1);
         assert_eq!(
             expect.info_block.path_infos[0],
             got.info_block.path_infos[0]
-        );
-        assert_eq!(
-            expect.info_block.path_infos[1],
-            got.info_block.path_infos[1]
         );
 
         assert_eq!(expect.data, got.data);
