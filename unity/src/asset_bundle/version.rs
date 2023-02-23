@@ -58,10 +58,10 @@ impl AssetBundleVersion {
     /// use std::str::FromStr;
     /// use unity::AssetBundleVersion;
     ///
-    /// assert!(AssetBundleVersion::from_str("2020.3.34f1").unwrap().is_new())
-    /// assert!(AssetBundleVersion::from_str("2021.3.2f1").unwrap().is_new())
-    /// assert!(AssetBundleVersion::from_str("2022.1.1f1").unwrap().is_new())
-    /// assert!(AssetBundleVersion::from_str("2023.1.0a4").unwrap().is_new())
+    /// assert!(AssetBundleVersion::from_str("2020.3.34f1").unwrap().is_new());
+    /// assert!(AssetBundleVersion::from_str("2021.3.2f1").unwrap().is_new());
+    /// assert!(AssetBundleVersion::from_str("2022.1.1f1").unwrap().is_new());
+    /// assert!(AssetBundleVersion::from_str("2023.1.0a4").unwrap().is_new());
     /// ```
     pub fn is_new(&self) -> bool {
         self.major >= 2023
@@ -79,8 +79,33 @@ fn init() {
 
 #[cfg(test)]
 mod tests {
+    use mltd_utils::{rand_ascii_string, rand_range};
+
+    use super::AssetBundleVersion;
+    use std::str::FromStr;
+
     #[test]
-    fn test_asset_bundle_version_read() {
-        todo!()
+    fn test_from_str() {
+        let version = format!(
+            "{}.{}.{}{}{}",
+            rand_range(0..5000),
+            rand_range(0..5000),
+            rand_range(0..5000),
+            rand_ascii_string(1).into_inner()[0],
+            rand_range(0..5000),
+        );
+        AssetBundleVersion::from_str(&version).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_invalid() {
+        let version = format!(
+            "{}a.{}.{}",
+            String::from_utf8_lossy(&rand_ascii_string(5).into_inner()),
+            String::from_utf8_lossy(&rand_ascii_string(5).into_inner()),
+            String::from_utf8_lossy(&rand_ascii_string(5).into_inner()),
+        );
+        AssetBundleVersion::from_str(&version).unwrap();
     }
 }

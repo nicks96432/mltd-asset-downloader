@@ -4,7 +4,7 @@ use std::io::Result as IOResult;
 use std::io::{Read, Seek, SeekFrom, Write};
 
 /// Extends [`Read`] with methods for reading exact number of bytes.
-pub trait ReadExact: Read {
+pub(crate) trait ReadExact: Read {
     /// Read the exact number of bytes.
     ///
     /// # Errors
@@ -45,7 +45,7 @@ impl<R: Read> ReadExact for R {
 }
 
 /// Extends [`Seek`] with methods for reading exact number of bytes.
-pub trait SeekAlign: Seek {
+pub(crate) trait SeekAlign: Seek {
     /// Seeks to alignment.
     ///
     /// # Errors
@@ -68,7 +68,7 @@ pub trait SeekAlign: Seek {
 
 impl<R: Seek> SeekAlign for R {}
 
-pub(crate) trait UnityIO: Sized {
+pub trait UnityIO: Sized {
     /// Reads the struct from `reader`, assuming that the data start
     /// from current position.
     ///
@@ -81,10 +81,10 @@ pub(crate) trait UnityIO: Sized {
     ///
     /// ```no_run
     /// use std::io::Cursor;
-    /// use unity::AssetBlockInfo;
+    /// use unity::{AssetBlockInfo, UnityIO};
     ///
     /// let mut file = Cursor::new(vec![0u8; 10]);
-    /// let header = AssetBlockInfo::from_reader(&mut file).unwrap();
+    /// let header = AssetBlockInfo::read(&mut file).unwrap();
     ///
     /// let decompressed_size = header.decompressed_size;
     /// assert_eq!(decompressed_size, 0);

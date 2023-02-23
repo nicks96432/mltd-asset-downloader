@@ -162,31 +162,31 @@ mod tests {
     }
 
     #[test]
-    fn test_none() -> Result<(), UnityError> {
-        test_compress(CompressionMethod::None)
+    fn test_none() {
+        test_compress(CompressionMethod::None).unwrap();
     }
 
     #[cfg(feature = "lz4")]
     #[test]
-    fn test_lz4() -> Result<(), UnityError> {
-        test_compress(CompressionMethod::Lz4)
+    fn test_lz4() {
+        test_compress(CompressionMethod::Lz4).unwrap();
     }
 
     #[cfg(feature = "lz4")]
     #[test]
-    fn test_lz4hc() -> Result<(), UnityError> {
-        test_compress(CompressionMethod::Lz4hc)
+    fn test_lz4hc() {
+        test_compress(CompressionMethod::Lz4hc).unwrap();
     }
 
     #[cfg(feature = "lzma")]
     #[test]
-    fn test_lzma() -> Result<(), UnityError> {
-        test_compress(CompressionMethod::Lzma)
+    fn test_lzma() {
+        test_compress(CompressionMethod::Lzma).unwrap();
     }
 
     #[cfg(feature = "lzham")]
     #[test]
-    fn test_lzham() -> Result<(), UnityError> {
-        test_compress(CompressionMethod::Lzham)
+    fn test_lzham() {
+        test_compress(CompressionMethod::Lzham).unwrap();
     }
 }
