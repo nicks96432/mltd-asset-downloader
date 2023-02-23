@@ -27,6 +27,7 @@ jobs:
           components: rustfmt, clippy
           override: true
           profile: minimal
+          toolchain: stable
 
       - name: Set up cargo cache
         uses: actions/cache@v3
