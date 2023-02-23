@@ -9,7 +9,7 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          components: rustfmt, clippy
+          components: clippy
           override: true
           profile: minimal
           toolchain: nightly
@@ -63,7 +63,7 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          components: rustfmt, clippy
+          components: clippy
           override: true
           profile: minimal
           toolchain: stable
@@ -88,7 +88,7 @@ jobs:
           cargo build --release
 
       - name: Publish artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/upload-artifact@v3
         with:
           name: mltd
-          path: ./target/release/mltd*
+          path: target/release/mltd*
