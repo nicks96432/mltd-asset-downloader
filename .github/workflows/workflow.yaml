@@ -91,14 +91,14 @@ jobs:
         run: echo "hash=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Publish artifacts
-        if: 'contains("Windows", runner.os)'
+        if: ${{ contains("Windows", runner.os) }}
         uses: actions/upload-artifact@v3
         with:
           name: mltd-${{ steps.hash.outputs.hash }}-Windows
           path: target/release/mltd.exe
 
       - name: Publish artifacts
-        if: '!contains("Windows", runner.os)'
+        if: ${{ !contains("Windows", runner.os) }}
         uses: actions/upload-artifact@v3
         with:
           name: mltd-${{ steps.hash.outputs.hash }}-${{ runner.os }}
