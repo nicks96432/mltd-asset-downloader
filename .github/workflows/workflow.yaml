@@ -52,6 +52,7 @@ jobs:
         run: cargo test
 
   build:
+    name: Build project
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -65,7 +66,7 @@ jobs:
           components: rustfmt, clippy
           override: true
           profile: minimal
-          toolchain: nightly
+          toolchain: stable
 
       - name: Set up cargo cache
         uses: actions/cache@v3
@@ -86,8 +87,8 @@ jobs:
         run: |
           cargo build --release
 
-      - name: Build artifacts
+      - name: Publish artifacts
         uses: actions/download-artifact@v3
         with:
           name: mltd
-          path: target/release/mltd
+          path: ./target/release/mltd*
