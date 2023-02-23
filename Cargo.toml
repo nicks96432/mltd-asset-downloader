@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli", "download", "extract", "unity", "utils"]
+members = ["cli", "download", "extract", "manifest", "unity", "utils"]
 
 [workspace.package]
 authors = ["我可能很廢"]
@@ -8,9 +8,12 @@ license = "MIT"
 repository = "https://github.com/nicks96432/mltd-asset-downloader"
 
 [workspace.dependencies]
+ctor = "0.1.26"
 log = "0.4.17"
 num_cpus = "1.15.0"
 rayon = "1.6.1"
+serde = "1.0.152"
+ureq = "2.6.2"
 
 [workspace.dependencies.clap]
 default-features = false
