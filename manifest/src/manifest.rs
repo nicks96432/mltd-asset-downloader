@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_tuple::Deserialize_tuple as DeserializeTuple;
 use serde_tuple::Serialize_tuple as SerializeTuple;
-use std::collections::HashMap;
+use linked_hash_map::LinkedHashMap;
 use std::io::{copy, Cursor};
 use ureq::AgentBuilder;
 
@@ -24,7 +24,7 @@ pub struct ManifestEntry {
     pub size: u64,
 }
 
-type RawManifest = [HashMap<String, ManifestEntry>; 1];
+type RawManifest = [LinkedHashMap<String, ManifestEntry>; 1];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(from = "RawManifest", into = "RawManifest")]
@@ -41,7 +41,7 @@ pub struct Manifest {
 impl Manifest {
     pub fn new() -> Self {
         Self {
-            data: [HashMap::new(); 1],
+            data: [LinkedHashMap::new(); 1],
             name: String::new(),
             version: 0u64,
         }
