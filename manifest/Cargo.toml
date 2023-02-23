@@ -1,0 +1,44 @@
+[package]
+authors.workspace = true
+description = "Download asset manifest from MLTD asset server"
+edition.workspace = true
+license.workspace = true
+name = "mltd-asset-manifest"
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+log = { workspace = true }
+rmp-serde = "1.1.1"
+serde = { workspace = true }
+serde_tuple = "0.5.0"
+
+[dependencies.clap]
+features = ["derive"]
+workspace = true
+
+[dependencies.mltd-utils]
+features = ["log", "request"]
+path = "../utils"
+
+[dependencies.serde_json]
+optional = true
+version = "1.0.93"
+
+[dependencies.serde_yaml]
+version = "0.9.17"
+optional = true
+
+[dependencies.ureq]
+default-features = false
+features = ["json"]
+workspace = true
+
+[dev-dependencies]
+ctor = { workspace = true }
+env_logger = { workspace = true }
+
+[features]
+default = ["json", "yaml"]
+json = ["dep:serde_json"]
+yaml = ["dep:serde_yaml"]

@@ -3,7 +3,6 @@ use std::path::PathBuf;
 #[derive(Debug, clap::Args)]
 #[command(author, version, about)]
 pub struct ExtractorArgs {
-    
     /// The output path
     #[arg(short, long, value_name = "DIR", default_value_os_t = [".", "output"].iter().collect())]
     output: PathBuf,
@@ -13,6 +12,6 @@ pub struct ExtractorArgs {
     parallel: usize,
 }
 
-pub fn extractor(_args: &ExtractorArgs) {
+pub fn extract_media(_args: &ExtractorArgs) {
     todo!()
 }

@@ -1,37 +1,29 @@
-mod fetch;
-mod manifest;
+mod error;
 
-use self::manifest::*;
-use crate::fetch::{fetch_asset, get_manifest_version};
-use indicatif::{BinaryBytes, ProgressBar, ProgressFinish, ProgressStyle};
+pub use self::error::*;
+
 use indicatif::{MultiProgress, MultiProgressAlignment};
-use mltd_utils::{create_dir, error_exit};
+use indicatif::{ProgressBar, ProgressFinish, ProgressStyle};
+use mltd_asset_manifest::{Manifest, OsVariant};
+use mltd_utils::fetch_asset;
 use rayon::current_thread_index;
 use rayon::prelude::{ParallelBridge, ParallelIterator};
 use rayon::ThreadPoolBuilder;
-use std::fs::File;
-use std::io::{copy, Cursor};
-use std::path::PathBuf;
+use std::fs::{create_dir_all, File};
+use std::io::copy;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use ureq::AgentBuilder;
 
 #[derive(Debug, clap::Args)]
 #[command(author, version, about, arg_required_else_help(true))]
 pub struct DownloaderArgs {
-    /// Keep the manifest file in the output directory
-    #[arg(long, default_value_t = false)]
-    manifest: bool,
-
-    /// Download the manifest file only, don't download any assets
-    #[arg(long, default_value_t = false)]
-    manifest_only: bool,
-
     /// The os variant to download
     #[arg(value_enum, value_name = "VARIANT")]
     os_variant: OsVariant,
 
     /// The output path
-    #[arg(short, long, value_name = "DIR", default_value_os_t = [".", "assets"].iter().collect())]
+    #[arg(short, long, value_name = "DIR", default_value_os_t = Path::new("assets").to_path_buf())]
     output: PathBuf,
 
     /// The number of threads to use
@@ -39,78 +31,26 @@ pub struct DownloaderArgs {
     parallel: usize,
 }
 
-pub fn downloader(args: &DownloaderArgs) {
-    log::debug!("getting version from matsurihi.me");
+pub fn download_assets(args: &DownloaderArgs) -> Result<(), DownloadError> {
+    log::debug!("getting manifest");
+    let manifest = match Manifest::download(&args.os_variant) {
+        Ok(m) => m,
+        Err(e) => return Err(DownloadError::ManifestError(e)), // TODO: add DownloadError
+    };
 
-    let (manifest_name, manifest_version) = get_manifest_version().unwrap_or_else(|e| {
-        error_exit(
-            "cannot get the latest version from matsurihi.me",
-            Some(e.as_ref()),
-        )
-    });
-
-    log::info!(
-        "the latest version is {}, manifest file {}",
-        manifest_version,
-        manifest_name
-    );
-
-    log::debug!("reading manifest from MLTD asset server");
-
-    let agent_builder = AgentBuilder::new()
-        .https_only(true)
-        .max_idle_connections_per_host(args.parallel)
-        .user_agent(args.os_variant.user_agent());
-
-    let agent = agent_builder.build();
-
-    let asset_url_base = format!("/{}/production/2018/{}", manifest_version, args.os_variant);
-
-    let manifest_url = format!("{}/{}", asset_url_base, manifest_name);
-    let manifest_res = fetch_asset(&agent, &manifest_url)
-        .unwrap_or_else(|e| error_exit("cannot get manifest file from MLTD server", Some(&e)));
-
-    log::debug!("creating output directory");
+    let output_path = args.output.join(manifest.version.to_string());
 
     #[cfg(not(feature = "debug"))]
-    create_dir(&args.output);
+    {
+        log::debug!("creating output directory");
+        if let Err(e) = create_dir_all(&args.output) {
+            return Err(DownloadError::FileCreateFailed(e));
+        }
 
-    let mut buf = Vec::new();
-    copy(&mut manifest_res.into_reader(), &mut buf)
-        .unwrap_or_else(|e| error_exit("cnnoot read response to buf", Some(&e)));
-    let buf = buf;
-    let mut reader = Cursor::new(buf);
-
-    let manifest = rmp_serde::from_read::<_, Manifest>(&mut reader.clone())
-        .unwrap_or_else(|e| error_exit("cannot decode manifest", Some(&e)));
-
-    let asset_count = manifest[0].len();
-    let asset_total_size = manifest[0].iter().map(|entry| entry.1.size).sum();
-
-    log::info!(
-        "manifest information: {} assets, {}",
-        asset_count,
-        BinaryBytes(asset_total_size)
-    );
-
-    log::debug!("creating asset directory");
-
-    let output_path = args.output.join(manifest_version.to_string());
-
-    #[cfg(not(feature = "debug"))]
-    create_dir(&output_path);
-
-    if args.manifest || args.manifest_only {
-        log::debug!("create manifest file");
-        let mut file = File::create(output_path.join(manifest_name))
-            .unwrap_or_else(|e| error_exit("cannot create file", Some(&e)));
-        copy(&mut reader, &mut file)
-            .unwrap_or_else(|e| error_exit("cannot write manifest to file", Some(&e)));
-    }
-
-    if args.manifest_only {
-        log::info!("download complete");
-        return;
+        log::debug!("creating asset directory");
+        if let Err(e) = create_dir_all(&output_path) {
+            return Err(DownloadError::FileCreateFailed(e));
+        }
     }
 
     log::debug!("setting progress bar");
@@ -143,30 +83,29 @@ pub fn downloader(args: &DownloaderArgs) {
         progress_bars.push(progress_bar);
     }
 
-    let total_progress_bar_style = match ProgressStyle::with_template(template) {
-        Ok(style) => style,
-        Err(_) => {
-            log::debug!("invalid progress bar template, using default style");
-
-            ProgressStyle::default_bar()
-        }
-    }
-    .progress_chars("##-");
-
     let downloaded_count = AtomicU64::new(0);
-    let total_progress_bar =
-        multi_progress.add(ProgressBar::new(asset_total_size).with_style(total_progress_bar_style));
+    let total_progress_bar = multi_progress.add(
+        ProgressBar::new(u64::try_from(manifest.len()).unwrap())
+            .with_style(progress_bar_style.clone()),
+    );
 
     log::debug!("setting the number of threads to use");
 
     let thread_pool_builder = ThreadPoolBuilder::new().num_threads(args.parallel);
-    if let Err(e) = thread_pool_builder.build_global() {
-        error_exit("cannot set the number of threads to use", Some(&e));
+    if let Err(_) = thread_pool_builder.build_global() {
+        return Err(DownloadError::ThreadPoolError);
     }
 
-    log::debug!("start downloading assets");
+    log::debug!("building request agent");
+    let agent_builder = AgentBuilder::new()
+        .https_only(true)
+        .user_agent(args.os_variant.user_agent());
+    let agent = agent_builder.build();
 
-    let iter = manifest[0].iter().par_bridge();
+    log::debug!("start downloading assets");
+    let asset_url_base = format!("/{}/production/2018/{}", manifest.version, args.os_variant);
+    let iter = manifest.data[0].iter().par_bridge();
+
     iter.for_each(|(filename, entry)| {
         let tid = current_thread_index().unwrap_or_default();
         let progress_bar = &progress_bars[tid];
@@ -191,11 +130,17 @@ pub fn downloader(args: &DownloaderArgs) {
         let asset_file = Vec::new();
 
         #[cfg(not(feature = "debug"))]
-        let asset_file = File::create(&asset_path)
-            .unwrap_or_else(|e| error_exit("cannot create file", Some(&e)));
+        let mut asset_file = match File::create(&asset_path) {
+            Ok(f) => f,
+            Err(e) => {
+                multi_progress.suspend(|| {
+                    log::warn!("cannot create {}: {}", asset_path.to_string_lossy(), e)
+                });
+                return;
+            }
+        };
 
-        let mut writer = progress_bar.wrap_write(asset_file);
-
+        let mut writer = progress_bar.wrap_write(&mut asset_file);
         if let Err(e) = copy(&mut asset_res.into_reader(), &mut writer) {
             multi_progress
                 .suspend(|| log::warn!("cannot write to {}: {}", asset_path.to_string_lossy(), e));
@@ -203,7 +148,11 @@ pub fn downloader(args: &DownloaderArgs) {
 
         let cur_dounloaded_count = downloaded_count.fetch_add(1, Ordering::AcqRel);
         total_progress_bar.inc(entry.size);
-        total_progress_bar.set_message(format!("Total ({}/{})", cur_dounloaded_count, asset_count));
+        total_progress_bar.set_message(format!(
+            "Total ({}/{})",
+            cur_dounloaded_count,
+            manifest.len()
+        ));
     });
 
     if let Err(e) = multi_progress.clear() {
@@ -211,4 +160,5 @@ pub fn downloader(args: &DownloaderArgs) {
     }
 
     log::info!("download complete");
+    Ok(())
 }
