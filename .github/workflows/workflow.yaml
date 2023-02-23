@@ -29,16 +29,15 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Install cargo check tools
-        if: ${{ failure() }}
-        run: >
-          cargo install --locked cargo-deny cargo-outdated cargo-udeps 
-          cargo-audit cargo-pants || true
-
       - name: Lint
         run: |
           cargo fmt --all -- --check
           cargo clippy -- -D warnings
+
+      - name: Install cargo check tools
+        run: >
+          cargo install --locked cargo-deny cargo-outdated cargo-udeps 
+          cargo-audit cargo-pants || true
 
       - name: Check
         run: |
