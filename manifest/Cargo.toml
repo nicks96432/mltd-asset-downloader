@@ -18,6 +18,10 @@ ureq = { workspace = true }
 features = ["derive"]
 workspace = true
 
+[dependencies.linked-hash-map]
+features = ["serde_impl"]
+version = "0.5.6"
+
 [dependencies.mltd-utils]
 features = ["log", "request"]
 path = "../utils"
