@@ -11,4 +11,4 @@ env:
 
 jobs:
   check:
-    uses: ./.github/workflows/rust-check.yaml
+    uses: ./.github/workflows/workflow.yaml

@@ -3,16 +3,9 @@ on:
 
 jobs:
   check:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Check out
-        uses: actions/checkout@v3
-
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -32,6 +25,9 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check out
+        uses: actions/checkout@v3
 
       - name: Lint
         run: |
@@ -54,3 +50,44 @@ jobs:
 
       - name: Test
         run: cargo test
+
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          components: rustfmt, clippy
+          override: true
+          profile: minimal
+          toolchain: nightly
+
+      - name: Set up cargo cache
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check out
+        uses: actions/checkout@v3
+
+      - name: Build
+        run: |
+          cargo build --release
+
+      - name: Build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: mltd
+          path: target/release/mltd
