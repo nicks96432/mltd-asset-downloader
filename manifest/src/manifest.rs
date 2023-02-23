@@ -51,6 +51,10 @@ impl Manifest {
         self.data[0].len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Gets the latest manifest filename and version from matsurihi.me.
     ///
     /// # Errors
@@ -124,7 +128,7 @@ impl Manifest {
         log::debug!("reading response body to buf");
 
         let mut buf = Vec::new();
-        if let Err(_) = copy(&mut manifest_res.into_reader(), &mut buf) {
+        if copy(&mut manifest_res.into_reader(), &mut buf).is_err() {
             return Err(ManifestError::RequestFailed);
         }
         let mut reader = Cursor::new(&buf);
@@ -152,7 +156,7 @@ impl Manifest {
         }
 
         #[cfg(feature = "yaml")]
-        if let Ok(manifest) = serde_yaml::from_slice(&value) {
+        if let Ok(manifest) = serde_yaml::from_slice(value) {
             return Ok(manifest);
         }
 
@@ -184,6 +188,12 @@ impl Manifest {
     }
 }
 
+impl Default for Manifest {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl From<RawManifest> for Manifest {
     fn from(value: RawManifest) -> Self {
         Self {
@@ -194,9 +204,9 @@ impl From<RawManifest> for Manifest {
     }
 }
 
-impl Into<RawManifest> for Manifest {
-    fn into(self) -> RawManifest {
-        self.data
+impl From<Manifest> for RawManifest {
+    fn from(value: Manifest) -> Self {
+        value.data
     }
 }
 

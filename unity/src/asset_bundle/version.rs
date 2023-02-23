@@ -28,7 +28,7 @@ impl FromStr for AssetBundleVersion {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         log::trace!("input version: {}", s);
 
-        let nums: Vec<&str> = s.split(".").collect();
+        let nums: Vec<&str> = s.split('.').collect();
         if nums.len() != 3 {
             return Err(UnityError::InvalidVersion);
         }

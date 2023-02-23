@@ -13,7 +13,6 @@ log = "0.4.17"
 num_cpus = "1.15.0"
 rayon = "1.6.1"
 serde = "1.0.152"
-ureq = "2.6.2"
 
 [workspace.dependencies.clap]
 default-features = false
@@ -29,6 +28,10 @@ version = "0.10.0"
 default-features = false
 features = ["rayon"]
 version = "0.17.3"
+
+[workspace.dependencies.ureq]
+features = ["json", "native-certs"]
+version = "2.6.2"
 
 [profile.release]
 codegen-units = 12

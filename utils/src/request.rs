@@ -4,11 +4,11 @@ use ureq::Error as UreqError;
 use ureq::Error::Status;
 use ureq::{Agent, Request, Response};
 
-const ASSET_URL_BASE: &'static str = "https://td-assets.bn765.com";
-const UNITY_VERSION: &'static str = "2020.3.32f1";
+const ASSET_URL_BASE: &str = "https://td-assets.bn765.com";
+const UNITY_VERSION: &str = "2020.3.32f1";
 
-pub fn fetch_asset(agent: &Agent, path: &String) -> Result<Response, UreqError> {
-    let url = format!("{}{}", ASSET_URL_BASE, path.as_str());
+pub fn fetch_asset(agent: &Agent, path: &str) -> Result<Response, Box<UreqError>> {
+    let url = format!("{}{}", ASSET_URL_BASE, path);
     let req = agent
         .get(url.as_str())
         .set("Accept", "*/*")
@@ -22,7 +22,10 @@ pub fn fetch_asset(agent: &Agent, path: &String) -> Result<Response, UreqError> 
         trace_response(res);
     }
 
-    result
+    match result {
+        Ok(r) => Ok(r),
+        Err(e) => Err(Box::new(e)),
+    }
 }
 
 pub fn trace_request(req: &Request) {

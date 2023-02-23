@@ -8,8 +8,8 @@ use std::io::Cursor;
 pub fn rand_ascii_string(len: usize) -> Cursor<Vec<u8>> {
     let mut rng = MyRng::from_rng(thread_rng()).unwrap();
     let mut buf = vec![0u8; len];
-    for i in 0..len {
-        buf[i] = rng.gen_range(0x33..0x7f); // printable ascii
+    for byte in buf.iter_mut().take(len) {
+        *byte = u8::try_from(rng.gen_range(0x33..0x7f)).unwrap(); // printable ascii
     }
     buf.push(0u8);
 

@@ -12,6 +12,7 @@ indicatif = { workspace = true }
 log = { workspace = true }
 num_cpus = { workspace = true }
 rayon = { workspace = true }
+ureq = { workspace = true }
 
 [dependencies.clap]
 features = ["derive"]
@@ -27,10 +28,6 @@ path = "../utils"
 
 [dependencies.serde]
 features = ["derive"]
-workspace = true
-
-[dependencies.ureq]
-features = ["json", "native-certs"]
 workspace = true
 
 [features]
