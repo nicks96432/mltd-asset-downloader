@@ -1,13 +1,13 @@
-use crate::compression::CompressionMethod;
-use crate::UnityError;
+use crate::compression::Method as CompressionMethod;
+use crate::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct AssetBundleFlags {
+pub struct Flags {
     pub bits: u32,
     pub new: bool,
 }
 
-impl AssetBundleFlags {
+impl Flags {
     /// Creates a new [`AssetBundleFlags`] of old Unity version.
     ///
     /// For version differences, see [`AssetBundleVersion`][v] for more details.
@@ -26,8 +26,9 @@ impl AssetBundleFlags {
     ///
     /// This function will return [`UnityError::UnknownCompressionMethod`] if
     /// the compression method is unknown.
-    pub fn compression_method(&self) -> Result<CompressionMethod, UnityError> {
+    pub fn compression_method(&self) -> Result<CompressionMethod, Error> {
         let value = self.bits & 0x3f;
+
         CompressionMethod::try_from(value)
     }
 

@@ -1,36 +1,36 @@
-use crate::UnityError;
+use crate::error::Error;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 
 /// Unity version string
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AssetBundleVersion {
+pub struct Version {
     pub major: u32,
     pub minor: u32,
     pub patch: String,
 }
 
-impl Debug for AssetBundleVersion {
+impl Debug for Version {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self)
     }
 }
 
-impl Display for AssetBundleVersion {
+impl Display for Version {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
     }
 }
 
-impl FromStr for AssetBundleVersion {
-    type Err = UnityError;
+impl FromStr for Version {
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         log::trace!("input version: {}", s);
 
         let nums: Vec<&str> = s.split('.').collect();
         if nums.len() != 3 {
-            return Err(UnityError::InvalidVersion);
+            return Err(Error::InvalidVersion);
         }
 
         Ok(Self {
@@ -41,7 +41,7 @@ impl FromStr for AssetBundleVersion {
     }
 }
 
-impl AssetBundleVersion {
+impl Version {
     /// Returns whether this [`AssetBundleVersion`] is a newer Unity version.
     ///
     /// from [UnityPy](https://github.com/K0lb3/UnityPy/blob/c8d41de4ee914bb63d765fcbeb063531e1eea460/UnityPy/files/BundleFile.py#L99):
@@ -65,9 +65,9 @@ impl AssetBundleVersion {
     /// ```
     pub fn is_new(&self) -> bool {
         self.major >= 2023
-            || (self.major == 2022 && self >= &AssetBundleVersion::from_str("2022.1.1f1").unwrap())
-            || (self.major == 2021 && self >= &AssetBundleVersion::from_str("2021.3.2f1").unwrap())
-            || (self.major == 2020 && self >= &AssetBundleVersion::from_str("2020.3.34f1").unwrap())
+            || (self.major == 2022 && self >= &Version::from_str("2022.1.1f1").unwrap())
+            || (self.major == 2021 && self >= &Version::from_str("2021.3.2f1").unwrap())
+            || (self.major == 2020 && self >= &Version::from_str("2020.3.34f1").unwrap())
     }
 }
 
@@ -81,7 +81,7 @@ fn init() {
 mod tests {
     use mltd_utils::{rand_ascii_string, rand_range};
 
-    use super::AssetBundleVersion;
+    use super::Version;
     use std::str::FromStr;
 
     #[test]
@@ -94,7 +94,7 @@ mod tests {
             rand_ascii_string(1).into_inner()[0],
             rand_range(0..5000),
         );
-        AssetBundleVersion::from_str(&version).unwrap();
+        Version::from_str(&version).unwrap();
     }
 
     #[test]
@@ -106,6 +106,6 @@ mod tests {
             String::from_utf8_lossy(&rand_ascii_string(5).into_inner()),
             String::from_utf8_lossy(&rand_ascii_string(5).into_inner()),
         );
-        AssetBundleVersion::from_str(&version).unwrap();
+        Version::from_str(&version).unwrap();
     }
 }

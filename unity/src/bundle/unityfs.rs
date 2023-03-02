@@ -1,26 +1,27 @@
-use crate::compression::{Compressor, Decompressor};
+use super::{Header, InfoBlock, Signature, UnityFSHeader};
+use crate::asset::Asset;
+use crate::compression::Compressor;
+use crate::error::Error;
 use crate::macros::impl_try_from_into_vec;
 use crate::traits::{SeekAlign, UnityIO};
-use crate::UnityError;
-use crate::{AssetBundleHeader, AssetBundleSignature, InfoBlock, UnityFSHeader};
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::mem::size_of;
 
 #[derive(Debug, Clone)]
-pub struct UnityFSBundle {
-    pub bundle_header: AssetBundleHeader,
+pub struct UnityFS {
+    pub bundle_header: Header,
     pub unityfs_header: UnityFSHeader,
     pub info_block: InfoBlock,
     pub data: Vec<u8>,
 }
 
-impl UnityIO for UnityFSBundle {
-    fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, UnityError> {
+impl UnityIO for UnityFS {
+    fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, Error> {
         // asset bundle header
-        let bundle_header = AssetBundleHeader::read(reader)?;
+        let bundle_header = Header::read(reader)?;
         log::trace!("bundle header:\n{:#?}", bundle_header);
-        if bundle_header.signature != AssetBundleSignature::UnityFS {
-            return Err(UnityError::InvalidSignature);
+        if bundle_header.signature != Signature::UnityFS {
+            return Err(Error::UnknownSignature);
         }
 
         // unityfs specific header
@@ -57,11 +58,11 @@ impl UnityIO for UnityFSBundle {
         }
 
         // decompress info block
-        let buf = Decompressor::new(compression_method).decompress(&buf, decompressed_size)?;
+        let buf = Compressor::new(compression_method).decompress(&buf, decompressed_size)?;
         let info_block = InfoBlock::read(&mut Cursor::new(buf))?;
 
         if unityfs_header.flags.info_block_end() {
-            let offset = u64::try_from(size_of::<AssetBundleHeader>())?;
+            let offset = u64::try_from(size_of::<Header>())?;
             reader.seek(SeekFrom::Start(offset))?;
         }
 
@@ -79,7 +80,7 @@ impl UnityIO for UnityFSBundle {
             let mut buf = vec![0u8; usize::try_from(block.compressed_size)?];
             reader.read_exact(&mut buf)?;
 
-            let decompressor = Decompressor::new(block.compression_method()?);
+            let decompressor = Compressor::new(block.compression_method()?);
             let buf = decompressor.decompress(&buf, usize::try_from(block.decompressed_size)?)?;
 
             let expected_size = block.decompressed_size;
@@ -89,7 +90,7 @@ impl UnityIO for UnityFSBundle {
         }
         log::trace!("data block total size: {}", data.len());
 
-        Ok(UnityFSBundle {
+        Ok(UnityFS {
             bundle_header,
             unityfs_header,
             info_block,
@@ -97,7 +98,7 @@ impl UnityIO for UnityFSBundle {
         })
     }
 
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), UnityError> {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.bundle_header.write(writer)?;
 
         // create compressor
@@ -130,7 +131,7 @@ impl UnityIO for UnityFSBundle {
         unityfs_header.decompressed_size = decompressed_len;
 
         // modify bundle size in the header
-        let header_size = u32::try_from(size_of::<AssetBundleHeader>())?;
+        let header_size = u32::try_from(size_of::<Header>())?;
         let data_block_size = u32::try_from(data_buf.iter().map(|d| d.len()).sum::<usize>())?;
         unityfs_header.bundle_size = u64::from(header_size + compressed_len + data_block_size);
 
@@ -145,7 +146,24 @@ impl UnityIO for UnityFSBundle {
     }
 }
 
-impl_try_from_into_vec!(UnityFSBundle);
+impl UnityFS {
+    pub fn files(&self) -> Result<Vec<Asset>, Error> {
+        let mut assets = Vec::new();
+
+        for path_info in self.info_block.path_infos.iter() {
+            let begin = usize::try_from(path_info.offset)?;
+            let end = usize::try_from(path_info.decompressed_size)?;
+            let mut data = Cursor::new(&self.data[begin..end]);
+
+            let asset = Asset::read(&mut data)?;
+            assets.push(asset);
+        }
+
+        Ok(assets)
+    }
+}
+
+impl_try_from_into_vec!(UnityFS);
 
 #[cfg(test)]
 #[ctor::ctor]
@@ -156,7 +174,7 @@ fn init() {
 #[cfg(test)]
 mod tests {
     use crate::traits::UnityIO;
-    use crate::UnityFSBundle;
+    use crate::UnityFS;
     use std::fs::File;
     use std::io::Cursor;
     use std::path::Path;
@@ -167,7 +185,7 @@ mod tests {
             .join("tests")
             .join("test.unity3d");
         let mut file = File::open(path).unwrap();
-        UnityFSBundle::read(&mut file).unwrap();
+        UnityFS::read(&mut file).unwrap();
     }
 
     #[test]
@@ -176,7 +194,7 @@ mod tests {
             .join("tests")
             .join("test.unity3d");
         let mut file = File::open(path).unwrap();
-        let expect = UnityFSBundle::read(&mut file).unwrap();
+        let expect = UnityFS::read(&mut file).unwrap();
 
         let mut buf = Vec::new();
         expect.write(&mut buf).unwrap();
@@ -186,7 +204,7 @@ mod tests {
             buf.len()
         );
 
-        let got = UnityFSBundle::read(&mut Cursor::new(&buf)).unwrap();
+        let got = UnityFS::read(&mut Cursor::new(&buf)).unwrap();
 
         assert_eq!(expect.bundle_header, got.bundle_header);
 
@@ -238,5 +256,15 @@ mod tests {
         );
 
         assert_eq!(expect.data, got.data);
+    }
+
+    #[test]
+    fn test_files() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("test.unity3d");
+        let mut file = File::open(path).unwrap();
+        let bundle = UnityFS::read(&mut file).unwrap();
+        bundle.files().unwrap();
     }
 }

@@ -1,4 +1,4 @@
-use crate::error::UnityError;
+use crate::error::Error;
 use byteorder::ReadBytesExt;
 use std::io::Result as IOResult;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -56,7 +56,7 @@ pub(crate) trait SeekAlign: Seek {
     /// This function will return [`UnityError::TryFromIntError`]
     /// if integer conversion is failed.
     #[inline]
-    fn seek_align(&mut self, alignment: u64) -> Result<(), UnityError> {
+    fn seek_align(&mut self, alignment: u64) -> Result<(), Error> {
         let pos = i64::try_from(self.stream_position()?)?;
         let alignment = i64::try_from(alignment)?;
         let align = (alignment - pos % alignment) % alignment;
@@ -66,7 +66,7 @@ pub(crate) trait SeekAlign: Seek {
     }
 }
 
-impl<R: Seek> SeekAlign for R {}
+impl<S: Seek> SeekAlign for S {}
 
 pub trait UnityIO: Sized {
     /// Reads the struct from `reader`, assuming that the data start
@@ -81,15 +81,15 @@ pub trait UnityIO: Sized {
     ///
     /// ```no_run
     /// use std::io::Cursor;
-    /// use unity::{AssetBlockInfo, UnityIO};
+    /// use unity::{BlockInfo, UnityIO};
     ///
     /// let mut file = Cursor::new(vec![0u8; 10]);
-    /// let header = AssetBlockInfo::read(&mut file).unwrap();
+    /// let header = BlockInfo::read(&mut file).unwrap();
     ///
     /// let decompressed_size = header.decompressed_size;
     /// assert_eq!(decompressed_size, 0);
     /// ```
-    fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, UnityError>;
+    fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, Error>;
 
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), UnityError>;
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error>;
 }
