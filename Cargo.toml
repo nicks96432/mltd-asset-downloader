@@ -11,7 +11,7 @@ repository = "https://github.com/nicks96432/mltd-asset-downloader"
 ctor = "0.1.26"
 log = "0.4.17"
 num_cpus = "1.15.0"
-rayon = "1.6.1"
+rayon = "1.7.0"
 serde = "1.0.152"
 
 [workspace.dependencies.clap]

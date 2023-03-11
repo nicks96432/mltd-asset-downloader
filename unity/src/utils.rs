@@ -1,6 +1,6 @@
 use crate::bundle::Signature;
 use crate::error::Error;
-use crate::traits::ReadExact;
+use crate::traits::ReadString;
 use std::io::{Read, Seek};
 use std::str::FromStr;
 

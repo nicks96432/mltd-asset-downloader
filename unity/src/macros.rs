@@ -23,7 +23,7 @@ macro_rules! impl_try_from_into_vec {
 
             fn try_into(self) -> Result<Vec<u8>, Self::Error> {
                 let mut buf = Vec::new();
-                self.write(&mut buf)?;
+                self.save(&mut buf)?;
 
                 Ok(buf)
             }

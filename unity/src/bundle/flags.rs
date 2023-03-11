@@ -1,5 +1,5 @@
 use crate::compression::Method as CompressionMethod;
-use crate::Error;
+use crate::error::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Flags {

@@ -1,9 +1,9 @@
 use super::{Flags, Signature, Version};
 use crate::error::Error;
 use crate::macros::{impl_default, impl_try_from_into_vec};
-use crate::traits::{ReadExact, UnityIO};
+use crate::traits::ReadString;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use std::io::{Read, Seek, Write};
+use std::io::{Read, Write};
 use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -22,8 +22,8 @@ pub struct UnityFSHeader {
     pub flags: Flags,
 }
 
-impl UnityIO for Header {
-    fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, Error> {
+impl Header {
+    pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let signature = reader.read_string()?;
         log::trace!("signature: {}", signature);
 
@@ -35,7 +35,7 @@ impl UnityIO for Header {
         })
     }
 
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn save<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_all(self.signature.to_string().as_bytes())?;
         writer.write_u8(0)?;
 
@@ -62,10 +62,8 @@ impl UnityFSHeader {
             flags: Flags::new(0u32),
         }
     }
-}
 
-impl UnityIO for UnityFSHeader {
-    fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, Error> {
+    pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         Ok(Self {
             bundle_size: reader.read_u64::<BigEndian>()?,
             compressed_size: reader.read_u32::<BigEndian>()?,
@@ -74,7 +72,7 @@ impl UnityIO for UnityFSHeader {
         })
     }
 
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn save<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_u64::<BigEndian>(self.bundle_size)?;
         writer.write_u32::<BigEndian>(self.compressed_size)?;
         writer.write_u32::<BigEndian>(self.decompressed_size)?;
@@ -97,12 +95,9 @@ fn init() {
 
 #[cfg(test)]
 mod tests {
-    use crate::traits::{ReadExact, UnityIO};
-    use crate::{Header, Signature, UnityFSHeader, Version};
-    use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+    use super::*;
     use mltd_utils::{rand_ascii_string, rand_bytes, rand_range};
-    use std::io::{copy, Cursor, Write};
-    use std::str::FromStr;
+    use std::io::{copy, Cursor};
 
     #[test]
     fn test_header_read() {

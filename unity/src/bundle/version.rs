@@ -56,12 +56,12 @@ impl Version {
     ///
     /// ```no_run
     /// use std::str::FromStr;
-    /// use unity::AssetBundleVersion;
+    /// use unity::bundle::Version;
     ///
-    /// assert!(AssetBundleVersion::from_str("2020.3.34f1").unwrap().is_new());
-    /// assert!(AssetBundleVersion::from_str("2021.3.2f1").unwrap().is_new());
-    /// assert!(AssetBundleVersion::from_str("2022.1.1f1").unwrap().is_new());
-    /// assert!(AssetBundleVersion::from_str("2023.1.0a4").unwrap().is_new());
+    /// assert!(Version::from_str("2020.3.34f1").unwrap().is_new());
+    /// assert!(Version::from_str("2021.3.2f1").unwrap().is_new());
+    /// assert!(Version::from_str("2022.1.1f1").unwrap().is_new());
+    /// assert!(Version::from_str("2023.1.0a4").unwrap().is_new());
     /// ```
     pub fn is_new(&self) -> bool {
         self.major >= 2023

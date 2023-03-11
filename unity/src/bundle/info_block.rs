@@ -1,10 +1,10 @@
 use crate::compression::Method as CompressionMethod;
 use crate::error::Error;
 use crate::macros::{impl_default, impl_try_from_into_vec};
-use crate::traits::{ReadExact, UnityIO};
+use crate::traits::ReadString;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::fmt::Debug;
-use std::io::{Read, Seek, Write};
+use std::io::{Read, Write};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BlockInfo {
@@ -53,10 +53,8 @@ impl BlockInfo {
 
         CompressionMethod::try_from(value)
     }
-}
 
-impl UnityIO for BlockInfo {
-    fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, Error> {
+    pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         Ok(Self {
             decompressed_size: reader.read_u32::<BigEndian>()?,
             compressed_size: reader.read_u32::<BigEndian>()?,
@@ -64,7 +62,7 @@ impl UnityIO for BlockInfo {
         })
     }
 
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn save<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_u32::<BigEndian>(self.decompressed_size)?;
         writer.write_u32::<BigEndian>(self.compressed_size)?;
         writer.write_u16::<BigEndian>(self.flags)?;
@@ -84,10 +82,8 @@ impl PathInfo {
             path: String::new(),
         }
     }
-}
 
-impl UnityIO for PathInfo {
-    fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, Error> {
+    pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         Ok(Self {
             offset: reader.read_u64::<BigEndian>()?,
             decompressed_size: reader.read_u64::<BigEndian>()?,
@@ -96,7 +92,7 @@ impl UnityIO for PathInfo {
         })
     }
 
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn save<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_u64::<BigEndian>(self.offset)?;
         writer.write_u64::<BigEndian>(self.decompressed_size)?;
         writer.write_u32::<BigEndian>(self.flags)?;
@@ -118,11 +114,10 @@ impl InfoBlock {
             path_infos: Vec::new(),
         }
     }
-}
 
-impl UnityIO for InfoBlock {
-    fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, Error> {
-        let decompressed_hash = reader.read_exact_bytes::<16>()?;
+    pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let mut decompressed_hash = [0u8; 16];
+        reader.read_exact(&mut decompressed_hash)?;
         log::trace!("hash: {:?}", decompressed_hash);
 
         let block_count = reader.read_u32::<BigEndian>()?;
@@ -155,15 +150,15 @@ impl UnityIO for InfoBlock {
         })
     }
 
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn save<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_all(&self.decompressed_hash)?;
         writer.write_u32::<BigEndian>(self.block_count)?;
         for block_info in self.block_infos.iter() {
-            block_info.write(writer)?;
+            block_info.save(writer)?;
         }
         writer.write_u32::<BigEndian>(self.path_count)?;
         for path_info in self.path_infos.iter() {
-            path_info.write(writer)?;
+            path_info.save(writer)?;
         }
 
         Ok(())
@@ -186,10 +181,7 @@ fn init() {
 
 #[cfg(test)]
 mod tests {
-    use crate::traits::ReadExact;
-    use crate::{traits::UnityIO, BlockInfo};
-    use crate::{InfoBlock, PathInfo};
-    use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+    use super::*;
     use mltd_utils::{rand_ascii_string, rand_bytes, rand_range};
     use std::io::{copy, Seek, SeekFrom};
 
@@ -277,10 +269,9 @@ mod tests {
         let got = InfoBlock::read(&mut reader).unwrap();
         reader.set_position(0);
 
-        assert_eq!(
-            got.decompressed_hash,
-            reader.read_exact_bytes::<16>().unwrap()
-        );
+        let mut buf = [0u8; 16];
+        reader.read_exact(&mut buf).unwrap();
+        assert_eq!(got.decompressed_hash, buf);
         assert_eq!(got.block_count, block_count);
         for i in 0..usize::try_from(block_count).unwrap() {
             assert_eq!(got.block_infos[i], block_infos[i]);

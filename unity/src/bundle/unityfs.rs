@@ -3,7 +3,7 @@ use crate::asset::Asset;
 use crate::compression::Compressor;
 use crate::error::Error;
 use crate::macros::impl_try_from_into_vec;
-use crate::traits::{SeekAlign, UnityIO};
+use crate::traits::SeekAlign;
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::mem::size_of;
 
@@ -15,8 +15,8 @@ pub struct UnityFS {
     pub data: Vec<u8>,
 }
 
-impl UnityIO for UnityFS {
-    fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, Error> {
+impl UnityFS {
+    pub fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, Error> {
         // asset bundle header
         let bundle_header = Header::read(reader)?;
         log::trace!("bundle header:\n{:#?}", bundle_header);
@@ -98,8 +98,8 @@ impl UnityIO for UnityFS {
         })
     }
 
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.bundle_header.write(writer)?;
+    pub fn save<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.bundle_header.save(writer)?;
 
         // create compressor
         let method = self.unityfs_header.flags.compression_method()?;
@@ -120,7 +120,7 @@ impl UnityIO for UnityFS {
 
         // compress info block
         let mut buf = Vec::new();
-        info_block.write(&mut buf)?;
+        info_block.save(&mut buf)?;
         let compressed_info_block = compressor.compress(&buf)?;
 
         // modify header according to the sized of compressed size
@@ -136,7 +136,7 @@ impl UnityIO for UnityFS {
         unityfs_header.bundle_size = u64::from(header_size + compressed_len + data_block_size);
 
         // finally write the data
-        unityfs_header.write(writer)?;
+        unityfs_header.save(writer)?;
         writer.write_all(&compressed_info_block)?;
         for data in data_buf {
             writer.write_all(&data)?;
@@ -173,10 +173,8 @@ fn init() {
 
 #[cfg(test)]
 mod tests {
-    use crate::traits::UnityIO;
-    use crate::UnityFS;
+    use super::*;
     use std::fs::File;
-    use std::io::Cursor;
     use std::path::Path;
 
     #[test]
@@ -197,7 +195,7 @@ mod tests {
         let expect = UnityFS::read(&mut file).unwrap();
 
         let mut buf = Vec::new();
-        expect.write(&mut buf).unwrap();
+        expect.save(&mut buf).unwrap();
         log::trace!(
             "before: {}, after: {}",
             file.metadata().unwrap().len(),
