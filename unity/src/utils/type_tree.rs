@@ -11,8 +11,69 @@ pub enum Name {
     Custom(String),
 }
 
+#[derive(Debug, Clone)]
+pub struct Node {
+    pub version: u16,
+    pub level: u8,
+    pub class_flags: u8,
+    pub class_offset: u32,
+    pub name_offset: u32,
+    pub size: i32,
+    pub index: i32,
+    pub meta_flag: i32,
+    pub ref_type_hash: u64,
+
+    pub class: Name,
+    pub name: Name,
+}
+
+impl Node {
+    pub fn new() -> Self {
+        Self {
+            version: 0u16,
+            level: 0u8,
+            class_flags: 0u8,
+            class_offset: 0u32,
+            name_offset: 0u32,
+            size: 0i32,
+            index: 0i32,
+            meta_flag: 0i32,
+
+            /// version > 19
+            ref_type_hash: 0u64,
+
+            class: Name::Custom(String::new()),
+            name: Name::Custom(String::new()),
+        }
+    }
+
+    pub fn read<R>(reader: &mut R, header: &Header) -> Result<Self, Error>
+    where
+        R: Read,
+    {
+        Ok(Self {
+            version: reader.read_u16_by(header.endian)?,
+            level: reader.read_u8()?,
+            class_flags: reader.read_u8()?,
+            class_offset: reader.read_u32_by(header.endian)?,
+            name_offset: reader.read_u32_by(header.endian)?,
+            size: reader.read_i32_by(header.endian)?,
+            index: reader.read_i32_by(header.endian)?,
+            meta_flag: reader.read_i32_by(header.endian)?,
+
+            ref_type_hash: match header.version >= 19 {
+                true => reader.read_u64_by(header.endian)?,
+                false => 0,
+            },
+
+            class: Name::Custom(String::new()),
+            name: Name::Custom(String::new()),
+        })
+    }
+}
+
 /// from [UnityPy](
-/// https://github.com/K0lb3/UnityPy/blob/master/UnityPy/enums/CommonString.py
+///     https://github.com/K0lb3/UnityPy/blob/master/UnityPy/enums/CommonString.py
 /// )
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive)]
 pub enum CommonString {
@@ -124,65 +185,4 @@ pub enum CommonString {
     MPrefabInstance = 1121,
     MPrefabAsset = 1138,
     FileSize = 1152,
-}
-
-#[derive(Debug, Clone)]
-pub struct Node {
-    pub version: u16,
-    pub level: u8,
-    pub class_flags: u8,
-    pub class_offset: u32,
-    pub name_offset: u32,
-    pub size: i32,
-    pub index: i32,
-    pub meta_flag: i32,
-    pub ref_type_hash: u64,
-
-    pub class: Name,
-    pub name: Name,
-}
-
-impl Node {
-    pub fn new() -> Self {
-        Self {
-            version: 0u16,
-            level: 0u8,
-            class_flags: 0u8,
-            class_offset: 0u32,
-            name_offset: 0u32,
-            size: 0i32,
-            index: 0i32,
-            meta_flag: 0i32,
-
-            /// version > 19
-            ref_type_hash: 0u64,
-
-            class: Name::Custom(String::new()),
-            name: Name::Custom(String::new()),
-        }
-    }
-
-    pub fn read<R>(reader: &mut R, header: &Header) -> Result<Self, Error>
-    where
-        R: Read,
-    {
-        Ok(Self {
-            version: reader.read_u16_by(header.endian)?,
-            level: reader.read_u8()?,
-            class_flags: reader.read_u8()?,
-            class_offset: reader.read_u32_by(header.endian)?,
-            name_offset: reader.read_u32_by(header.endian)?,
-            size: reader.read_i32_by(header.endian)?,
-            index: reader.read_i32_by(header.endian)?,
-            meta_flag: reader.read_i32_by(header.endian)?,
-
-            ref_type_hash: match header.version >= 19 {
-                true => reader.read_u64_by(header.endian)?,
-                false => 0,
-            },
-
-            class: Name::Custom(String::new()),
-            name: Name::Custom(String::new()),
-        })
-    }
 }

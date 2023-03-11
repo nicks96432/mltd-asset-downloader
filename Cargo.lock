@@ -911,6 +911,7 @@ dependencies = [
  "byteorder",
  "ctor",
  "env_logger",
+ "linked-hash-map",
  "log",
  "lz4_flex",
  "lzham",

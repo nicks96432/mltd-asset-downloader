@@ -186,7 +186,7 @@ pub(crate) trait WriteIntExt: Write {
     }
 }
 
-pub(crate) trait ReadArrayExt: ReadIntExt {
+pub(crate) trait ReadVecExt: ReadIntExt {
     #[inline]
     fn read_i8_vec_by(&mut self, endian: bool) -> Result<Vec<i8>, std::io::Error> {
         let iter = 0..self.read_u32_by(endian)?;
@@ -254,4 +254,4 @@ impl<R> ReadIntExt for R where R: Read {}
 
 impl<W> WriteIntExt for W where W: Write {}
 
-impl<R> ReadArrayExt for R where R: Read {}
+impl<R> ReadVecExt for R where R: Read {}

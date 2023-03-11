@@ -9,6 +9,7 @@ version = "0.1.0"
 
 [dependencies]
 byteorder = "1.4.3"
+linked-hash-map = { workspace = true }
 log = { workspace = true }
 num-derive = "0.3.3"
 num-traits = "0.2.15"

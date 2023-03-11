@@ -9,6 +9,7 @@ repository = "https://github.com/nicks96432/mltd-asset-downloader"
 
 [workspace.dependencies]
 ctor = "0.1.26"
+linked-hash-map = "0.5.6"
 log = "0.4.17"
 num_cpus = "1.15.0"
 rayon = "1.7.0"

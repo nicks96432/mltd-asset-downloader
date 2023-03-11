@@ -20,7 +20,7 @@ workspace = true
 
 [dependencies.linked-hash-map]
 features = ["serde_impl"]
-version = "0.5.6"
+workspace = true
 
 [dependencies.mltd-utils]
 features = ["log", "request"]

@@ -1,15 +1,15 @@
 use super::Header;
 use crate::error::Error;
 use crate::macros::impl_default;
-use crate::traits::{ReadArrayExt, ReadIntExt, ReadString};
+use crate::traits::{ReadIntExt, ReadString, ReadVecExt};
 use crate::utils::type_tree::{CommonString, Name, Node};
 use byteorder::ReadBytesExt;
 use num_traits::FromPrimitive;
 use std::io::{Cursor, Read, Seek};
 
 #[derive(Debug, Clone)]
-pub struct Class {
-    pub id: i32,
+pub struct SerializedType {
+    pub class_id: i32,
     pub stripped: bool,
     pub script_index: i16,
     pub script_id: [u8; 16],
@@ -19,10 +19,10 @@ pub struct Class {
     pub type_dependencies: Vec<i32>,
 }
 
-impl Class {
+impl SerializedType {
     pub fn new() -> Self {
         Self {
-            id: 0i32,
+            class_id: 0i32,
             stripped: false,
             script_index: 0i16,
             script_id: [0u8; 16],
@@ -39,7 +39,7 @@ impl Class {
     {
         let mut class = Self::new();
 
-        class.id = reader.read_i32_by(header.endian)?;
+        class.class_id = reader.read_i32_by(header.endian)?;
         if header.version >= 16 {
             class.stripped = reader.read_u8()? > 0;
         }
@@ -49,7 +49,9 @@ impl Class {
 
         if header.version >= 13 {
             // TODO: remove magic number 114
-            if (header.version < 16 && class.id < 0) || (header.version >= 16 && class.id == 114) {
+            if (header.version < 16 && class.class_id < 0)
+                || (header.version >= 16 && class.class_id == 114)
+            {
                 reader.read_exact(&mut class.script_id)?;
             }
             reader.read_exact(&mut class.hash)?;
@@ -111,4 +113,4 @@ impl Class {
     }
 }
 
-impl_default!(Class);
+impl_default!(SerializedType);

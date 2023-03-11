@@ -1,7 +1,7 @@
 use num_derive::{FromPrimitive, ToPrimitive};
 
 /// From [UnityPy](
-/// https://github.com/K0lb3/UnityPy/blob/master/UnityPy/enums/BuildTarget.py
+///     https://github.com/K0lb3/UnityPy/blob/master/UnityPy/enums/BuildTarget.py
 /// )
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive)]
 pub enum Platform {
