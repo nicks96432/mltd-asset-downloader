@@ -1,6 +1,6 @@
-use crate::asset::Header;
 use crate::error::Error;
 use crate::traits::ReadIntExt;
+use crate::{asset::Header, macros::impl_default};
 use byteorder::ReadBytesExt;
 use num_derive::{FromPrimitive, ToPrimitive};
 use std::io::Read;
@@ -71,6 +71,8 @@ impl Node {
         })
     }
 }
+
+impl_default!(Node);
 
 /// from [UnityPy](
 ///     https://github.com/K0lb3/UnityPy/blob/master/UnityPy/enums/CommonString.py

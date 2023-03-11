@@ -27,7 +27,7 @@ pub(crate) trait ReadString: Read {
 
 impl<R> ReadString for R where R: Read {}
 
-/// Extends [`Seek`] with methods for reading exact number of bytes.
+/// Extends [`Seek`] with methods for seeking to byte alignment.
 pub(crate) trait SeekAlign: Seek {
     /// Seeks to alignment.
     ///
@@ -42,8 +42,8 @@ pub(crate) trait SeekAlign: Seek {
     fn seek_align(&mut self, alignment: u64) -> Result<(), Error> {
         let pos = i64::try_from(self.stream_position()?)?;
         let alignment = i64::try_from(alignment)?;
-        let align = (alignment - pos % alignment) % alignment;
-        self.seek(SeekFrom::Current(align))?;
+        let alignment = (alignment - pos % alignment) % alignment;
+        self.seek(SeekFrom::Current(alignment))?;
 
         Ok(())
     }

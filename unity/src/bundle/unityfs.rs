@@ -93,7 +93,7 @@ impl UnityFS {
         }
         log::trace!("data block total size: {}", data.len());
 
-        Ok(UnityFS {
+        Ok(Self {
             bundle_header,
             unityfs_header,
             info_block,

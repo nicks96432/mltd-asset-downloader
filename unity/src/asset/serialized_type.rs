@@ -5,7 +5,7 @@ use crate::traits::{ReadIntExt, ReadString, ReadVecExt};
 use crate::utils::type_tree::{CommonString, Name, Node};
 use byteorder::ReadBytesExt;
 use num_traits::FromPrimitive;
-use std::io::{Cursor, Read, Seek};
+use std::io::{Cursor, Read, Write};
 
 #[derive(Debug, Clone)]
 pub struct SerializedType {
@@ -35,46 +35,46 @@ impl SerializedType {
 
     pub fn read<R>(reader: &mut R, header: &Header) -> Result<Self, Error>
     where
-        R: Read + Seek,
+        R: Read,
     {
-        let mut class = Self::new();
+        let mut ser_type = Self::new();
 
-        class.class_id = reader.read_i32_by(header.endian)?;
+        ser_type.class_id = reader.read_i32_by(header.endian)?;
         if header.version >= 16 {
-            class.stripped = reader.read_u8()? > 0;
+            ser_type.stripped = reader.read_u8()? > 0;
         }
         if header.version >= 17 {
-            class.script_index = reader.read_i16_by(header.endian)?;
+            ser_type.script_index = reader.read_i16_by(header.endian)?;
         }
 
         if header.version >= 13 {
             // TODO: remove magic number 114
-            if (header.version < 16 && class.class_id < 0)
-                || (header.version >= 16 && class.class_id == 114)
+            if (header.version < 16 && ser_type.class_id < 0)
+                || (header.version >= 16 && ser_type.class_id == 114)
             {
-                reader.read_exact(&mut class.script_id)?;
+                reader.read_exact(&mut ser_type.script_id)?;
             }
-            reader.read_exact(&mut class.hash)?;
+            reader.read_exact(&mut ser_type.hash)?;
         }
 
         if !header.has_type_tree {
-            return Ok(class);
+            return Ok(ser_type);
         }
 
         if header.version >= 12 || header.version == 10 {
-            class.read_type_tree(reader, header)?;
+            ser_type.read_type_tree(reader, header)?;
         }
 
         if header.version >= 21 {
-            class.type_dependencies = reader.read_i32_vec_by(header.endian)?;
+            ser_type.type_dependencies = reader.read_i32_vec_by(header.endian)?;
         }
 
-        Ok(class)
+        Ok(ser_type)
     }
 
     fn read_type_tree<R>(&mut self, reader: &mut R, header: &Header) -> Result<(), Error>
     where
-        R: Read + Seek,
+        R: Read,
     {
         let node_count = reader.read_u32_by(header.endian)?;
         log::trace!("{} asset class node(s)", node_count);
@@ -110,6 +110,13 @@ impl SerializedType {
         }
 
         Ok(())
+    }
+
+    pub fn save<W>(&self, _writer: &mut W) -> Result<(), Error>
+    where
+        W: Write,
+    {
+        unimplemented!();
     }
 }
 

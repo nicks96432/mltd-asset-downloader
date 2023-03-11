@@ -5,14 +5,14 @@ use crate::traits::{ReadIntExt, SeekAlign};
 use byteorder::ReadBytesExt;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
-use std::io::{Read, Seek};
+use std::io::{Read, Seek, Write};
 
 #[derive(Debug, Clone)]
 pub struct Object {
     pub path_id: u64,
     pub start: u64,
     pub size: u32,
-    pub type_id: ClassIDType,
+    pub type_id: ClassType,
     pub serialized_type: Option<SerializedType>,
     pub is_destroyed: u16,
     pub class_id: u16,
@@ -25,7 +25,7 @@ impl Object {
             path_id: 0u64,
             start: 0u64,
             size: 0u32,
-            type_id: ClassIDType::Unknown,
+            type_id: ClassType::Unknown,
             serialized_type: None,
             is_destroyed: 0u16,
             class_id: 0u16,
@@ -59,14 +59,14 @@ impl Object {
         object.size = reader.read_u32_by(endian)?;
 
         let err = || Error::UnknownClassIDType;
-        object.type_id = ClassIDType::from_i32(reader.read_i32_by(endian)?).ok_or_else(err)?;
+        object.type_id = ClassType::from_i32(reader.read_i32_by(endian)?).ok_or_else(err)?;
 
         if version < 16 {
             object.class_id = reader.read_u16_by(endian)?;
             object.serialized_type = None;
 
             for t in asset.types.iter() {
-                if ClassIDType::from_i32(t.class_id).ok_or_else(err)? == object.type_id {
+                if ClassType::from_i32(t.class_id).ok_or_else(err)? == object.type_id {
                     object.serialized_type = Some(t.clone());
                     break;
                 }
@@ -82,7 +82,7 @@ impl Object {
             object.is_destroyed = reader.read_u16_by(endian)?;
         }
 
-        if 11 <= version && version < 17 {
+        if (11..17).contains(&version) {
             let script_type_index = reader.read_i16_by(endian)?;
             if let Some(s) = &mut object.serialized_type {
                 s.script_index = script_type_index;
@@ -95,6 +95,13 @@ impl Object {
 
         Ok(object)
     }
+
+    pub fn save<W>(&self, _writer: &mut W) -> Result<(), Error>
+    where
+        W: Write,
+    {
+        unimplemented!();
+    }
 }
 
 impl_default!(Object);
@@ -103,7 +110,7 @@ impl_default!(Object);
 ///     https://github.com/K0lb3/UnityPy/blob/master/UnityPy/files/ObjectReader.py
 /// )
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive)]
-pub enum ClassIDType {
+pub enum ClassType {
     Unknown = -1,
     Object = 0,
     GameObject = 1,
