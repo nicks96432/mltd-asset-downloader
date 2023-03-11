@@ -54,7 +54,10 @@ impl BlockInfo {
         CompressionMethod::try_from(value)
     }
 
-    pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn read<R>(reader: &mut R) -> Result<Self, Error>
+    where
+        R: Read,
+    {
         Ok(Self {
             decompressed_size: reader.read_u32::<BigEndian>()?,
             compressed_size: reader.read_u32::<BigEndian>()?,
@@ -62,7 +65,10 @@ impl BlockInfo {
         })
     }
 
-    pub fn save<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn save<W>(&self, writer: &mut W) -> Result<(), Error>
+    where
+        W: Write,
+    {
         writer.write_u32::<BigEndian>(self.decompressed_size)?;
         writer.write_u32::<BigEndian>(self.compressed_size)?;
         writer.write_u16::<BigEndian>(self.flags)?;
@@ -83,7 +89,10 @@ impl PathInfo {
         }
     }
 
-    pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn read<R>(reader: &mut R) -> Result<Self, Error>
+    where
+        R: Read,
+    {
         Ok(Self {
             offset: reader.read_u64::<BigEndian>()?,
             decompressed_size: reader.read_u64::<BigEndian>()?,
@@ -92,7 +101,10 @@ impl PathInfo {
         })
     }
 
-    pub fn save<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn save<W>(&self, writer: &mut W) -> Result<(), Error>
+    where
+        W: Write,
+    {
         writer.write_u64::<BigEndian>(self.offset)?;
         writer.write_u64::<BigEndian>(self.decompressed_size)?;
         writer.write_u32::<BigEndian>(self.flags)?;
@@ -115,7 +127,10 @@ impl InfoBlock {
         }
     }
 
-    pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn read<R>(reader: &mut R) -> Result<Self, Error>
+    where
+        R: Read,
+    {
         let mut decompressed_hash = [0u8; 16];
         reader.read_exact(&mut decompressed_hash)?;
         log::trace!("hash: {:?}", decompressed_hash);
@@ -150,7 +165,10 @@ impl InfoBlock {
         })
     }
 
-    pub fn save<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn save<W>(&self, writer: &mut W) -> Result<(), Error>
+    where
+        W: Write,
+    {
         writer.write_all(&self.decompressed_hash)?;
         writer.write_u32::<BigEndian>(self.block_count)?;
         for block_info in self.block_infos.iter() {

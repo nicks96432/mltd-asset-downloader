@@ -16,6 +16,8 @@ pub enum Error {
     IOError(IOError),
     ParseIntError(ParseIntError),
     TryFromIntError(TryFromIntError),
+    UnknownCommonName,
+    UnknownPlatform,
     UnknownSignature,
     Utf8Error(Utf8Error),
 
@@ -45,6 +47,8 @@ impl Display for Error {
             Self::IOError(e) => e.fmt(f),
             Self::ParseIntError(e) => e.fmt(f),
             Self::TryFromIntError(e) => e.fmt(f),
+            Self::UnknownCommonName => write!(f, "unknown asset class common name"),
+            Self::UnknownPlatform => write!(f, "unknown asset target platform"),
             Self::UnknownSignature => write!(f, "unknown asset bundle signature"),
             Self::Utf8Error(e) => e.fmt(f),
             #[cfg(feature = "lz4")]

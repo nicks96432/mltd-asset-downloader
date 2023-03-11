@@ -16,7 +16,10 @@ pub struct UnityFS {
 }
 
 impl UnityFS {
-    pub fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, Error> {
+    pub fn read<R>(reader: &mut R) -> Result<Self, Error>
+    where
+        R: Read + Seek,
+    {
         // asset bundle header
         let bundle_header = Header::read(reader)?;
         log::trace!("bundle header:\n{:#?}", bundle_header);
@@ -98,7 +101,10 @@ impl UnityFS {
         })
     }
 
-    pub fn save<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn save<W>(&self, writer: &mut W) -> Result<(), Error>
+    where
+        W: Write,
+    {
         self.bundle_header.save(writer)?;
 
         // create compressor
@@ -144,17 +150,16 @@ impl UnityFS {
 
         Ok(())
     }
-}
 
-impl UnityFS {
     pub fn files(&self) -> Result<Vec<Asset>, Error> {
         let mut assets = Vec::new();
 
-        for path_info in self.info_block.path_infos.iter() {
+        for (i, path_info) in self.info_block.path_infos.iter().enumerate() {
             let begin = usize::try_from(path_info.offset)?;
             let end = usize::try_from(path_info.decompressed_size)?;
             let mut data = Cursor::new(&self.data[begin..end]);
 
+            log::trace!("asset {}:", i);
             let asset = Asset::read(&mut data)?;
             assets.push(asset);
         }

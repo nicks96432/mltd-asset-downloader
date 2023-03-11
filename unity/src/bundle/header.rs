@@ -23,7 +23,10 @@ pub struct UnityFSHeader {
 }
 
 impl Header {
-    pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn read<R>(reader: &mut R) -> Result<Self, Error>
+    where
+        R: Read,
+    {
         let signature = reader.read_string()?;
         log::trace!("signature: {}", signature);
 
@@ -35,7 +38,10 @@ impl Header {
         })
     }
 
-    pub fn save<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn save<W>(&self, writer: &mut W) -> Result<(), Error>
+    where
+        W: Write,
+    {
         writer.write_all(self.signature.to_string().as_bytes())?;
         writer.write_u8(0)?;
 
@@ -63,7 +69,10 @@ impl UnityFSHeader {
         }
     }
 
-    pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn read<R>(reader: &mut R) -> Result<Self, Error>
+    where
+        R: Read,
+    {
         Ok(Self {
             bundle_size: reader.read_u64::<BigEndian>()?,
             compressed_size: reader.read_u32::<BigEndian>()?,
@@ -72,7 +81,10 @@ impl UnityFSHeader {
         })
     }
 
-    pub fn save<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn save<W>(&self, writer: &mut W) -> Result<(), Error>
+    where
+        W: Write,
+    {
         writer.write_u64::<BigEndian>(self.bundle_size)?;
         writer.write_u32::<BigEndian>(self.compressed_size)?;
         writer.write_u32::<BigEndian>(self.decompressed_size)?;

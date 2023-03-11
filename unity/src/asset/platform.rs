@@ -1,6 +1,9 @@
-use num_derive::FromPrimitive;
+use num_derive::{FromPrimitive, ToPrimitive};
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, FromPrimitive)]
+/// From [UnityPy](
+/// https://github.com/K0lb3/UnityPy/blob/master/UnityPy/enums/BuildTarget.py
+/// )
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive)]
 pub enum Platform {
     DashboardWidget = 1,
     StandaloneOSX,
