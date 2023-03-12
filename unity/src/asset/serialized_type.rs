@@ -1,13 +1,12 @@
-use super::Header;
+use super::{ClassType, Header};
 use crate::error::Error;
-use crate::macros::impl_default;
 use crate::traits::{ReadIntExt, ReadString, ReadVecExt};
 use crate::utils::type_tree::{CommonString, Name, Node};
 use byteorder::ReadBytesExt;
 use num_traits::FromPrimitive;
 use std::io::{Cursor, Read, Write};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct SerializedType {
     pub class_id: i32,
     pub stripped: bool,
@@ -33,7 +32,7 @@ impl SerializedType {
         }
     }
 
-    pub fn read<R>(reader: &mut R, header: &Header) -> Result<Self, Error>
+    pub fn read<R>(reader: &mut R, header: &Header, is_ref: bool) -> Result<Self, Error>
     where
         R: Read,
     {
@@ -48,9 +47,9 @@ impl SerializedType {
         }
 
         if header.version >= 13 {
-            // TODO: remove magic number 114
-            if (header.version < 16 && ser_type.class_id < 0)
-                || (header.version >= 16 && ser_type.class_id == 114)
+            if (is_ref && ser_type.script_index >= 0)
+                || (header.version < 16 && ser_type.class_id < 0)
+                || (header.version >= 16 && ser_type.class_id == ClassType::MonoBehaviour as i32)
             {
                 reader.read_exact(&mut ser_type.script_id)?;
             }
@@ -119,5 +118,3 @@ impl SerializedType {
         unimplemented!();
     }
 }
-
-impl_default!(SerializedType);

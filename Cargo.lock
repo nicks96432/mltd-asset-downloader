@@ -443,7 +443,9 @@ name = "mltd-asset-extract"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "log",
  "num_cpus",
+ "unity",
 ]
 
 [[package]]

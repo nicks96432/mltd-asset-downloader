@@ -1,15 +1,16 @@
+mod class_type;
 mod header;
-mod object;
+mod object_reader;
 mod platform;
 mod serialized_type;
 
+pub use self::class_type::*;
 pub use self::header::*;
-pub use self::object::*;
+pub use self::object_reader::*;
 pub use self::platform::*;
 pub use self::serialized_type::*;
 
 use crate::error::Error;
-use crate::macros::impl_default;
 use crate::traits::ReadIntExt;
 use crate::traits::ReadString;
 use crate::traits::SeekAlign;
@@ -18,7 +19,7 @@ use std::io::Read;
 use std::io::Seek;
 use std::io::Write;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ScriptIdentifier {
     pub index: i32,
     pub id: i64,
@@ -51,7 +52,7 @@ impl ScriptIdentifier {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct FileIdentifier {
     pub guid: [u8; 16],
     pub file_type: i32,
@@ -96,14 +97,15 @@ impl FileIdentifier {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Asset {
     pub header: Header,
     pub types: Vec<SerializedType>,
     pub big_id_enabled: i32,
-    pub objects: LinkedHashMap<u64, Object>,
+    pub objects: LinkedHashMap<u64, ObjectReader>,
     pub scripts: Vec<ScriptIdentifier>,
     pub externals: Vec<FileIdentifier>,
+    pub ref_types: Vec<SerializedType>,
     pub user_information: String,
 }
 
@@ -116,6 +118,7 @@ impl Asset {
             objects: LinkedHashMap::new(),
             scripts: Vec::new(),
             externals: Vec::new(),
+            ref_types: Vec::new(),
             user_information: String::new(),
         }
     }
@@ -136,9 +139,9 @@ impl Asset {
         log::trace!("{} asset serized type(s)", type_count);
 
         for i in 0..type_count {
-            let serialized_type = SerializedType::read(reader, &asset.header)?;
-            log::trace!("asset class {}:\n{:#?}", i, serialized_type);
-            asset.types.push(serialized_type);
+            let r#type = SerializedType::read(reader, &asset.header, false)?;
+            log::trace!("asset class {}:\n{:#?}", i, r#type);
+            asset.types.push(r#type);
         }
 
         if (7..14).contains(&version) {
@@ -149,7 +152,7 @@ impl Asset {
         log::trace!("{} asset object(s)", object_count);
 
         for i in 0..object_count {
-            let object = Object::read(reader, &asset)?;
+            let object = ObjectReader::read(reader, &asset)?;
             log::trace!("asset object {}:\n{:#?}", i, &object);
             asset.objects.insert(object.path_id, object);
         }
@@ -174,9 +177,14 @@ impl Asset {
             asset.externals.push(external);
         }
 
-        // TODO: SerializedType ref type
         if version >= 20 {
-            todo!();
+            let ref_type_count = reader.read_i32_by(endian)?;
+            log::trace!("{} asset ref type(s)", ref_type_count);
+            for i in 0..ref_type_count {
+                let r#type = SerializedType::read(reader, &asset.header, true)?;
+                log::trace!("asset ref type {}:\n{:#?}", i, &r#type);
+                asset.ref_types.push(r#type);
+            }
         }
 
         if version >= 5 {
@@ -185,7 +193,7 @@ impl Asset {
 
         // TODO: object read type tree
         for object in asset.objects.values() {
-            if object.type_id == ClassType::AssetBundle {
+            if object.r#type == ClassType::AssetBundle {
                 todo!()
             }
         }
@@ -200,7 +208,3 @@ impl Asset {
         unimplemented!()
     }
 }
-
-impl_default!(ScriptIdentifier);
-impl_default!(FileIdentifier);
-impl_default!(Asset);

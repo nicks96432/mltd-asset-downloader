@@ -1,7 +1,7 @@
 use super::Platform;
+use crate::error::Error;
 use crate::macros::impl_default;
-use crate::traits::{ReadIntExt, WriteIntExt};
-use crate::{error::Error, traits::ReadString};
+use crate::traits::{ReadIntExt, ReadString, WriteIntExt};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::io::{Read, Seek, SeekFrom, Write};

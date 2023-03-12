@@ -42,7 +42,7 @@ impl FromStr for Version {
 }
 
 impl Version {
-    /// Returns whether this [`AssetBundleVersion`] is a newer Unity version.
+    /// Returns whether this [`Version`] is a newer Unity version.
     ///
     /// from [UnityPy](https://github.com/K0lb3/UnityPy/blob/c8d41de4ee914bb63d765fcbeb063531e1eea460/UnityPy/files/BundleFile.py#L99):
     ///

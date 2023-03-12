@@ -1,19 +1,19 @@
 use crate::compression::Method as CompressionMethod;
 use crate::error::Error;
-use crate::macros::{impl_default, impl_try_from_into_vec};
+use crate::macros::impl_try_from_into_vec;
 use crate::traits::ReadString;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::fmt::Debug;
 use std::io::{Read, Write};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct BlockInfo {
     pub decompressed_size: u32,
     pub compressed_size: u32,
     pub flags: u16,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct PathInfo {
     pub offset: u64,
     pub decompressed_size: u64,
@@ -21,7 +21,7 @@ pub struct PathInfo {
     pub path: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct InfoBlock {
     pub decompressed_hash: [u8; 16],
     pub block_count: u32,
@@ -42,11 +42,11 @@ impl BlockInfo {
     }
 
     /// Returns the compression method of the data block of
-    /// this [`AssetBlockInfo`].
+    /// this [`BlockInfo`].
     ///
     /// # Errors
     ///
-    /// This function will return [`UnityError::UnknownCompressionMethod`] if
+    /// This function will return [`Error::UnknownCompressionMethod`] if
     /// the compression method is unknown.
     pub fn compression_method(&self) -> Result<CompressionMethod, Error> {
         let value = u32::from(self.flags & 0x3f);
@@ -182,10 +182,6 @@ impl InfoBlock {
         Ok(())
     }
 }
-
-impl_default!(BlockInfo);
-impl_default!(PathInfo);
-impl_default!(InfoBlock);
 
 impl_try_from_into_vec!(BlockInfo);
 impl_try_from_into_vec!(PathInfo);

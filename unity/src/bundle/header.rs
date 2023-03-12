@@ -1,6 +1,6 @@
 use super::{Flags, Signature, Version};
 use crate::error::Error;
-use crate::macros::{impl_default, impl_try_from_into_vec};
+use crate::macros::impl_try_from_into_vec;
 use crate::traits::ReadString;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};
@@ -14,7 +14,7 @@ pub struct Header {
     pub version_engine: Version,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct UnityFSHeader {
     pub bundle_size: u64,
     pub compressed_size: u32,
@@ -93,8 +93,6 @@ impl UnityFSHeader {
         Ok(())
     }
 }
-
-impl_default!(UnityFSHeader);
 
 impl_try_from_into_vec!(Header);
 impl_try_from_into_vec!(UnityFSHeader);

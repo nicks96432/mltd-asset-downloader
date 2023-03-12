@@ -13,6 +13,7 @@ pub struct UnityFS {
     pub unityfs_header: UnityFSHeader,
     pub info_block: InfoBlock,
     pub data: Vec<u8>,
+    pub assets: Vec<Asset>,
 }
 
 impl UnityFS {
@@ -93,11 +94,24 @@ impl UnityFS {
         }
         log::trace!("data block total size: {}", data.len());
 
+        // parse assets
+        let mut assets = Vec::new();
+        for (i, path_info) in info_block.path_infos.iter().enumerate() {
+            let begin = usize::try_from(path_info.offset)?;
+            let end = usize::try_from(path_info.decompressed_size)?;
+            let mut buf = Cursor::new(&data[begin..end]);
+
+            log::trace!("asset {}:", i);
+            let asset = Asset::read(&mut buf)?;
+            assets.push(asset);
+        }
+
         Ok(Self {
             bundle_header,
             unityfs_header,
             info_block,
             data,
+            assets,
         })
     }
 
@@ -149,22 +163,6 @@ impl UnityFS {
         }
 
         Ok(())
-    }
-
-    pub fn files(&self) -> Result<Vec<Asset>, Error> {
-        let mut assets = Vec::new();
-
-        for (i, path_info) in self.info_block.path_infos.iter().enumerate() {
-            let begin = usize::try_from(path_info.offset)?;
-            let end = usize::try_from(path_info.decompressed_size)?;
-            let mut data = Cursor::new(&self.data[begin..end]);
-
-            log::trace!("asset {}:", i);
-            let asset = Asset::read(&mut data)?;
-            assets.push(asset);
-        }
-
-        Ok(assets)
     }
 }
 
@@ -259,15 +257,5 @@ mod tests {
         );
 
         assert_eq!(expect.data, got.data);
-    }
-
-    #[test]
-    fn test_files() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests")
-            .join("test.unity3d");
-        let mut file = File::open(path).unwrap();
-        let bundle = UnityFS::read(&mut file).unwrap();
-        bundle.files().unwrap();
     }
 }

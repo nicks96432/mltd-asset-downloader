@@ -52,7 +52,11 @@ fn main() {
         }
 
         #[cfg(feature = "extract")]
-        Command::Extract(e) => extract_media(&e),
+        Command::Extract(e) => {
+            if let Err(e) = extract_media(&e) {
+                log::error!("asset extract failed: {}", e.as_ref());
+            }
+        }
 
         #[cfg(feature = "manifest")]
         Command::Manifest(m) => {
