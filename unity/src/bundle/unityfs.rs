@@ -2,7 +2,6 @@ use super::{Header, InfoBlock, Signature, UnityFSHeader};
 use crate::asset::Asset;
 use crate::compression::Compressor;
 use crate::error::Error;
-use crate::macros::impl_try_from_into_vec;
 use crate::traits::SeekAlign;
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::mem::size_of;
@@ -17,33 +16,44 @@ pub struct UnityFS {
 }
 
 impl UnityFS {
+    pub fn new() -> Self {
+        Self {
+            bundle_header: Header::new(),
+            unityfs_header: UnityFSHeader::new(),
+            info_block: InfoBlock::new(),
+            data: Vec::new(),
+            assets: Vec::new(),
+        }
+    }
+
     pub fn read<R>(reader: &mut R) -> Result<Self, Error>
     where
         R: Read + Seek,
     {
+        let mut unityfs = Self::new();
+
         // asset bundle header
-        let bundle_header = Header::read(reader)?;
-        log::trace!("bundle header:\n{:#?}", bundle_header);
-        if bundle_header.signature != Signature::UnityFS {
+        unityfs.bundle_header = Header::read(reader)?;
+        log::trace!("bundle header:\n{:#?}", unityfs.bundle_header);
+        if unityfs.bundle_header.signature != Signature::UnityFS {
             return Err(Error::UnknownSignature);
         }
 
         // unityfs specific header
-        let mut unityfs_header = UnityFSHeader::read(reader)?;
-        assert!(unityfs_header.flags.info_block_combined());
-        log::trace!("unityfs header:\n{:#?}", unityfs_header);
+        unityfs.unityfs_header = UnityFSHeader::read(reader)?;
+        assert!(unityfs.unityfs_header.flags.info_block_combined());
+        log::trace!("unityfs header:\n{:#?}", unityfs.unityfs_header);
 
-        unityfs_header.flags.new = bundle_header.version_engine.is_new();
-        let unityfs_header = unityfs_header;
+        unityfs.unityfs_header.flags.new = unityfs.bundle_header.version_engine.is_new();
 
         // alignment
-        if bundle_header.version >= 7 {
+        if unityfs.bundle_header.version >= 7 {
             reader.seek_align(16)?;
         }
 
         // find info block
-        let compressed_size = usize::try_from(unityfs_header.compressed_size)?;
-        let decompressed_size = usize::try_from(unityfs_header.decompressed_size)?;
+        let compressed_size = usize::try_from(unityfs.unityfs_header.compressed_size)?;
+        let decompressed_size = usize::try_from(unityfs.unityfs_header.decompressed_size)?;
         log::trace!(
             "info block size: {}, unccompressed size: {})",
             compressed_size,
@@ -53,33 +63,33 @@ impl UnityFS {
         let mut buf = vec![0u8; compressed_size];
         reader.read_exact(&mut buf)?;
 
-        let compression_method = unityfs_header.flags.compression_method()?;
+        let compression_method = unityfs.unityfs_header.flags.compression_method()?;
         log::trace!("info block compression method: {:?}", compression_method);
 
-        if unityfs_header.flags.info_block_end() {
+        if unityfs.unityfs_header.flags.info_block_end() {
             let offset = -i64::try_from(compressed_size)?;
             reader.seek(SeekFrom::End(offset))?;
         }
 
         // decompress info block
         let buf = Compressor::new(compression_method).decompress(&buf, decompressed_size)?;
-        let info_block = InfoBlock::read(&mut Cursor::new(buf))?;
+        unityfs.info_block = InfoBlock::read(&mut Cursor::new(buf))?;
 
-        if unityfs_header.flags.info_block_end() {
+        if unityfs.unityfs_header.flags.info_block_end() {
             let offset = u64::try_from(size_of::<Header>())?;
             reader.seek(SeekFrom::Start(offset))?;
         }
 
-        if unityfs_header.flags.info_block_padding() {
+        if unityfs.unityfs_header.flags.info_block_padding() {
             reader.seek_align(16)?;
         }
 
         // data block
-        let iter = info_block.block_infos.iter();
+        let iter = unityfs.info_block.block_infos.iter();
         let len = iter.fold(0u64, |acc, &x| acc + u64::from(x.decompressed_size));
-        let mut data = Vec::with_capacity(usize::try_from(len)?);
+        unityfs.data = Vec::with_capacity(usize::try_from(len)?);
 
-        let iter = info_block.block_infos.iter();
+        let iter = unityfs.info_block.block_infos.iter();
         for block in iter {
             let mut buf = vec![0u8; usize::try_from(block.compressed_size)?];
             reader.read_exact(&mut buf)?;
@@ -90,29 +100,21 @@ impl UnityFS {
             let expected_size = block.decompressed_size;
             assert_eq!(u32::try_from(buf.len())?, expected_size);
 
-            data.write_all(&buf)?;
+            unityfs.data.write_all(&buf)?;
         }
-        log::trace!("data block total size: {}", data.len());
+        log::trace!("data block total size: {}", unityfs.data.len());
 
         // parse assets
-        let mut assets = Vec::new();
-        for (i, path_info) in info_block.path_infos.iter().enumerate() {
+        for (i, path_info) in unityfs.info_block.path_infos.iter().enumerate() {
             let begin = usize::try_from(path_info.offset)?;
             let end = usize::try_from(path_info.decompressed_size)?;
-            let mut buf = Cursor::new(&data[begin..end]);
 
             log::trace!("asset {}:", i);
-            let asset = Asset::read(&mut buf)?;
-            assets.push(asset);
+            let asset = Asset::read(Cursor::new(unityfs.data[begin..end].to_vec()))?;
+            unityfs.assets.push(asset);
         }
 
-        Ok(Self {
-            bundle_header,
-            unityfs_header,
-            info_block,
-            data,
-            assets,
-        })
+        Ok(unityfs)
     }
 
     pub fn save<W>(&self, writer: &mut W) -> Result<(), Error>
@@ -165,8 +167,6 @@ impl UnityFS {
         Ok(())
     }
 }
-
-impl_try_from_into_vec!(UnityFS);
 
 #[cfg(test)]
 #[ctor::ctor]

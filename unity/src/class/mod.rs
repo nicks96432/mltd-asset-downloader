@@ -1,15 +1,18 @@
+mod class_type;
+mod editor_extension;
 mod game_object;
 mod object;
 mod pptr;
 
-use std::io::Read;
-
+pub use self::class_type::*;
+pub use self::editor_extension::*;
 pub use self::game_object::*;
+pub use self::object::*;
 pub use self::pptr::*;
-pub use object::*;
 
-use crate::asset::{ClassType, ObjectReader};
+use crate::asset::ObjectReader;
 use crate::error::Error;
+use std::io::Read;
 
 #[derive(Debug)]
 pub enum Class {

@@ -1,20 +1,20 @@
-mod class_type;
 mod header;
 mod object_reader;
 mod platform;
-mod serialized_type;
+mod asset_type;
 
-pub use self::class_type::*;
 pub use self::header::*;
 pub use self::object_reader::*;
 pub use self::platform::*;
-pub use self::serialized_type::*;
+pub use self::asset_type::*;
 
+use crate::class::ClassType;
 use crate::error::Error;
 use crate::traits::ReadIntExt;
 use crate::traits::ReadString;
 use crate::traits::SeekAlign;
 use linked_hash_map::LinkedHashMap;
+use std::io::Cursor;
 use std::io::Read;
 use std::io::Seek;
 use std::io::Write;
@@ -100,13 +100,15 @@ impl FileIdentifier {
 #[derive(Debug, Clone, Default)]
 pub struct Asset {
     pub header: Header,
-    pub types: Vec<SerializedType>,
+    pub types: Vec<AssetType>,
     pub big_id_enabled: i32,
     pub objects: LinkedHashMap<u64, ObjectReader>,
     pub scripts: Vec<ScriptIdentifier>,
     pub externals: Vec<FileIdentifier>,
-    pub ref_types: Vec<SerializedType>,
+    pub ref_types: Vec<AssetType>,
     pub user_information: String,
+
+    reader: Cursor<Vec<u8>>,
 }
 
 impl Asset {
@@ -120,75 +122,75 @@ impl Asset {
             externals: Vec::new(),
             ref_types: Vec::new(),
             user_information: String::new(),
+
+            reader: Cursor::new(Vec::new()),
         }
     }
 
-    pub fn read<R>(reader: &mut R) -> Result<Self, Error>
-    where
-        R: Read + Seek,
-    {
+    pub fn read(reader: Cursor<Vec<u8>>) -> Result<Self, Error> {
         let mut asset = Self::new();
+        asset.reader = reader;
 
-        asset.header = Header::read(reader)?;
+        asset.header = Header::read(&mut asset.reader)?;
         log::trace!("asset header:\n{:#?}", &asset.header);
 
         let endian = asset.header.endian;
         let version = asset.header.version;
 
-        let type_count = reader.read_u32_by(endian)?;
+        let type_count = asset.reader.read_u32_by(endian)?;
         log::trace!("{} asset serized type(s)", type_count);
 
         for i in 0..type_count {
-            let r#type = SerializedType::read(reader, &asset.header, false)?;
+            let r#type = AssetType::read(&mut asset.reader, &asset.header, false)?;
             log::trace!("asset class {}:\n{:#?}", i, r#type);
             asset.types.push(r#type);
         }
 
         if (7..14).contains(&version) {
-            asset.big_id_enabled = reader.read_i32_by(endian)?;
+            asset.big_id_enabled = asset.reader.read_i32_by(endian)?;
         }
 
-        let object_count = reader.read_i32_by(endian)?;
+        let object_count = asset.reader.read_i32_by(endian)?;
         log::trace!("{} asset object(s)", object_count);
 
         for i in 0..object_count {
-            let object = ObjectReader::read(reader, &asset)?;
+            let object = ObjectReader::read(&mut asset)?;
             log::trace!("asset object {}:\n{:#?}", i, &object);
             asset.objects.insert(object.path_id, object);
         }
 
         if version >= 11 {
-            let script_count = reader.read_u32_by(endian)?;
+            let script_count = asset.reader.read_u32_by(endian)?;
             log::trace!("{} asset script(s)", script_count);
 
             for i in 0..script_count {
-                let script = ScriptIdentifier::read(reader, &asset.header)?;
+                let script = ScriptIdentifier::read(&mut asset.reader, &asset.header)?;
                 log::trace!("asset script {}:\n{:#?}", i, &script);
                 asset.scripts.push(script);
             }
         }
 
-        let external_count = reader.read_i32_by(endian)?;
+        let external_count = asset.reader.read_i32_by(endian)?;
         log::trace!("{} asset external file(s)", external_count);
 
         for i in 0..external_count {
-            let external = FileIdentifier::read(reader, &asset.header)?;
+            let external = FileIdentifier::read(&mut asset.reader, &asset.header)?;
             log::trace!("asset external {}:\n{:#?}", i, &external);
             asset.externals.push(external);
         }
 
         if version >= 20 {
-            let ref_type_count = reader.read_i32_by(endian)?;
+            let ref_type_count = asset.reader.read_i32_by(endian)?;
             log::trace!("{} asset ref type(s)", ref_type_count);
             for i in 0..ref_type_count {
-                let r#type = SerializedType::read(reader, &asset.header, true)?;
+                let r#type = AssetType::read(&mut asset.reader, &asset.header, true)?;
                 log::trace!("asset ref type {}:\n{:#?}", i, &r#type);
                 asset.ref_types.push(r#type);
             }
         }
 
         if version >= 5 {
-            asset.user_information = reader.read_string()?;
+            asset.user_information = asset.reader.read_string()?;
         }
 
         // TODO: object read type tree

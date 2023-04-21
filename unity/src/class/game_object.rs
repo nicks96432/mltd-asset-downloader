@@ -7,9 +7,10 @@ use std::io::Read;
 
 #[derive(Debug, Clone)]
 pub struct GameObject {
+    pub name: String,
+
     components: Vec<PPtr>,
     layer: i32,
-    pub name: String,
     animator: Option<PPtr>,
     animation: Option<PPtr>,
     transform: Option<PPtr>,

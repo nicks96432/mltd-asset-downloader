@@ -23,6 +23,19 @@ pub struct UnityFSHeader {
 }
 
 impl Header {
+    pub(crate) fn new() -> Self {
+        Self {
+            signature: Signature::UnityFS,
+            version: 0,
+            version_player: String::new(),
+            version_engine: Version {
+                major: 0,
+                minor: 0,
+                patch: String::new(),
+            },
+        }
+    }
+
     pub fn read<R>(reader: &mut R) -> Result<Self, Error>
     where
         R: Read,

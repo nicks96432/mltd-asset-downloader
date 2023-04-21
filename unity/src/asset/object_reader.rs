@@ -1,11 +1,12 @@
-use super::{Asset, ClassType, SerializedType};
+use super::{Asset, AssetType};
+use crate::class::ClassType;
 use crate::class::Class;
 use crate::error::Error;
 use crate::macros::impl_default;
 use crate::traits::{ReadIntExt, SeekAlign};
 use byteorder::ReadBytesExt;
 use num_traits::{FromPrimitive, ToPrimitive};
-use std::io::{Read, Seek, Write};
+use std::io::{Read, Write};
 
 #[derive(Debug, Clone)]
 pub struct ObjectReader {
@@ -13,7 +14,7 @@ pub struct ObjectReader {
     pub start: u64,
     pub size: u32,
     pub r#type: ClassType,
-    pub serialized_type: Option<SerializedType>,
+    pub asset_type: Option<AssetType>,
     pub is_destroyed: u16,
     pub class_id: u16,
     pub stripped: bool,
@@ -28,7 +29,7 @@ impl ObjectReader {
             start: 0u64,
             size: 0u32,
             r#type: ClassType::Unknown,
-            serialized_type: None,
+            asset_type: None,
             is_destroyed: 0u16,
             class_id: 0u16,
             stripped: false,
@@ -37,11 +38,10 @@ impl ObjectReader {
         }
     }
 
-    pub fn read<R>(reader: &mut R, asset: &Asset) -> Result<Self, Error>
-    where
-        R: Read + Seek,
-    {
+    pub fn read(asset: &mut Asset) -> Result<Self, Error> {
         let mut object = Self::new();
+
+        let reader = &mut asset.reader;
         let endian = asset.header.endian;
         let version = asset.header.version;
         object.endian = endian;
@@ -68,11 +68,11 @@ impl ObjectReader {
 
         if version < 16 {
             object.class_id = reader.read_u16_by(endian)?;
-            object.serialized_type = None;
+            object.asset_type = None;
 
             for t in asset.types.iter() {
                 if ClassType::from_i32(t.class_id).ok_or_else(err)? == object.r#type {
-                    object.serialized_type = Some(t.clone());
+                    object.asset_type = Some(t.clone());
                     break;
                 }
             }
@@ -80,7 +80,7 @@ impl ObjectReader {
             let index = ToPrimitive::to_usize(&object.r#type).ok_or_else(err)?;
             let t = &asset.types[index];
             object.class_id = t.class_id.try_into()?;
-            object.serialized_type = Some(t.clone());
+            object.asset_type = Some(t.clone());
         }
 
         if version < 11 {
@@ -89,7 +89,7 @@ impl ObjectReader {
 
         if (11..17).contains(&version) {
             let script_type_index = reader.read_i16_by(endian)?;
-            if let Some(s) = &mut object.serialized_type {
+            if let Some(s) = &mut object.asset_type {
                 s.script_index = script_type_index;
             }
         }

@@ -1,4 +1,5 @@
-use super::{ClassType, Header};
+use super::Header;
+use crate::class::ClassType;
 use crate::error::Error;
 use crate::traits::{ReadIntExt, ReadString, ReadVecExt};
 use crate::utils::type_tree::{CommonString, Name, Node};
@@ -7,7 +8,7 @@ use num_traits::FromPrimitive;
 use std::io::{Cursor, Read, Write};
 
 #[derive(Debug, Clone, Default)]
-pub struct SerializedType {
+pub struct AssetType {
     pub class_id: i32,
     pub stripped: bool,
     pub script_index: i16,
@@ -18,7 +19,7 @@ pub struct SerializedType {
     pub type_dependencies: Vec<i32>,
 }
 
-impl SerializedType {
+impl AssetType {
     pub fn new() -> Self {
         Self {
             class_id: 0i32,
