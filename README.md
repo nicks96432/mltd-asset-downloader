@@ -8,21 +8,21 @@ Game asset downloader for THE IDOLM@STER MILLION LIVE! Theater Days (MLTD), writ
 
 ```console
 $ ./mltd-asset-downloader --help
-asset downloader for THE IDOLM@STER MILLION LIVE! Theater Days (MLTD)
+A CLI made for assets in THE iDOLM@STER® MILLION LIVE! THEATER DAYS (MLTD)
 
-Usage: mltd-asset-downloader [OPTIONS] <VARIANT>
+Usage: mltd [OPTIONS] <COMMAND>
 
-Arguments:
-  <VARIANT>  The os variant to download [possible values: android, ios]
+Commands:
+  download  Download assets from MLTD asset server
+  extract   Extract media from MLTD assets
+  manifest  Download asset manifest from MLTD asset server
+  help      Print this message or the help of the given subcommand(s)
 
 Options:
-      --keep-manifest    Keep the manifest file in the output directory
-  -o, --output <DIR>     The output path [default: ./assets]
-  -P, --parallel <CPUS>  The number of threads to use [default: (your CPU core count)]
-  -v, --verbose...       More output per occurrence
-  -q, --quiet...         Less output per occurrence
-  -h, --help             Print help
-  -V, --version          Print version
+  -v, --verbose...  More output per occurrence
+  -q, --quiet...    Less output per occurrence
+  -h, --help        Print help
+  -V, --version     Print version
 ```
 
 ## Build
