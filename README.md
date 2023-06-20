@@ -31,6 +31,8 @@ Options:
 cargo build --release
 ```
 
+The executable will be in the `target/release` directory.
+
 ## License
 
 Licensed under [MIT](LICENSE).
