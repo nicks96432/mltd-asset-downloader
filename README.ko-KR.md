@@ -7,22 +7,22 @@
 ## 사용법
 
 ```console
-$ ./mltd-asset-downloader --help
+$ ./mltd --help
 THE IDOLM@STER MILLION LIVE! Theater Days (MLTD) 에셋 다운로더
 
-Usage: mltd-asset-downloader [옵션] <VARIANT>
+Usage: mltd [OPTIONS] <COMMAND>
 
-Arguments:
-  <VARIANT>  The os variant to download [possible values: android, ios]
+Commands:
+  download  Download assets from MLTD asset server
+  extract   Extract media from MLTD assets
+  manifest  Download asset manifest from MLTD asset server
+  help      Print this message or the help of the given subcommand(s)
 
 Options:
-      --keep-manifest       Keep the manifest file in the output directory
-  -o, --output <DIR>        다운로드 경로 [default: "./assets"]
-  -P, --parallel <CPUS>     다운로드 파일의 배치 크기, [default: (CPU 코어 수)]
-  -v, --verbose...          More output per occurrence
-  -q, --quiet...            Less output per occurrence
-  -h, --help                이 도움말 표시
-  -V, --version             버전 출력
+  -v, --verbose...  More output per occurrence
+  -q, --quiet...    Less output per occurrence
+  -h, --help        Print help
+  -V, --version     Print version
 ```
 
 ## 빌드

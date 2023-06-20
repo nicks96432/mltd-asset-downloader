@@ -7,22 +7,22 @@
 ## 用法
 
 ```console
-$ ./mltd-asset-downloadeer --help
+$ ./mltd --help
 偶像大師 百萬人演唱會！ 劇場時光 (MLTD) 遊戲資源下載器
 
-用法: mltd-asset-downloader [OPTIONS] <VARIANT>
+用法: mltd [OPTIONS] <COMMAND>
 
-參數:
-  <VARIANT>  The os variant to download [possible values: android, ios]
+Commands:
+  download  從MLTD資源伺服器下載資源包
+  extract   從MLTD的資源包中提取資源
+  manifest  從MLTD資源伺服器下載資源包列表
+  help      顯示這個說明訊息或是以上指令的說明
 
 選項:
-      --keep-manifest       保留manifest在輸出資料夾裡
-  -o, --output <DIR>        存檔路徑 (default: "./assets")
-  -P, --parallel <CPUS>     一次要下載幾個檔案 [default: (你的CPU核心數)]
-  -v, --verbose...          顯示更多輸出訊息
-  -q, --quiet...            顯示更少輸出訊息
-  -h, --help                顯示說明
-  -V, --version             印出版本號
+  -v, --verbose...  顯示更多輸出訊息
+  -q, --quiet...    顯示更少輸出訊息
+  -h, --help        顯示說明
+  -V, --version     顯示版本
 ```
 
 ## 編譯

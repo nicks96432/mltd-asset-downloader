@@ -7,7 +7,7 @@ Game asset downloader for THE IDOLM@STER MILLION LIVE! Theater Days (MLTD), writ
 ## Usage
 
 ```console
-$ ./mltd-asset-downloader --help
+$ ./mltd --help
 A CLI made for assets in THE iDOLM@STER® MILLION LIVE! THEATER DAYS (MLTD)
 
 Usage: mltd [OPTIONS] <COMMAND>
