@@ -1,3 +1,4 @@
+use std::cell::{BorrowMutError, BorrowError};
 use std::error::Error as StdError;
 use std::fmt::{Display, Formatter, Result};
 use std::io::Error as IOError;
@@ -12,6 +13,8 @@ use {
 
 #[derive(Debug)]
 pub enum Error {
+    BorrowError(BorrowError),
+    BorrowMutError(BorrowMutError),
     InvalidVersion,
     IOError(IOError),
     ParseIntError(ParseIntError),
@@ -44,6 +47,8 @@ impl StdError for Error {}
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
+            Self::BorrowError(e) => e.fmt(f),
+            Self::BorrowMutError(e) => e.fmt(f),
             Self::InvalidVersion => write!(f, "invalid asset bundle version"),
             Self::IOError(e) => e.fmt(f),
             Self::ParseIntError(e) => e.fmt(f),
@@ -83,6 +88,8 @@ macro_rules! impl_from_for_error {
     };
 }
 
+impl_from_for_error!(BorrowError);
+impl_from_for_error!(BorrowMutError);
 impl_from_for_error!(IOError);
 impl_from_for_error!(ParseIntError);
 impl_from_for_error!(TryFromIntError);

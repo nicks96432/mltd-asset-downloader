@@ -2,7 +2,10 @@ use crate::compression::Method as CompressionMethod;
 use crate::error::Error;
 use crate::macros::impl_try_from_into_vec;
 use crate::traits::ReadString;
+
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use num_traits::FromPrimitive;
+
 use std::fmt::Debug;
 use std::io::{Read, Write};
 
@@ -51,7 +54,7 @@ impl BlockInfo {
     pub fn compression_method(&self) -> Result<CompressionMethod, Error> {
         let value = u32::from(self.flags & 0x3f);
 
-        CompressionMethod::try_from(value)
+        CompressionMethod::from_u32(value).ok_or_else(|| Error::UnknownCompressionMethod)
     }
 
     pub fn read<R>(reader: &mut R) -> Result<Self, Error>

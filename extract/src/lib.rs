@@ -1,7 +1,8 @@
+use unity::bundle::UnityFS;
+
 use std::error::Error;
 use std::fs::File;
 use std::path::PathBuf;
-use unity::bundle::UnityFS;
 
 #[derive(Debug, clap::Args)]
 #[command(author, version, about, arg_required_else_help(true))]
@@ -24,7 +25,7 @@ pub fn extract_media(args: &ExtractorArgs) -> Result<(), Box<dyn Error>> {
     let bundle = UnityFS::read(&mut f)?;
 
     for (i, asset) in bundle.assets.iter().enumerate() {
-        for (j, object) in asset.objects.values().enumerate() {
+        for (j, object) in asset.borrow().objects.values().enumerate() {
             log::debug!("asset {} object {}:\n{:#?}", i, j, object.class(&mut f)?);
         }
     }

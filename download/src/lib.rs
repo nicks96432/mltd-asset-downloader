@@ -40,17 +40,14 @@ pub fn download_assets(args: &DownloaderArgs) -> Result<(), DownloadError> {
 
     let output_path = args.output.join(manifest.version.to_string());
 
-    #[cfg(not(feature = "debug"))]
-    {
-        log::debug!("creating output directory");
-        if let Err(e) = create_dir_all(&args.output) {
-            return Err(DownloadError::FileCreateFailed(e));
-        }
+    log::debug!("creating output directory");
+    if let Err(e) = create_dir_all(&args.output) {
+        return Err(DownloadError::FileCreateFailed(e));
+    }
 
-        log::debug!("creating asset directory");
-        if let Err(e) = create_dir_all(&output_path) {
-            return Err(DownloadError::FileCreateFailed(e));
-        }
+    log::debug!("creating asset directory");
+    if let Err(e) = create_dir_all(&output_path) {
+        return Err(DownloadError::FileCreateFailed(e));
     }
 
     log::debug!("setting progress bar");

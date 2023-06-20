@@ -1,6 +1,8 @@
-use crate::error::Error;
+use num_derive::{FromPrimitive, ToPrimitive};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+use std::fmt::{Display, Formatter, Result};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive)]
 pub enum Method {
     None = 0,
     Lzma,
@@ -9,17 +11,18 @@ pub enum Method {
     Lzham,
 }
 
-impl TryFrom<u32> for Method {
-    type Error = Error;
-
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Method::None),
-            1 => Ok(Method::Lzma),
-            2 => Ok(Method::Lz4),
-            3 => Ok(Method::Lz4hc),
-            4 => Ok(Method::Lzham),
-            _ => Err(Error::UnknownCompressionMethod),
-        }
+impl Display for Method {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::None => "None",
+                Self::Lzma => "LZMA",
+                Self::Lz4 => "LZ4",
+                Self::Lz4hc => "LZ4HC",
+                Self::Lzham => "LZHAM",
+            }
+        )
     }
 }

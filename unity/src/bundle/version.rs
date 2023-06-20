@@ -1,4 +1,5 @@
 use crate::error::Error;
+
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 

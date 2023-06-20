@@ -1,6 +1,8 @@
 use crate::compression::Method as CompressionMethod;
 use crate::error::Error;
 
+use num_traits::FromPrimitive;
+
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Flags {
     pub bits: u32,
@@ -29,7 +31,7 @@ impl Flags {
     pub fn compression_method(&self) -> Result<CompressionMethod, Error> {
         let value = self.bits & 0x3f;
 
-        CompressionMethod::try_from(value)
+        CompressionMethod::from_u32(value).ok_or_else(|| Error::UnknownCompressionMethod)
     }
 
     /// Returns whether the block info and asset info in

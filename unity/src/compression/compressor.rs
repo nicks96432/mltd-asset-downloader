@@ -24,8 +24,9 @@ impl Compressor {
 
             #[cfg(feature = "lzma")]
             Method::Lzma => {
-                use std::io::Read;
                 use xz2::read::XzEncoder;
+
+                use std::io::Read;
 
                 let mut output = Vec::new();
                 let mut compressor = XzEncoder::new(buf, 6); // TODO: custom compression level
@@ -38,8 +39,9 @@ impl Compressor {
 
             #[cfg(feature = "lzham")]
             Method::Lzham => {
-                use lzham::compress;
                 use std::io::{BufReader, Cursor};
+
+                use lzham::compress;
 
                 let input = Vec::from(buf);
                 let mut input = BufReader::new(Cursor::new(input));

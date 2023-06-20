@@ -3,6 +3,7 @@ use crate::asset::ObjectReader;
 use crate::error::Error;
 use crate::macros::impl_default;
 use crate::traits::ReadIntExt;
+
 use std::io::Read;
 
 #[derive(Debug, Clone)]

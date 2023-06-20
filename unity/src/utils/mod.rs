@@ -23,3 +23,10 @@ impl FileType {
         Ok(Self::Unknown)
     }
 }
+
+pub fn bool_to_yes_no(b: bool) -> &'static str {
+    match b {
+        true => "Yes",
+        false => "No",
+    }
+}
