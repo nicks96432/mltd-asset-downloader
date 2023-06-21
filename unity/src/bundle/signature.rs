@@ -3,7 +3,7 @@ use crate::error::Error;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Signature {
     UnityFS,
     UnityWeb,

@@ -109,7 +109,7 @@ impl ObjectReader {
         Ok(object)
     }
 
-    pub fn class<R>(&self, reader: &mut R) -> Result<Class, Error>
+    pub fn class<R>(self, reader: &mut R) -> Result<Class, Error>
     where
         R: Read,
     {
@@ -118,7 +118,7 @@ impl ObjectReader {
 
     // TODO: read type tree
 
-    pub fn save<W>(&self, _writer: &mut W) -> Result<(), Error>
+    pub fn save<W>(&self, writer: &mut W) -> Result<(), Error>
     where
         W: Write,
     {

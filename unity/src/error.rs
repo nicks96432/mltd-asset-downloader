@@ -1,4 +1,4 @@
-use std::cell::{BorrowMutError, BorrowError};
+use std::cell::{BorrowError, BorrowMutError};
 use std::error::Error as StdError;
 use std::fmt::{Display, Formatter, Result};
 use std::io::Error as IOError;

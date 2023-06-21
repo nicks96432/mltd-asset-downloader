@@ -1,5 +1,5 @@
 use super::{Object, PPtr};
-use crate::asset::{ObjectReader, Platform};
+use crate::asset::ObjectReader;
 use crate::error::Error;
 
 use std::io::Read;

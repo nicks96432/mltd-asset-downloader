@@ -1,12 +1,14 @@
+use std::fmt::{Display, Formatter};
+
 use crate::compression::Method as CompressionMethod;
 use crate::error::Error;
+use crate::utils::bool_to_yes_no;
 
 use num_traits::FromPrimitive;
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Flags {
     pub bits: u32,
-    pub new: bool,
 }
 
 impl Flags {
@@ -16,10 +18,7 @@ impl Flags {
     ///
     /// [v]: crate::bundle::Version
     pub fn new(flag: u32) -> Self {
-        Self {
-            bits: flag,
-            new: false,
-        }
+        Self { bits: flag }
     }
 
     /// Returns the compression method of this [`Flags`].
@@ -54,6 +53,51 @@ impl Flags {
     ///
     /// [InfoBlock]: crate::bundle::InfoBlock
     pub fn info_block_padding(&self) -> bool {
-        self.new && self.bits & 0x200 != 0
+        self.bits & 0x200 != 0
+    }
+}
+
+impl Display for Flags {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // XXX: maybe try a different way to indent output?
+        let indent = f.width().unwrap_or(0);
+        writeln!(f, "{:indent$}Flags:", "", indent = indent)?;
+
+        write!(
+            f,
+            "{:indent$}Compression method:                     ",
+            "",
+            indent = indent + 4
+        )?;
+
+        if let Ok(compression_method) = self.compression_method() {
+            writeln!(f, "{}", compression_method)?;
+        } else {
+            writeln!(f, "unknown")?;
+        }
+
+        writeln!(
+            f,
+            "{:indent$}Block info and path info are combined?  {}",
+            "",
+            bool_to_yes_no(self.info_block_combined()),
+            indent = indent + 4
+        )?;
+        writeln!(
+            f,
+            "{:indent$}Info block is at the end?               {}",
+            "",
+            bool_to_yes_no(self.info_block_end()),
+            indent = indent + 4
+        )?;
+        write!(
+            f,
+            "{:indent$}Info block has padding at the begining? {}",
+            "",
+            bool_to_yes_no(self.info_block_padding()),
+            indent = indent + 4
+        )?;
+
+        Ok(())
     }
 }

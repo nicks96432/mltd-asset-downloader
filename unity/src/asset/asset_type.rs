@@ -125,6 +125,7 @@ impl AssetType {
 
 impl Display for AssetType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // XXX: maybe try a different way to indent output?
         let indent = f.width().unwrap_or(0);
 
         writeln!(
@@ -155,7 +156,7 @@ impl Display for AssetType {
                 f,
                 "{:indent$}Script ID:    {}",
                 "",
-                hex::encode(&self.script_id),
+                hex::encode(self.script_id),
                 indent = indent
             )?;
         }
@@ -163,7 +164,7 @@ impl Display for AssetType {
             f,
             "{:indent$}Hash:         {}",
             "",
-            hex::encode(&self.hash),
+            hex::encode(self.hash),
             indent = indent
         )?;
 

@@ -35,7 +35,7 @@ impl GameObject {
         }
     }
 
-    pub fn read<R>(reader: &mut R, object: &ObjectReader) -> Result<Self, Error>
+    pub fn read<R>(reader: &mut R, object: ObjectReader) -> Result<Self, Error>
     where
         R: Read,
     {

@@ -241,6 +241,7 @@ impl Asset {
 
 impl Display for Asset {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // XXX: maybe try a different way to indent output?
         let indent = f.width().unwrap_or(0);
         writeln!(f, "{:indent$}Basic information:", "", indent = indent)?;
         writeln!(

@@ -9,14 +9,14 @@ use num_traits::FromPrimitive;
 use std::fmt::Debug;
 use std::io::{Read, Write};
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct BlockInfo {
     pub decompressed_size: u32,
     pub compressed_size: u32,
     pub flags: u16,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PathInfo {
     pub offset: u64,
     pub decompressed_size: u64,
@@ -24,7 +24,7 @@ pub struct PathInfo {
     pub path: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct InfoBlock {
     pub decompressed_hash: [u8; 16],
     pub block_count: u32,

@@ -26,7 +26,7 @@ pub fn extract_media(args: &ExtractorArgs) -> Result<(), Box<dyn Error>> {
 
     for (i, asset) in bundle.assets.iter().enumerate() {
         for (j, object) in asset.borrow().objects.values().enumerate() {
-            log::debug!("asset {} object {}:\n{:#?}", i, j, object.class(&mut f)?);
+            log::debug!("asset {} object {}:\n{:#?}", i, j, object);
         }
     }
 

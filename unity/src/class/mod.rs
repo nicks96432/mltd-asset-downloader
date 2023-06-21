@@ -57,7 +57,7 @@ pub enum Class {
 }
 
 impl Class {
-    pub fn read<R>(reader: &mut R, obj: &ObjectReader) -> Result<Self, Error>
+    pub fn read<R>(reader: &mut R, obj: ObjectReader) -> Result<Self, Error>
     where
         R: Read,
     {
