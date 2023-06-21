@@ -61,20 +61,19 @@ impl Display for Flags {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // XXX: maybe try a different way to indent output?
         let indent = f.width().unwrap_or(0);
+
         writeln!(f, "{:indent$}Flags:", "", indent = indent)?;
 
         write!(
             f,
-            "{:indent$}Compression method:                     ",
+            "{:indent$}Compression method:                     {}",
             "",
+            match self.compression_method() {
+                Ok(c) => c.to_string(),
+                Err(_) => "unknown".to_owned(),
+            },
             indent = indent + 4
         )?;
-
-        if let Ok(compression_method) = self.compression_method() {
-            writeln!(f, "{}", compression_method)?;
-        } else {
-            writeln!(f, "unknown")?;
-        }
 
         writeln!(
             f,

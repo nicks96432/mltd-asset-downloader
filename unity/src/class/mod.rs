@@ -10,7 +10,7 @@ pub use self::game_object::*;
 pub use self::object::*;
 pub use self::pptr::*;
 
-use crate::asset::ObjectReader;
+use crate::asset::ObjectInfo;
 use crate::error::Error;
 use std::io::Read;
 
@@ -57,11 +57,11 @@ pub enum Class {
 }
 
 impl Class {
-    pub fn read<R>(reader: &mut R, obj: ObjectReader) -> Result<Self, Error>
+    pub fn read<R>(reader: &mut R, obj: ObjectInfo) -> Result<Self, Error>
     where
         R: Read,
     {
-        match obj.r#type {
+        match obj.class_type {
             ClassType::Animation => Ok(Self::Animation),
             ClassType::AnimationClip => Ok(Self::AnimationClip),
             ClassType::Animator => Ok(Self::Animator),

@@ -1,4 +1,4 @@
-use crate::asset::ObjectReader;
+use crate::asset::ObjectInfo;
 use crate::error::Error;
 
 use std::io::Read;
@@ -9,7 +9,7 @@ pub struct Object {
 }
 
 impl Object {
-    pub fn read<R>(file_reader: &mut R, object_reader: &ObjectReader) -> Result<Self, Error>
+    pub fn read<R>(file_reader: &mut R, object_reader: &ObjectInfo) -> Result<Self, Error>
     where
         R: Read,
     {

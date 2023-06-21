@@ -1,5 +1,5 @@
 use super::PPtr;
-use crate::asset::ObjectReader;
+use crate::asset::ObjectInfo;
 use crate::error::Error;
 use crate::macros::impl_default;
 use crate::traits::ReadIntExt;
@@ -35,12 +35,10 @@ impl GameObject {
         }
     }
 
-    pub fn read<R>(reader: &mut R, object: ObjectReader) -> Result<Self, Error>
+    pub fn read<R>(reader: &mut R, object: ObjectInfo) -> Result<Self, Error>
     where
         R: Read,
     {
-        let _component_count = reader.read_i32_by(object.endian)?;
-
         todo!()
     }
 }

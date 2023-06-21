@@ -1,25 +1,28 @@
-use super::{Asset, Header};
+use super::{Asset, TypeTree};
 use crate::class::ClassType;
 use crate::error::Error;
+use crate::macros::impl_default;
 use crate::traits::{ReadIntExt, ReadString, ReadVecExt};
-use crate::utils::type_tree::{CommonString, Name, Node};
 
 use byteorder::ReadBytesExt;
-use num_traits::FromPrimitive;
+use num_traits::{FromPrimitive, ToPrimitive};
 
-use std::fmt::Display;
-use std::io::{Cursor, Read, Write};
+use std::fmt::{Display, Formatter};
+use std::io::{Read, Write};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AssetType {
+    /// Negative for script types
     pub class_id: i32,
     pub stripped: bool,
     pub script_index: i16,
-    pub script_id: [u8; 16],
-    pub hash: [u8; 16],
-    pub nodes: Vec<Node>,
-    pub string_data: Vec<String>,
+    pub script_hash: [u8; 16],
+    pub type_hash: [u8; 16],
+    pub type_tree: TypeTree,
     pub type_dependencies: Vec<i32>,
+    pub class_name: String,
+    pub namespace: String,
+    pub assembly_name: String,
 }
 
 impl AssetType {
@@ -28,91 +31,67 @@ impl AssetType {
             class_id: 0i32,
             stripped: false,
             script_index: -1i16,
-            script_id: [0u8; 16],
-            hash: [0u8; 16],
-            nodes: Vec::new(),
-            string_data: Vec::new(),
+            script_hash: [0u8; 16],
+            type_hash: [0u8; 16],
+            type_tree: TypeTree::new(),
             type_dependencies: Vec::new(),
+            class_name: String::new(),
+            namespace: String::new(),
+            assembly_name: String::new(),
         }
     }
 
     pub fn read(asset: &mut Asset, is_ref: bool) -> Result<Self, Error> {
-        let header = &asset.header;
-        let reader = &mut asset.reader;
+        let version = asset.header.version;
+        let big_endian = asset.header.big_endian;
 
         let mut asset_type = Self::new();
 
-        asset_type.class_id = reader.read_i32_by(header.endian)?;
-        if header.version >= 16 {
-            asset_type.stripped = reader.read_u8()? > 0;
-        }
-        if header.version >= 17 {
-            asset_type.script_index = reader.read_i16_by(header.endian)?;
+        asset_type.class_id = asset.reader.read_i32_by(big_endian)?;
+
+        if version >= 16 {
+            asset_type.stripped = asset.reader.read_u8()? > 0;
         }
 
-        if header.version >= 13 {
+        if version >= 17 {
+            asset_type.script_index = asset.reader.read_i16_by(big_endian)?;
+        }
+
+        if version >= 13 {
             if (is_ref && asset_type.script_index >= 0)
-                || (header.version < 16 && asset_type.class_id < 0)
-                || (header.version >= 16 && asset_type.class_id == ClassType::MonoBehaviour as i32)
+                || (version < 16 && asset_type.class_id < 0)
+                || (version >= 16
+                    // MonoBehavior is a script type
+                    && asset_type.class_id
+                            == ToPrimitive::to_i32(&ClassType::MonoBehaviour).unwrap_or(0))
             {
-                reader.read_exact(&mut asset_type.script_id)?;
+                asset.reader.read_exact(&mut asset_type.script_hash)?;
             }
-            reader.read_exact(&mut asset_type.hash)?;
+            asset.reader.read_exact(&mut asset_type.type_hash)?;
         }
 
-        if !header.has_type_tree {
+        if !asset.metadata.has_type_tree {
             return Ok(asset_type);
         }
 
-        if header.version >= 12 || header.version == 10 {
-            asset_type.read_type_tree(reader, header)?;
+        if version >= 12 || version == 10 {
+            asset_type.type_tree = TypeTree::read(asset)?;
+        } else {
+            // TODO: implement old type tree parsing
+            unimplemented!();
         }
 
-        if header.version >= 21 {
-            asset_type.type_dependencies = reader.read_i32_vec_by(header.endian)?;
+        if version >= 21 {
+            if is_ref {
+                asset_type.class_name = asset.reader.read_string()?;
+                asset_type.namespace = asset.reader.read_string()?;
+                asset_type.assembly_name = asset.reader.read_string()?;
+            } else {
+                asset_type.type_dependencies = asset.reader.read_i32_vec_by(big_endian)?;
+            }
         }
 
         Ok(asset_type)
-    }
-
-    fn read_type_tree<R>(&mut self, reader: &mut R, header: &Header) -> Result<(), Error>
-    where
-        R: Read,
-    {
-        let node_count = reader.read_u32_by(header.endian)?;
-        log::trace!("{} asset class node(s)", node_count);
-
-        let string_buf_size = reader.read_u32_by(header.endian)?;
-
-        self.nodes.clear();
-        for _ in 0..node_count {
-            self.nodes.push(Node::read(reader, header)?);
-        }
-
-        let mut buf = vec![0u8; usize::try_from(string_buf_size)?];
-        reader.read_exact(&mut buf)?;
-        let mut buf = Cursor::new(buf);
-
-        let mut read_name = |offset: u32| -> Result<Name, Error> {
-            if offset & 0x8000_0000 == 0 {
-                buf.set_position(offset.into());
-                Ok(Name::Custom(buf.read_string()?))
-            } else {
-                match CommonString::from_u32(offset & 0x7fffffff) {
-                    Some(s) => Ok(Name::Common(s)),
-                    None => Err(Error::UnknownCommonName),
-                }
-            }
-        };
-
-        for (i, node) in self.nodes.iter_mut().enumerate() {
-            node.class = read_name(node.class_offset)?;
-            node.name = read_name(node.name_offset)?;
-
-            log::trace!("asset class node {}:\n{:#?}", i, node)
-        }
-
-        Ok(())
     }
 
     pub fn save<W>(&self, _writer: &mut W) -> Result<(), Error>
@@ -124,7 +103,7 @@ impl AssetType {
 }
 
 impl Display for AssetType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // XXX: maybe try a different way to indent output?
         let indent = f.width().unwrap_or(0);
 
@@ -156,7 +135,7 @@ impl Display for AssetType {
                 f,
                 "{:indent$}Script ID:    {}",
                 "",
-                hex::encode(self.script_id),
+                hex::encode(self.script_hash),
                 indent = indent
             )?;
         }
@@ -164,7 +143,7 @@ impl Display for AssetType {
             f,
             "{:indent$}Hash:         {}",
             "",
-            hex::encode(self.hash),
+            hex::encode(self.type_hash),
             indent = indent
         )?;
 
@@ -172,7 +151,7 @@ impl Display for AssetType {
             f,
             "{:indent$}Type tree:    {} node(s)",
             "",
-            self.nodes.len(),
+            self.type_tree.nodes.len(),
             indent = indent
         )?;
 
@@ -180,7 +159,7 @@ impl Display for AssetType {
             return Ok(());
         }
 
-        for (i, node) in self.nodes.iter().enumerate() {
+        for (i, node) in self.type_tree.nodes.iter().enumerate() {
             writeln!(f, "{:indent$}Node {}:", "", i, indent = indent + 4)?;
             writeln!(
                 f,
@@ -194,3 +173,5 @@ impl Display for AssetType {
         Ok(())
     }
 }
+
+impl_default!(AssetType);

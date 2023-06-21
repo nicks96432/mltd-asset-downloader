@@ -1,4 +1,4 @@
-use crate::asset::ObjectReader;
+use crate::asset::ObjectInfo;
 use crate::error::Error;
 
 use std::io::Read;
@@ -7,7 +7,7 @@ use std::io::Read;
 pub struct PPtr {}
 
 impl PPtr {
-    pub fn read<R>(reader: &mut R, object: &ObjectReader) -> Result<Self, Error>
+    pub fn read<R>(reader: &mut R, object: &ObjectInfo) -> Result<Self, Error>
     where
         R: Read,
     {

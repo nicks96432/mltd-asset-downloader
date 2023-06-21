@@ -1,19 +1,22 @@
 mod asset_type;
 mod header;
-mod object_reader;
+mod metadata;
+mod object_info;
 mod platform;
+mod type_tree;
 
 pub use self::asset_type::*;
 pub use self::header::*;
-pub use self::object_reader::*;
+pub use self::metadata::*;
+pub use self::object_info::*;
 pub use self::platform::*;
+pub use self::type_tree::*;
 
 use crate::class::ClassType;
 use crate::error::Error;
 use crate::traits::ReadIntExt;
 use crate::traits::ReadString;
 use crate::traits::SeekAlign;
-use crate::utils::bool_to_yes_no;
 
 use linked_hash_map::LinkedHashMap;
 
@@ -45,13 +48,13 @@ impl ScriptIdentifier {
 
         let mut identifier = Self::new();
 
-        identifier.index = reader.read_i32_by(header.endian)?;
+        identifier.index = reader.read_i32_by(header.big_endian)?;
         identifier.id = match header.version {
             v if v >= 14 => {
                 reader.seek_align(4)?;
-                reader.read_i64_by(header.endian)?
+                reader.read_i64_by(header.big_endian)?
             }
-            _ => reader.read_i32_by(header.endian)?.into(),
+            _ => reader.read_i32_by(header.big_endian)?.into(),
         };
 
         Ok(identifier)
@@ -87,7 +90,7 @@ impl FileIdentifier {
         }
         if header.version >= 5 {
             reader.read_exact(&mut identifier.guid)?;
-            identifier.file_type = reader.read_i32_by(header.endian)?;
+            identifier.file_type = reader.read_i32_by(header.big_endian)?;
         }
 
         identifier.path = reader.read_string()?;
@@ -106,9 +109,8 @@ impl FileIdentifier {
 #[derive(Debug, Clone, Default)]
 pub struct Asset {
     pub header: Header,
-    pub types: Vec<AssetType>,
-    pub big_id_enabled: bool,
-    pub objects: LinkedHashMap<u64, ObjectReader>,
+    pub metadata: Metadata,
+    pub objects: LinkedHashMap<u64, ObjectInfo>,
     pub scripts: Vec<ScriptIdentifier>,
     pub externals: Vec<FileIdentifier>,
     pub ref_types: Vec<AssetType>,
@@ -121,114 +123,76 @@ impl Asset {
     pub fn new() -> Self {
         Self {
             header: Header::new(),
-            types: Vec::new(),
-            big_id_enabled: false,
+            metadata: Metadata::new(),
             objects: LinkedHashMap::new(),
             scripts: Vec::new(),
             externals: Vec::new(),
             ref_types: Vec::new(),
             user_information: String::new(),
-
             reader: Cursor::new(Vec::new()),
         }
     }
 
     pub fn read(reader: Cursor<Vec<u8>>) -> Result<Rc<RefCell<Self>>, Error> {
-        let asset_rc = Rc::new(RefCell::new(Self::new()));
+        let mut asset = Self::new();
+        asset.reader = reader;
 
-        let object_count: i32;
+        log::debug!("reading asset header");
+        asset.header = Header::read(&mut asset.reader)?;
+        log::trace!("asset header:\n{:#?}", &asset.header);
 
-        {
-            let mut asset = asset_rc.try_borrow_mut()?;
+        log::debug!("reading asset metadata");
+        asset.metadata = Metadata::read(&mut asset)?;
+        log::trace!("asset metadata:\n{:#?}", &asset.metadata);
 
-            asset.reader = reader;
+        let version = asset.header.version;
+        let big_endian = asset.header.big_endian;
 
-            log::debug!("reading asset header");
-            asset.header = Header::read(&mut asset.reader)?;
-            log::trace!("asset header:\n{:#?}", &asset.header);
+        if version >= 11 {
+            log::debug!("reading asset scripts");
+            let script_count = asset.reader.read_u32_by(big_endian)?;
+            log::trace!("{} asset script(s)", script_count);
 
-            let endian = asset.header.endian;
-
-            log::debug!("reading asset types");
-            let type_count = asset.reader.read_u32_by(endian)?;
-            log::trace!("{} asset serized type(s)", type_count);
-
-            for i in 0..type_count {
-                let r#type = AssetType::read(&mut asset, false)?;
-                log::trace!("asset class {}:\n{:#?}", i, r#type);
-                asset.types.push(r#type);
-            }
-
-            if (7..14).contains(&asset.header.version) {
-                log::debug!("reading big_id_enabled");
-                asset.big_id_enabled = asset.reader.read_i32_by(endian)? > 0i32;
-            }
-
-            log::debug!("reading objects");
-            object_count = asset.reader.read_i32_by(endian)?;
-            log::trace!("{} asset object(s)", object_count);
-        }
-
-        for i in 0..object_count {
-            let object = ObjectReader::read(asset_rc.clone())?;
-            log::trace!("asset object {}:\n{:#?}", i, &object);
-
-            let mut asset = asset_rc.try_borrow_mut()?;
-            asset.objects.insert(object.path_id, object);
-        }
-
-        {
-            let mut asset = asset_rc.try_borrow_mut()?;
-
-            let version = asset.header.version;
-            let endian = asset.header.endian;
-
-            if version >= 11 {
-                log::debug!("reading asset scripts");
-                let script_count = asset.reader.read_u32_by(endian)?;
-                log::trace!("{} asset script(s)", script_count);
-
-                for i in 0..script_count {
-                    let script = ScriptIdentifier::read(&mut asset)?;
-                    log::trace!("asset script {}:\n{:#?}", i, &script);
-                    asset.scripts.push(script);
-                }
-            }
-
-            log::debug!("reading external files");
-            let external_count = asset.reader.read_i32_by(endian)?;
-            log::trace!("{} asset external file(s)", external_count);
-
-            for i in 0..external_count {
-                let external = FileIdentifier::read(&mut asset)?;
-                log::trace!("asset external {}:\n{:#?}", i, &external);
-                asset.externals.push(external);
-            }
-
-            if version >= 20 {
-                log::debug!("reading asset ref types");
-                let ref_type_count = asset.reader.read_i32_by(endian)?;
-                log::trace!("{} asset ref type(s)", ref_type_count);
-                for i in 0..ref_type_count {
-                    let r#type = AssetType::read(&mut asset, true)?;
-                    log::trace!("asset ref type {}:\n{:#?}", i, &r#type);
-                    asset.ref_types.push(r#type);
-                }
-            }
-
-            if version >= 5 {
-                asset.user_information = asset.reader.read_string()?;
-            }
-
-            // TODO: object read type tree
-            for object in asset.objects.values() {
-                if object.r#type == ClassType::AssetBundle {
-                    todo!()
-                }
+            for i in 0..script_count {
+                let script = ScriptIdentifier::read(&mut asset)?;
+                log::trace!("asset script {}:\n{:#?}", i, &script);
+                asset.scripts.push(script);
             }
         }
 
-        Ok(asset_rc)
+        log::debug!("reading external files");
+        let external_count = asset.reader.read_i32_by(big_endian)?;
+        log::trace!("{} asset external file(s)", external_count);
+
+        for i in 0..external_count {
+            let external = FileIdentifier::read(&mut asset)?;
+            log::trace!("asset external {}:\n{:#?}", i, &external);
+            asset.externals.push(external);
+        }
+
+        if version >= 20 {
+            log::debug!("reading asset ref types");
+            let ref_type_count = asset.reader.read_i32_by(big_endian)?;
+            log::trace!("{} asset ref type(s)", ref_type_count);
+            for i in 0..ref_type_count {
+                let ref_type = AssetType::read(&mut asset, true)?;
+                log::trace!("asset ref type {}:\n{:#?}", i, &ref_type);
+                asset.ref_types.push(ref_type);
+            }
+        }
+
+        if version >= 5 {
+            asset.user_information = asset.reader.read_string()?;
+        }
+
+        // TODO: object read type tree
+        for object in asset.objects.values() {
+            if object.class_type == ClassType::AssetBundle {
+                todo!()
+            }
+        }
+
+        Ok(Rc::new(RefCell::new(asset)))
     }
 
     pub fn save<W>(&self, _writer: &mut W) -> Result<(), Error>
@@ -243,70 +207,11 @@ impl Display for Asset {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // XXX: maybe try a different way to indent output?
         let indent = f.width().unwrap_or(0);
-        writeln!(f, "{:indent$}Basic information:", "", indent = indent)?;
-        writeln!(
-            f,
-            "{:indent$}Metadata size:   {}",
-            "",
-            self.header.metadata_size,
-            indent = indent + 4
-        )?;
-        writeln!(
-            f,
-            "{:indent$}Asset Size:      {}",
-            "",
-            self.header.asset_size,
-            indent = indent + 4
-        )?;
-        writeln!(
-            f,
-            "{:indent$}Content offset:  {}",
-            "",
-            self.header.offset,
-            indent = indent + 4
-        )?;
-        let endian_str = if self.header.endian { "big" } else { "little" };
-        writeln!(
-            f,
-            "{:indent$}Endian:          {}",
-            "",
-            endian_str,
-            indent = indent + 4
-        )?;
-        writeln!(
-            f,
-            "{:indent$}Unity version:   {}",
-            "",
-            self.header.unity_version,
-            indent = indent + 4
-        )?;
-        writeln!(
-            f,
-            "{:indent$}Target platform: {:?}",
-            "",
-            self.header.target_platform,
-            indent = indent + 4
-        )?;
-        writeln!(
-            f,
-            "{:indent$}Has type tree?   {}",
-            "",
-            bool_to_yes_no(self.header.has_type_tree),
-            indent = indent + 4
-        )?;
-        writeln!(
-            f,
-            "{:indent$}Big ID enabled?  {}",
-            "",
-            bool_to_yes_no(self.big_id_enabled),
-            indent = indent + 4
-        )?;
 
-        writeln!(f, "{:indent$}Types:", "", indent = indent)?;
-        for (i, r#type) in self.types.iter().enumerate() {
-            writeln!(f, "{:indent$}Type {}:", "", i, indent = indent + 4)?;
-            writeln!(f, "{:indent$}", r#type, indent = indent + 8)?;
-        }
+        writeln!(f, "{:indent$}Basic information:", "", indent = indent)?;
+        write!(f, "{:indent$}", self.header, indent = indent + 4)?;
+        writeln!(f, "{:indent$}Metadata:", "", indent = indent)?;
+        write!(f, "{:indent$}:", self.metadata, indent = indent + 4)?;
 
         Ok(())
     }

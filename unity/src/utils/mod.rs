@@ -1,5 +1,3 @@
-pub mod type_tree;
-
 use crate::bundle::Signature;
 use crate::error::Error;
 use crate::traits::ReadString;
