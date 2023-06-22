@@ -5,18 +5,16 @@ use crate::error::Error;
 use crate::macros::impl_default;
 use crate::traits::SeekAlign;
 
-use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::mem::size_of;
-use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct UnityFS {
     pub header: UnityFSHeader,
     pub info_block: InfoBlock,
     pub data: Vec<u8>,
-    pub assets: Vec<Rc<RefCell<Asset>>>,
+    pub assets: Vec<Asset>,
 }
 
 impl UnityFS {
@@ -44,7 +42,7 @@ impl UnityFS {
         if !unityfs.header.flags.info_block_combined() {
             unimplemented!()
         }
-        log::trace!("unityfs header:\n{:#?}", unityfs.header);
+        log::trace!("unityfs header:\n{}", unityfs.header);
 
         if unityfs.header.version_format >= 7 {
             reader.seek_align(16)?;
@@ -167,25 +165,15 @@ impl UnityFS {
 impl Display for UnityFS {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "================Basic Information=================")?;
-        writeln!(f, "{}", self.header)?;
+        write!(f, "{}", self.header)?;
 
-        writeln!(f, "===================Block Infos====================")?;
-        for (i, block_info) in self.info_block.block_infos.iter().enumerate() {
-            writeln!(
-                f,
-                "Block {:>2} size: {:<8} (decompressed {})",
-                i, block_info.compressed_size, block_info.decompressed_size
-            )?;
-        }
+        writeln!(f, "====================Info Block====================")?;
+        write!(f, "{}", self.info_block)?;
 
         writeln!(f, "======================Assets======================")?;
-        for (i, path_info) in self.info_block.path_infos.iter().enumerate() {
-            writeln!(
-                f,
-                "Asset {} ({}): data offset {}",
-                i, path_info.path, path_info.offset
-            )?;
-            writeln!(f, "{:4}", self.assets[i].borrow())?;
+        for (i, asset) in self.assets.iter().enumerate() {
+            writeln!(f, "Asset {}:", i)?;
+            write!(f, "{:4}", asset)?;
         }
 
         Ok(())
@@ -241,8 +229,14 @@ mod tests {
         assert_eq!(expect.header.version_engine, got.header.version_engine);
         assert_eq!(expect.header.version_target, got.header.version_target);
 
-        assert_eq!(expect.info_block.block_count, got.info_block.block_count);
-        assert_eq!(expect.info_block.path_count, got.info_block.path_count);
+        assert_eq!(
+            expect.info_block.block_infos.len(),
+            got.info_block.block_infos.len()
+        );
+        assert_eq!(
+            expect.info_block.path_infos.len(),
+            got.info_block.path_infos.len()
+        );
 
         assert_eq!(expect.data, got.data);
     }

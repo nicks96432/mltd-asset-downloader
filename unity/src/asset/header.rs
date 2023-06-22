@@ -1,5 +1,4 @@
 use crate::error::Error;
-use crate::macros::impl_default;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
@@ -8,7 +7,7 @@ use std::{
     io::{Read, Seek, SeekFrom, Write},
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Header {
     pub metadata_size: u32,
     pub asset_size: u64,
@@ -22,15 +21,7 @@ pub struct Header {
 
 impl Header {
     pub fn new() -> Self {
-        Self {
-            metadata_size: 0u32,
-            asset_size: 0u64,
-            version: 0u32,
-            data_offset: 0u64,
-            big_endian: true,
-            padding: [0u8; 3],
-            unknown: 0u64,
-        }
+        Self::default()
     }
 
     pub fn read<R>(reader: &mut R) -> Result<Self, Error>
@@ -40,9 +31,9 @@ impl Header {
         let mut header = Self::new();
 
         header.metadata_size = reader.read_u32::<BigEndian>()?;
-        header.asset_size = reader.read_u32::<BigEndian>()? as u64;
+        header.asset_size = u64::from(reader.read_u32::<BigEndian>()?);
         header.version = reader.read_u32::<BigEndian>()?;
-        header.data_offset = reader.read_u32::<BigEndian>()? as u64;
+        header.data_offset = u64::from(reader.read_u32::<BigEndian>()?);
 
         if header.version >= 9 {
             header.big_endian = reader.read_u8()? > 0;
@@ -73,9 +64,9 @@ impl Header {
             }
             v if 9 < v && v <= 22 => {
                 writer.write_u32::<BigEndian>(self.metadata_size)?;
-                writer.write_u32::<BigEndian>(self.asset_size as u32)?;
+                writer.write_u32::<BigEndian>(u32::try_from(self.asset_size)?)?;
                 writer.write_u32::<BigEndian>(self.version)?;
-                writer.write_u32::<BigEndian>(self.data_offset as u32)?;
+                writer.write_u32::<BigEndian>(u32::try_from(self.data_offset)?)?;
                 writer.write_u8(u8::from(self.big_endian))?;
                 writer.write_all(&self.padding)?;
             }
@@ -147,5 +138,3 @@ impl Display for Header {
         Ok(())
     }
 }
-
-impl_default!(Header);

@@ -1,20 +1,34 @@
-use crate::asset::ObjectInfo;
+use crate::asset::{ClassInfo, Platform};
 use crate::error::Error;
+use crate::traits::ReadIntExt;
 
 use std::io::Read;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Object {
-    object_hide_flags: u32,
+    pub hide_flags: u32,
+
+    pub(crate) version: u32,
+    pub(crate) big_endian: bool,
 }
 
 impl Object {
-    pub fn read<R>(file_reader: &mut R, object_reader: &ObjectInfo) -> Result<Self, Error>
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn read<R>(reader: &mut R, object_info: &ClassInfo) -> Result<Self, Error>
     where
         R: Read,
     {
-        Ok(Self {
-            object_hide_flags: 0u32,
-        })
+        let mut object = Self::new();
+        object.version = object_info.version;
+        object.big_endian = object_info.big_endian;
+
+        if object_info.target_platform == Platform::NoTarget {
+            object.hide_flags = reader.read_u32_by(object_info.big_endian)?;
+        }
+
+        Ok(object)
     }
 }

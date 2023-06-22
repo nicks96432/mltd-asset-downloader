@@ -5,8 +5,8 @@ It's based on [UnityPy](https://github.com/K0lb3/UnityPy), but only few of the f
 
 Some references:
 
-* [Unity AssetBundle format parsing 1](https://chenanbao.github.io/2020/01/08/AssetBundle/)
-* [Unity AssetBundle format parsing 2](https://blog.codingnow.com/2014/08/unity3d_asset_bundle.html)
+* [Unity AssetBundle format parsing 1 (Chinese)](https://chenanbao.github.io/2020/01/08/AssetBundle/)
+* [Unity AssetBundle format parsing 2 (Chinese)](https://blog.codingnow.com/2014/08/unity3d_asset_bundle.html)
 * [UnityPy](https://github.com/K0lb3/UnityPy)
 
 ## License

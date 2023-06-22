@@ -64,7 +64,7 @@ impl Display for Flags {
 
         writeln!(f, "{:indent$}Flags:", "", indent = indent)?;
 
-        write!(
+        writeln!(
             f,
             "{:indent$}Compression method:                     {}",
             "",
@@ -89,7 +89,7 @@ impl Display for Flags {
             bool_to_yes_no(self.info_block_end()),
             indent = indent + 4
         )?;
-        write!(
+        writeln!(
             f,
             "{:indent$}Info block has padding at the begining? {}",
             "",

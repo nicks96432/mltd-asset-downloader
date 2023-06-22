@@ -35,7 +35,7 @@ pub fn download_assets(args: &DownloaderArgs) -> Result<(), DownloadError> {
     log::debug!("getting manifest");
     let manifest = match Manifest::download(&args.os_variant) {
         Ok(m) => m,
-        Err(e) => return Err(DownloadError::ManifestError(e)), // TODO: add DownloadError
+        Err(e) => return Err(DownloadError::ManifestError(e)),
     };
 
     let output_path = args.output.join(manifest.version.to_string());

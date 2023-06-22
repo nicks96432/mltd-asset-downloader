@@ -1,4 +1,4 @@
-use super::{Asset, Header};
+use super::Metadata;
 use crate::error::Error;
 use crate::macros::impl_default;
 use crate::traits::{ReadIntExt, ReadString};
@@ -7,12 +7,22 @@ use byteorder::ReadBytesExt;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 
+use std::fmt::{Display, Formatter};
 use std::io::{Cursor, Read};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Name {
     Common(CommonString),
     Custom(String),
+}
+
+impl ToString for Name {
+    fn to_string(&self) -> String {
+        match self {
+            Name::Common(c) => format!("{:?}", c),
+            Name::Custom(s) => s.to_owned(),
+        }
+    }
 }
 
 /// Global string buffer, from [UnityPy](
@@ -184,22 +194,26 @@ impl Node {
         }
     }
 
-    pub fn read<R>(reader: &mut R, header: &Header) -> Result<Self, Error>
+    pub fn align(&self) -> bool {
+        self.meta_flag & 0x4000i32 != 0
+    }
+
+    pub fn read<R>(reader: &mut R, metadata: &Metadata) -> Result<Self, Error>
     where
         R: Read,
     {
         Ok(Self {
-            version: reader.read_u16_by(header.big_endian)?,
+            version: reader.read_u16_by(metadata.big_endian)?,
             depth: reader.read_u8()?,
             is_array: reader.read_u8()? > 0,
-            class_offset: reader.read_u32_by(header.big_endian)?,
-            name_offset: reader.read_u32_by(header.big_endian)?,
-            size: reader.read_i32_by(header.big_endian)?,
-            index: reader.read_i32_by(header.big_endian)?,
-            meta_flag: reader.read_i32_by(header.big_endian)?,
+            class_offset: reader.read_u32_by(metadata.big_endian)?,
+            name_offset: reader.read_u32_by(metadata.big_endian)?,
+            size: reader.read_i32_by(metadata.big_endian)?,
+            index: reader.read_i32_by(metadata.big_endian)?,
+            meta_flag: reader.read_i32_by(metadata.big_endian)?,
 
-            ref_type_hash: match header.version >= 19 {
-                true => reader.read_u64_by(header.big_endian)?,
+            ref_type_hash: match metadata.version >= 19 {
+                true => reader.read_u64_by(metadata.big_endian)?,
                 false => 0,
             },
 
@@ -209,11 +223,76 @@ impl Node {
     }
 }
 
+impl Display for Node {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // XXX: maybe try a different way to indent output?
+        let indent = f.width().unwrap_or(0);
+
+        writeln!(
+            f,
+            "{:indent$}Class:        {}",
+            "",
+            self.class.to_string(),
+            indent = indent
+        )?;
+        writeln!(
+            f,
+            "{:indent$}Name:         {}",
+            "",
+            self.name.to_string(),
+            indent = indent
+        )?;
+        writeln!(
+            f,
+            "{:indent$}Class offset: {}",
+            "",
+            self.index,
+            indent = indent
+        )?;
+        writeln!(
+            f,
+            "{:indent$}Name offset:  {}",
+            "",
+            self.index,
+            indent = indent
+        )?;
+        writeln!(
+            f,
+            "{:indent$}Index:        {}",
+            "",
+            self.index,
+            indent = indent
+        )?;
+        writeln!(
+            f,
+            "{:indent$}Depth:        {}",
+            "",
+            self.depth,
+            indent = indent
+        )?;
+        writeln!(
+            f,
+            "{:indent$}Size:         {}",
+            "",
+            self.size,
+            indent = indent
+        )?;
+        writeln!(
+            f,
+            "{:indent$}Is array?     {}",
+            "",
+            self.is_array,
+            indent = indent
+        )?;
+
+        Ok(())
+    }
+}
+
 impl_default!(Node);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeTree {
-    pub node_count: i32,
     pub string_buffer_size: i32,
     pub nodes: Vec<Node>,
 }
@@ -221,25 +300,24 @@ pub struct TypeTree {
 impl TypeTree {
     pub fn new() -> Self {
         TypeTree {
-            node_count: 0i32,
             string_buffer_size: 0i32,
             nodes: Vec::new(),
         }
     }
 
-    pub fn read(asset: &mut Asset) -> Result<Self, Error> {
-        let header = &asset.header;
-        let reader = &mut asset.reader;
-
+    pub fn read<R>(reader: &mut R, metadata: &Metadata) -> Result<Self, Error>
+    where
+        R: Read,
+    {
         let mut type_tree = Self::new();
 
-        type_tree.node_count = reader.read_i32_by(header.big_endian)?;
-        log::trace!("{} asset class node(s)", type_tree.node_count);
+        let node_count = reader.read_i32_by(metadata.big_endian)?;
+        log::trace!("{} asset class node(s)", node_count);
 
-        type_tree.string_buffer_size = reader.read_i32_by(header.big_endian)?;
+        type_tree.string_buffer_size = reader.read_i32_by(metadata.big_endian)?;
 
-        for _ in 0..type_tree.node_count {
-            type_tree.nodes.push(Node::read(reader, header)?);
+        for _ in 0..node_count {
+            type_tree.nodes.push(Node::read(reader, metadata)?);
         }
 
         let mut buf = vec![0u8; usize::try_from(type_tree.string_buffer_size)?];
@@ -267,5 +345,19 @@ impl TypeTree {
         }
 
         Ok(type_tree)
+    }
+}
+
+impl Display for TypeTree {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // XXX: maybe try a different way to indent output?
+        let indent = f.width().unwrap_or(0);
+
+        for (i, node) in self.nodes.iter().enumerate() {
+            writeln!(f, "{:indent$}Node {}:", "", i, indent = indent + 4)?;
+            write!(f, "{:indent$}", node, indent = indent + 8)?;
+        }
+
+        Ok(())
     }
 }

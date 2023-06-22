@@ -1,5 +1,5 @@
-use super::{Asset, TypeTree};
-use crate::class::ClassType;
+use super::{Metadata, TypeTree};
+use crate::class::ClassIDType;
 use crate::error::Error;
 use crate::macros::impl_default;
 use crate::traits::{ReadIntExt, ReadString, ReadVecExt};
@@ -11,7 +11,7 @@ use std::fmt::{Display, Formatter};
 use std::io::{Read, Write};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AssetType {
+pub struct ClassType {
     /// Negative for script types
     pub class_id: i32,
     pub stripped: bool,
@@ -23,9 +23,12 @@ pub struct AssetType {
     pub class_name: String,
     pub namespace: String,
     pub assembly_name: String,
+
+    pub(crate) big_endian: bool,
+    pub(crate) version: u32,
 }
 
-impl AssetType {
+impl ClassType {
     pub fn new() -> Self {
         Self {
             class_id: 0i32,
@@ -38,60 +41,65 @@ impl AssetType {
             class_name: String::new(),
             namespace: String::new(),
             assembly_name: String::new(),
+            big_endian: false,
+            version: 0u32,
         }
     }
 
-    pub fn read(asset: &mut Asset, is_ref: bool) -> Result<Self, Error> {
-        let version = asset.header.version;
-        let big_endian = asset.header.big_endian;
+    pub fn read<R>(reader: &mut R, metadata: &Metadata, is_ref: bool) -> Result<Self, Error>
+    where
+        R: Read,
+    {
+        let mut class_type = Self::new();
+        class_type.big_endian = metadata.big_endian;
+        class_type.version = metadata.version;
 
-        let mut asset_type = Self::new();
+        class_type.class_id = reader.read_i32_by(class_type.big_endian)?;
 
-        asset_type.class_id = asset.reader.read_i32_by(big_endian)?;
-
-        if version >= 16 {
-            asset_type.stripped = asset.reader.read_u8()? > 0;
+        if class_type.version >= 16 {
+            class_type.stripped = reader.read_u8()? > 0;
         }
 
-        if version >= 17 {
-            asset_type.script_index = asset.reader.read_i16_by(big_endian)?;
+        if class_type.version >= 17 {
+            class_type.script_index = reader.read_i16_by(class_type.big_endian)?;
         }
 
-        if version >= 13 {
-            if (is_ref && asset_type.script_index >= 0)
-                || (version < 16 && asset_type.class_id < 0)
-                || (version >= 16
+        if class_type.version >= 13 {
+            if (is_ref && class_type.script_index >= 0)
+                || (class_type.version < 16 && class_type.class_id < 0)
+                || (class_type.version >= 16
                     // MonoBehavior is a script type
-                    && asset_type.class_id
-                            == ToPrimitive::to_i32(&ClassType::MonoBehaviour).unwrap_or(0))
+                    && class_type.class_id
+                            == ToPrimitive::to_i32(&ClassIDType::MonoBehaviour).unwrap_or(0))
             {
-                asset.reader.read_exact(&mut asset_type.script_hash)?;
+                reader.read_exact(&mut class_type.script_hash)?;
             }
-            asset.reader.read_exact(&mut asset_type.type_hash)?;
+            reader.read_exact(&mut class_type.type_hash)?;
         }
 
-        if !asset.metadata.has_type_tree {
-            return Ok(asset_type);
+        if !metadata.has_type_tree {
+            return Ok(class_type);
         }
 
-        if version >= 12 || version == 10 {
-            asset_type.type_tree = TypeTree::read(asset)?;
+        log::trace!("reading type tree");
+        if class_type.version >= 12 || class_type.version == 10 {
+            class_type.type_tree = TypeTree::read(reader, metadata)?;
         } else {
             // TODO: implement old type tree parsing
             unimplemented!();
         }
 
-        if version >= 21 {
+        if class_type.version >= 21 {
             if is_ref {
-                asset_type.class_name = asset.reader.read_string()?;
-                asset_type.namespace = asset.reader.read_string()?;
-                asset_type.assembly_name = asset.reader.read_string()?;
+                class_type.class_name = reader.read_string()?;
+                class_type.namespace = reader.read_string()?;
+                class_type.assembly_name = reader.read_string()?;
             } else {
-                asset_type.type_dependencies = asset.reader.read_i32_vec_by(big_endian)?;
+                class_type.type_dependencies = reader.read_i32_vec_by(class_type.big_endian)?;
             }
         }
 
-        Ok(asset_type)
+        Ok(class_type)
     }
 
     pub fn save<W>(&self, _writer: &mut W) -> Result<(), Error>
@@ -102,7 +110,7 @@ impl AssetType {
     }
 }
 
-impl Display for AssetType {
+impl Display for ClassType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // XXX: maybe try a different way to indent output?
         let indent = f.width().unwrap_or(0);
@@ -112,7 +120,7 @@ impl Display for AssetType {
             "{:indent$}Class ID:     {} ({:?})",
             "",
             self.class_id,
-            ClassType::from_i32(self.class_id).unwrap_or(ClassType::Unknown),
+            ClassIDType::from_i32(self.class_id).unwrap_or(ClassIDType::Unknown),
             indent = indent
         )?;
         writeln!(
@@ -159,19 +167,10 @@ impl Display for AssetType {
             return Ok(());
         }
 
-        for (i, node) in self.type_tree.nodes.iter().enumerate() {
-            writeln!(f, "{:indent$}Node {}:", "", i, indent = indent + 4)?;
-            writeln!(
-                f,
-                "{:indent$}Name: {:?}",
-                "",
-                node.name,
-                indent = indent + 8
-            )?;
-        }
+        write!(f, "{:indent$}", self.type_tree, indent = indent)?;
 
         Ok(())
     }
 }
 
-impl_default!(AssetType);
+impl_default!(ClassType);

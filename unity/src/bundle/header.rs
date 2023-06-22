@@ -1,8 +1,11 @@
-use super::{Flags, Signature, Version};
+use super::{Flags, Signature};
 use crate::error::Error;
-use crate::macros::{impl_try_from_into_vec, impl_default};
+use crate::macros::{impl_default, impl_try_from_into_vec};
 use crate::traits::ReadString;
+use crate::utils::Version;
+
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+
 use std::fmt::Display;
 use std::io::{Read, Write};
 use std::str::FromStr;

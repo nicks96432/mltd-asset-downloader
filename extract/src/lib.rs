@@ -23,12 +23,7 @@ pub struct ExtractorArgs {
 pub fn extract_media(args: &ExtractorArgs) -> Result<(), Box<dyn Error>> {
     let mut f = File::open(&args.input)?;
     let bundle = UnityFS::read(&mut f)?;
+    println!("{}", bundle);
 
-    for (i, asset) in bundle.assets.iter().enumerate() {
-        for (j, object) in asset.borrow().objects.values().enumerate() {
-            log::debug!("asset {} object {}:\n{:#?}", i, j, object);
-        }
-    }
-
-    Ok(())
+    todo!() // TODO: implement extract_media
 }

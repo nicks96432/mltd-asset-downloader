@@ -47,6 +47,16 @@ impl Debug for Version {
     }
 }
 
+impl Default for Version {
+    fn default() -> Self {
+        Self {
+            major: 2,
+            minor: String::from("0"),
+            patch: String::from("f5"),
+        }
+    }
+}
+
 impl Display for Version {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.{}.{}", self.major, self.minor, self.patch)

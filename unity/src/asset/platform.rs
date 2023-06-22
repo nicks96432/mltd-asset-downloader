@@ -43,3 +43,9 @@ pub enum Platform {
     UnknownPlatform = 3716,
     NoTarget = -2,
 }
+
+impl Default for Platform {
+    fn default() -> Self {
+        Self::UnknownPlatform
+    }
+}

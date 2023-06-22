@@ -19,7 +19,7 @@ serde = "1.0.164"
 [workspace.dependencies.clap]
 default-features = false
 features = ["std", "help", "usage"]
-version = "4.3.4"
+version = "4.3.5"
 
 [workspace.dependencies.env_logger]
 default-features = false

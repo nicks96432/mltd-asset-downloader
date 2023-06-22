@@ -1,22 +1,20 @@
-use super::Metadata;
-use crate::class::ClassType;
+use super::{ClassType, Metadata, Platform};
+use crate::class::ClassIDType;
 use crate::error::Error;
 use crate::macros::impl_default;
-use crate::traits::ReadIntExt;
-use crate::traits::SeekAlign;
-use crate::traits::WriteIntExt;
+use crate::traits::{ReadIntExt, SeekAlign, WriteIntExt};
 use crate::utils::bool_to_yes_no;
 
-use byteorder::ReadBytesExt;
-use byteorder::WriteBytesExt;
+use byteorder::{ReadBytesExt, WriteBytesExt};
 use num_traits::FromPrimitive;
 
+use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
-use std::io::Write;
-use std::io::{Read, Seek};
+use std::io::{Read, Seek, Write};
+use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ObjectInfo {
+pub struct ClassInfo {
     pub id: u64,
 
     /// This is added to the `data_offset` in the [`Header`][Header] to determine the file
@@ -26,7 +24,6 @@ pub struct ObjectInfo {
     pub data_offset: u64,
     pub data_size: u32,
 
-    pub class_type: ClassType,
     pub class_id: i32,
 
     /// Starting in version 16, this is an index to the array of type information given by looping
@@ -49,12 +46,15 @@ pub struct ObjectInfo {
     /// [Metadata]: super::Metadata
     pub stripped: bool,
 
-    pub(super) big_endian: bool,
-    pub(super) big_id_enabled: bool,
-    pub(super) version: u32,
+    // TODO: merge this class into ClassType so that we don't need this
+    pub(crate) class_type: Option<Rc<RefCell<ClassType>>>,
+    pub(crate) big_endian: bool,
+    pub(crate) big_id_enabled: bool,
+    pub(crate) target_platform: Platform,
+    pub(crate) version: u32,
 }
 
-impl ObjectInfo {
+impl ClassInfo {
     pub fn new() -> Self {
         Self {
             id: 0u64,
@@ -62,14 +62,20 @@ impl ObjectInfo {
             data_size: 0u32,
             type_id: 0u32,
             class_id: 0i32,
-            class_type: ClassType::Unknown,
             is_destroyed: false,
             script_index: -1i16,
             stripped: false,
+
+            class_type: None,
             big_endian: false,
             big_id_enabled: false,
+            target_platform: Platform::UnknownPlatform,
             version: 0,
         }
+    }
+
+    pub fn object_type(&self) -> Result<ClassIDType, Error> {
+        ClassIDType::from_i32(self.class_id).ok_or_else(|| Error::UnknownClassIDType)
     }
 
     pub fn read<R>(reader: &mut R, metadata: &Metadata) -> Result<Self, Error>
@@ -82,6 +88,7 @@ impl ObjectInfo {
         let mut object_info = Self::new();
         object_info.big_endian = big_endian;
         object_info.big_id_enabled = metadata.big_id_enabled;
+        object_info.target_platform = metadata.target_platform;
         object_info.version = version;
 
         if metadata.big_id_enabled {
@@ -104,12 +111,10 @@ impl ObjectInfo {
         if version <= 15 {
             object_info.class_id = i32::from(reader.read_u16_by(big_endian)?);
         } else {
-            let asset_type = &metadata.types[usize::try_from(object_info.type_id)?];
-            object_info.class_id = asset_type.class_id;
+            let class_type = &metadata.class_types[usize::try_from(object_info.type_id)?];
+            object_info.class_type = Some(class_type.clone());
+            object_info.class_id = class_type.try_borrow()?.class_id;
         }
-
-        object_info.class_type =
-            ClassType::from_i32(object_info.class_id).ok_or_else(|| Error::UnknownClassIDType)?;
 
         if version <= 10 {
             object_info.is_destroyed = reader.read_u16_by(big_endian)? > 0;
@@ -166,51 +171,51 @@ impl ObjectInfo {
     }
 }
 
-impl Display for ObjectInfo {
+impl Display for ClassInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // XXX: maybe try a different way to indent output?
         let indent = f.width().unwrap_or(0);
 
         writeln!(
             f,
-            "{:indent$}id:            {}",
+            "{:indent$}ID:             {}",
             "",
             self.id,
             indent = indent
         )?;
         writeln!(
             f,
-            "{:indent$}data offset:   {}",
+            "{:indent$}Data offset:    {}",
             "",
             self.data_offset,
             indent = indent
         )?;
         writeln!(
             f,
-            "{:indent$}data size:     {}",
+            "{:indent$}Data size:      {}",
             "",
             self.data_size,
             indent = indent
         )?;
         writeln!(
             f,
-            "{:indent$}asset type id: {}",
+            "{:indent$}Asset class id: {}",
             "",
             self.type_id,
             indent = indent
         )?;
         writeln!(
             f,
-            "{:indent$}type:          {:?}",
+            "{:indent$}Object type:    {:?}",
             "",
-            self.class_type,
+            self.object_type().unwrap_or(ClassIDType::Unknown),
             indent = indent
         )?;
 
         if self.version <= 10 {
             writeln!(
                 f,
-                "{:indent$}is destroyed?  {}",
+                "{:indent$}Is destroyed?   {}",
                 "",
                 bool_to_yes_no(self.is_destroyed),
                 indent = indent
@@ -220,7 +225,7 @@ impl Display for ObjectInfo {
         if (11..=16).contains(&self.version) {
             writeln!(
                 f,
-                "{:indent$}script index:  {}",
+                "{:indent$}Script index:   {}",
                 "",
                 self.script_index,
                 indent = indent
@@ -230,7 +235,7 @@ impl Display for ObjectInfo {
         if self.version == 15 || self.version == 16 {
             writeln!(
                 f,
-                "{:indent$}stripped?      {}",
+                "{:indent$}Stripped?      {}",
                 "",
                 bool_to_yes_no(self.stripped),
                 indent = indent
@@ -241,4 +246,4 @@ impl Display for ObjectInfo {
     }
 }
 
-impl_default!(ObjectInfo);
+impl_default!(ClassInfo);

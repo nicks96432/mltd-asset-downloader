@@ -3,7 +3,7 @@ use std::error::Error as StdError;
 use std::fmt::{Display, Formatter, Result};
 use std::io::Error as IOError;
 use std::num::{ParseIntError, TryFromIntError};
-use std::str::Utf8Error;
+use std::string::FromUtf8Error;
 
 #[cfg(feature = "lz4")]
 use {
@@ -15,15 +15,15 @@ use {
 pub enum Error {
     BorrowError(BorrowError),
     BorrowMutError(BorrowMutError),
+    FromUtf8Error(FromUtf8Error),
     InvalidVersion,
     IOError(IOError),
     ParseIntError(ParseIntError),
     TryFromIntError(TryFromIntError),
-    UnknownCommonName,
     UnknownClassIDType,
+    UnknownCommonName,
     UnknownPlatform,
     UnknownSignature,
-    Utf8Error(Utf8Error),
 
     #[cfg(feature = "lz4")]
     Lz4CompressError(Lz4CompressError),
@@ -38,7 +38,7 @@ pub enum Error {
     LzhamDecompressError(lzham::decompress::DecompressionStatus),
 
     #[cfg(feature = "lzma")]
-    LzmaDecompressError(std::io::Error),
+    LzmaDecompressError(IOError),
     UnknownCompressionMethod,
 }
 
@@ -49,15 +49,16 @@ impl Display for Error {
         match self {
             Self::BorrowError(e) => e.fmt(f),
             Self::BorrowMutError(e) => e.fmt(f),
+            Self::FromUtf8Error(e) => e.fmt(f),
             Self::InvalidVersion => write!(f, "invalid asset bundle version"),
             Self::IOError(e) => e.fmt(f),
             Self::ParseIntError(e) => e.fmt(f),
             Self::TryFromIntError(e) => e.fmt(f),
-            Self::UnknownCommonName => write!(f, "unknown asset class common name"),
             Self::UnknownClassIDType => write!(f, "unknown asset class id type"),
+            Self::UnknownCommonName => write!(f, "unknown asset class common name"),
             Self::UnknownPlatform => write!(f, "unknown asset target platform"),
             Self::UnknownSignature => write!(f, "unknown asset bundle signature"),
-            Self::Utf8Error(e) => e.fmt(f),
+
             #[cfg(feature = "lz4")]
             Self::Lz4CompressError(e) => e.fmt(f),
 
@@ -90,10 +91,10 @@ macro_rules! impl_from_for_error {
 
 impl_from_for_error!(BorrowError);
 impl_from_for_error!(BorrowMutError);
+impl_from_for_error!(FromUtf8Error);
 impl_from_for_error!(IOError);
 impl_from_for_error!(ParseIntError);
 impl_from_for_error!(TryFromIntError);
-impl_from_for_error!(Utf8Error);
 
 #[cfg(feature = "lz4")]
 impl_from_for_error!(Lz4CompressError);

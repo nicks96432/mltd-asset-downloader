@@ -4,7 +4,7 @@ use num_derive::{FromPrimitive, ToPrimitive};
 ///     https://github.com/K0lb3/UnityPy/blob/master/UnityPy/files/ObjectReader.py
 /// )
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive)]
-pub enum ClassType {
+pub enum ClassIDType {
     Unknown = -1,
     Object = 0,
     GameObject = 1,
