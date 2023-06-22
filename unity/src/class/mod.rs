@@ -1,13 +1,13 @@
+mod class_id_type;
 mod editor_extension;
 mod game_object;
 mod object;
-mod class_id_type;
 mod pptr;
 
+pub use self::class_id_type::*;
 pub use self::editor_extension::*;
 pub use self::game_object::*;
 pub use self::object::*;
-pub use self::class_id_type::*;
 pub use self::pptr::*;
 
 use crate::asset::ClassInfo;

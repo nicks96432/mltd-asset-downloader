@@ -208,7 +208,7 @@ impl Metadata {
         for i in 0usize..usize::try_from(object_count)? {
             let mut object_info = ClassInfo::read(&mut asset.reader, &metadata)?;
             log::trace!("asset object {}:\n{}", i, &object_info);
-            if object_info.class_type == None {
+            if object_info.class_type.is_none() {
                 object_info.class_type = Some(metadata.class_types[i].clone());
             }
             metadata.class_infos.push(object_info);

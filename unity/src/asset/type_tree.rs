@@ -291,7 +291,7 @@ impl Display for Node {
 
 impl_default!(Node);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TypeTree {
     pub string_buffer_size: i32,
     pub nodes: Vec<Node>,
@@ -299,10 +299,7 @@ pub struct TypeTree {
 
 impl TypeTree {
     pub fn new() -> Self {
-        TypeTree {
-            string_buffer_size: 0i32,
-            nodes: Vec::new(),
-        }
+        Self::default()
     }
 
     pub fn read<R>(reader: &mut R, metadata: &Metadata) -> Result<Self, Error>
