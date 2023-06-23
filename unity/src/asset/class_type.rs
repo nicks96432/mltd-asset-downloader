@@ -56,18 +56,18 @@ impl ClassType {
 
         class_type.class_id = reader.read_i32_by(class_type.big_endian)?;
 
-        if class_type.version >= 16 {
+        if metadata.version >= 16 {
             class_type.stripped = reader.read_u8()? > 0;
         }
 
-        if class_type.version >= 17 {
+        if metadata.version >= 17 {
             class_type.script_index = reader.read_i16_by(class_type.big_endian)?;
         }
 
-        if class_type.version >= 13 {
+        if metadata.version >= 13 {
             if (is_ref && class_type.script_index >= 0)
-                || (class_type.version < 16 && class_type.class_id < 0)
-                || (class_type.version >= 16
+                || (metadata.version < 16 && class_type.class_id < 0)
+                || (metadata.version >= 16
                     // MonoBehavior is a script type
                     && class_type.class_id
                             == ToPrimitive::to_i32(&ClassIDType::MonoBehaviour).unwrap_or(0))
@@ -82,14 +82,14 @@ impl ClassType {
         }
 
         log::trace!("reading type tree");
-        if class_type.version >= 12 || class_type.version == 10 {
+        if metadata.version >= 12 || metadata.version == 10 {
             class_type.type_tree = TypeTree::read(reader, metadata)?;
         } else {
             // TODO: implement old type tree parsing
             unimplemented!();
         }
 
-        if class_type.version >= 21 {
+        if metadata.version >= 21 {
             if is_ref {
                 class_type.class_name = reader.read_string()?;
                 class_type.namespace = reader.read_string()?;
@@ -117,7 +117,7 @@ impl Display for ClassType {
 
         writeln!(
             f,
-            "{:indent$}Class ID:     {} ({:?})",
+            "{:indent$}Class ID:       {} ({:?})",
             "",
             self.class_id,
             ClassIDType::from_i32(self.class_id).unwrap_or(ClassIDType::Unknown),
@@ -125,14 +125,14 @@ impl Display for ClassType {
         )?;
         writeln!(
             f,
-            "{:indent$}Stripped?     {}",
+            "{:indent$}Stripped?       {}",
             "",
             self.stripped,
             indent = indent
         )?;
         writeln!(
             f,
-            "{:indent$}Script index: {}",
+            "{:indent$}Script index:   {}",
             "",
             self.script_index,
             indent = indent
@@ -141,7 +141,7 @@ impl Display for ClassType {
         if self.script_index != -1 {
             writeln!(
                 f,
-                "{:indent$}Script ID:    {}",
+                "{:indent$}Script ID:      {}",
                 "",
                 hex::encode(self.script_hash),
                 indent = indent
@@ -149,7 +149,7 @@ impl Display for ClassType {
         }
         writeln!(
             f,
-            "{:indent$}Hash:         {}",
+            "{:indent$}Hash:           {}",
             "",
             hex::encode(self.type_hash),
             indent = indent
@@ -157,7 +157,7 @@ impl Display for ClassType {
 
         writeln!(
             f,
-            "{:indent$}Type tree:    {} node(s)",
+            "{:indent$}Type tree:      {} node(s)",
             "",
             self.type_tree.nodes.len(),
             indent = indent

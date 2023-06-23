@@ -2,14 +2,13 @@ use super::{InfoBlock, Signature, UnityFSHeader};
 use crate::asset::Asset;
 use crate::compression::Compressor;
 use crate::error::Error;
-use crate::macros::impl_default;
 use crate::traits::SeekAlign;
 
 use std::fmt::{Display, Formatter};
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::mem::size_of;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default)]
 pub struct UnityFS {
     pub header: UnityFSHeader,
     pub info_block: InfoBlock,
@@ -19,12 +18,7 @@ pub struct UnityFS {
 
 impl UnityFS {
     pub fn new() -> Self {
-        Self {
-            header: UnityFSHeader::new(),
-            info_block: InfoBlock::new(),
-            data: Vec::new(),
-            assets: Vec::new(),
-        }
+        Self::default()
     }
 
     pub fn read<R>(reader: &mut R) -> Result<Self, Error>
@@ -180,8 +174,6 @@ impl Display for UnityFS {
     }
 }
 
-impl_default!(UnityFS);
-
 #[cfg(test)]
 #[ctor::ctor]
 fn init() {
@@ -201,8 +193,10 @@ mod tests {
             .join("test.unity3d");
         let mut file = File::open(path).unwrap();
 
-        let bundle = UnityFS::read(&mut file).unwrap();
-        println!("{}", bundle);
+        match UnityFS::read(&mut file) {
+            Ok(bundle) => println!("{}", bundle),
+            Err(err) => println!("{:#?}", err),
+        };
     }
 
     #[test]

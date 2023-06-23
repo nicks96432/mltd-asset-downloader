@@ -62,7 +62,13 @@ impl Display for Flags {
         // XXX: maybe try a different way to indent output?
         let indent = f.width().unwrap_or(0);
 
-        writeln!(f, "{:indent$}Flags:", "", indent = indent)?;
+        writeln!(
+            f,
+            "{:indent$}Flags: (raw {:#010x})",
+            "",
+            self.bits,
+            indent = indent
+        )?;
 
         writeln!(
             f,

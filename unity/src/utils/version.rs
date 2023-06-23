@@ -1,5 +1,6 @@
 use crate::error::Error;
 
+use std::backtrace::Backtrace;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 
@@ -71,7 +72,10 @@ impl FromStr for Version {
 
         let nums: Vec<&str> = s.split('.').collect();
         if nums.len() != 3 {
-            return Err(Error::InvalidVersion);
+            return Err(Error::InvalidVersion {
+                version: s.to_string(),
+                backtrace: Backtrace::capture(),
+            });
         }
 
         Ok(Self {

@@ -8,10 +8,8 @@ use crate::utils::bool_to_yes_no;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use num_traits::FromPrimitive;
 
-use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek, Write};
-use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClassInfo {
@@ -24,30 +22,36 @@ pub struct ClassInfo {
     pub data_offset: u64,
     pub data_size: u32,
 
+    /// Negative for script types.
+    ///
+    /// Starting in version 16, this is the field `script_index` read in the loop over `types` in
+    /// [`Metadata`][Metadata].
+    ///
+    /// [Metadata]: super::Metadata
     pub class_id: i32,
 
     /// Starting in version 16, this is an index to the array of type information given by looping
-    /// over `types` in [`Metadata`][Metadata].
+    /// over `class_types` in [`Metadata`][Metadata].
     ///
     /// [Metadata]: super::Metadata
     pub type_id: u32,
 
     pub is_destroyed: bool,
 
-    /// Starting in version 17, this is the field `script_index` read in the loop over `types` in
+    /// Starting in version 17, this is the field `script_index` read in the loop over `class_types` in
     /// [`Metadata`][Metadata].
     ///
     /// [Metadata]: super::Metadata
     pub script_index: i16,
 
-    /// Starting in version 17, this is the field `stripped` read in the loop over `types` in
+    /// Starting in version 17, this is the field `stripped` read in the loop over `class_types` in
     /// [`Metadata`][Metadata].
     ///
     /// [Metadata]: super::Metadata
     pub stripped: bool,
 
-    // TODO: merge this class into ClassType so that we don't need this
-    pub(crate) class_type: Option<Rc<RefCell<ClassType>>>,
+    pub class_type: ClassType,
+
     pub(crate) big_endian: bool,
     pub(crate) big_id_enabled: bool,
     pub(crate) target_platform: Platform,
@@ -66,7 +70,7 @@ impl ClassInfo {
             script_index: -1i16,
             stripped: false,
 
-            class_type: None,
+            class_type: ClassType::new(),
             big_endian: false,
             big_id_enabled: false,
             target_platform: Platform::UnknownPlatform,
@@ -93,8 +97,8 @@ impl ClassInfo {
 
         if metadata.big_id_enabled {
             object_info.id = reader.read_u64_by(big_endian)?;
-        } else if version < 14 {
-            object_info.id = reader.read_u32_by(big_endian)?.into();
+        } else if version <= 13 {
+            object_info.id = u64::from(reader.read_u32_by(big_endian)?);
         } else {
             reader.seek_align(4)?;
             object_info.id = reader.read_u64_by(big_endian)?;
@@ -102,7 +106,7 @@ impl ClassInfo {
 
         object_info.data_offset = match version >= 22 {
             true => reader.read_u64_by(big_endian)?,
-            false => reader.read_u32_by(big_endian)?.into(),
+            false => u64::from(reader.read_u32_by(big_endian)?),
         };
         object_info.data_offset += metadata.data_offset;
         object_info.data_size = reader.read_u32_by(big_endian)?;
@@ -110,10 +114,6 @@ impl ClassInfo {
         object_info.type_id = reader.read_u32_by(big_endian)?;
         if version <= 15 {
             object_info.class_id = i32::from(reader.read_u16_by(big_endian)?);
-        } else {
-            let class_type = &metadata.class_types[usize::try_from(object_info.type_id)?];
-            object_info.class_type = Some(class_type.clone());
-            object_info.class_id = class_type.try_borrow()?.class_id;
         }
 
         if version <= 10 {
@@ -137,7 +137,7 @@ impl ClassInfo {
     {
         if self.big_id_enabled {
             writer.write_u64_by(self.id, self.big_endian)?;
-        } else if self.version < 14 {
+        } else if self.version <= 13 {
             writer.write_u32_by(u32::try_from(self.id)?, self.big_endian)?;
         } else {
             writer.seek_align(4)?;
@@ -151,7 +151,7 @@ impl ClassInfo {
 
         writer.write_u32_by(self.data_size, self.big_endian)?;
         writer.write_u32_by(self.type_id, self.big_endian)?;
-        if self.version < 16 {
+        if self.version <= 15 {
             writer.write_u16_by(u16::try_from(self.class_id)?, self.big_endian)?;
         }
 
@@ -241,6 +241,8 @@ impl Display for ClassInfo {
                 indent = indent
             )?;
         }
+
+        write!(f, "{:indent$}", self.class_type, indent = indent)?;
 
         Ok(())
     }

@@ -7,10 +7,9 @@ use crate::utils::{bool_to_yes_no, Version};
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use num_traits::{FromPrimitive, ToPrimitive};
 
-use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek, Write};
-use std::rc::Rc;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -132,7 +131,6 @@ pub struct Metadata {
     pub unity_version: Version,
     pub target_platform: Platform,
     pub has_type_tree: bool,
-    pub class_types: Vec<Rc<RefCell<ClassType>>>,
     pub big_id_enabled: bool,
     pub class_infos: Vec<ClassInfo>,
     pub script_infos: Vec<ScriptInfo>,
@@ -178,14 +176,11 @@ impl Metadata {
         let types_count = asset.reader.read_u32_by(big_endian)?;
         log::trace!("{} asset serialized type(s)", types_count);
 
+        let mut class_types = HashMap::new();
         for i in 0usize..usize::try_from(types_count)? {
-            let class_type = Rc::new(RefCell::new(ClassType::read(
-                &mut asset.reader,
-                &metadata,
-                false,
-            )?));
-            log::trace!("asset type {}:\n{}", i, class_type.try_borrow()?);
-            metadata.class_types.push(class_type);
+            let class_type = ClassType::read(&mut asset.reader, &metadata, false)?;
+            log::trace!("asset type {}:\n{}", i, class_type);
+            class_types.insert(i, class_type);
         }
 
         if (7u32..14u32).contains(&version) {
@@ -207,11 +202,31 @@ impl Metadata {
 
         for i in 0usize..usize::try_from(object_count)? {
             let mut object_info = ClassInfo::read(&mut asset.reader, &metadata)?;
+            let key = match version >= 16 {
+                true => usize::try_from(object_info.type_id)?,
+                false => i,
+            };
+
+            match class_types.remove(&key) {
+                Some(class_type) => {
+                    if version >= 16 {
+                        object_info.class_id = class_type.class_id;
+                    }
+                    if version >= 17 {
+                        object_info.stripped = class_type.stripped;
+                        object_info.script_index = class_type.script_index;
+                    }
+                    object_info.class_type = class_type;
+                }
+                None => log::error!("class_type of index {} not found", key),
+            };
+
             log::trace!("asset object {}:\n{}", i, &object_info);
-            if object_info.class_type.is_none() {
-                object_info.class_type = Some(metadata.class_types[i].clone());
-            }
             metadata.class_infos.push(object_info);
+        }
+
+        if class_types.len() > 0 {
+            log::warn!("there are still class_types left, some information may be lost!");
         }
 
         if version >= 11 {
@@ -334,13 +349,6 @@ impl Display for Metadata {
 
         writeln!(
             f,
-            "{:indent$}Number of class types:    {}",
-            "",
-            self.class_types.len(),
-            indent = indent
-        )?;
-        writeln!(
-            f,
             "{:indent$}Number of class infos:    {}",
             "",
             self.class_infos.len(),
@@ -375,12 +383,6 @@ impl Display for Metadata {
                 self.ref_types.len(),
                 indent = indent
             )?;
-        }
-
-        writeln!(f, "{:indent$}Class types:", "", indent = indent)?;
-        for (i, class_type) in self.class_types.iter().enumerate() {
-            writeln!(f, "{:indent$}Type {}:", "", i, indent = indent + 4)?;
-            writeln!(f, "{:indent$}", class_type.borrow(), indent = indent + 8)?;
         }
 
         writeln!(f, "{:indent$}Class infos:", "", indent = indent)?;

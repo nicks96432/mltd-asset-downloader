@@ -2,7 +2,10 @@ use crate::asset::{ClassInfo, Platform};
 use crate::error::Error;
 use crate::traits::ReadIntExt;
 
+use std::fmt::{Display, Formatter};
 use std::io::Read;
+
+use super::Class;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Object {
@@ -17,18 +20,37 @@ impl Object {
         Self::default()
     }
 
-    pub fn read<R>(reader: &mut R, object_info: &ClassInfo) -> Result<Self, Error>
+    pub fn read<R>(reader: &mut R, class_info: &ClassInfo) -> Result<Self, Error>
     where
         R: Read,
     {
         let mut object = Self::new();
-        object.version = object_info.version;
-        object.big_endian = object_info.big_endian;
+        object.version = class_info.version;
+        object.big_endian = class_info.big_endian;
 
-        if object_info.target_platform == Platform::NoTarget {
-            object.hide_flags = reader.read_u32_by(object_info.big_endian)?;
+        if class_info.target_platform == Platform::NoTarget {
+            object.hide_flags = reader.read_u32_by(class_info.big_endian)?;
         }
 
         Ok(object)
     }
 }
+
+impl Display for Object {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // XXX: maybe try a different way to indent output?
+        let indent = f.width().unwrap_or(0);
+
+        writeln!(
+            f,
+            "{:indent$}Hide flags: {}",
+            "",
+            self.hide_flags,
+            indent = indent
+        )?;
+
+        Ok(())
+    }
+}
+
+impl Class for Object {}

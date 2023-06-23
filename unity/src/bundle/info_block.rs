@@ -74,7 +74,7 @@ impl Display for BlockInfo {
         )?;
         writeln!(
             f,
-            "{:indent$}Flags:      {:#04x}",
+            "{:indent$}Flags:      {:#06x}",
             "",
             self.flags,
             indent = indent
@@ -149,7 +149,7 @@ impl Display for PathInfo {
         )?;
         writeln!(
             f,
-            "{:indent$}Flags:             {:#08x}",
+            "{:indent$}Flags:             {:#010x}",
             "",
             self.flags,
             indent = indent

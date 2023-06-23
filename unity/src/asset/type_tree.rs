@@ -167,7 +167,7 @@ pub struct Node {
 
     /// This is just an index of the node in the flat depth-first list of nodes.
     pub index: i32,
-    pub meta_flag: i32,
+    pub meta_flag: u32,
     pub ref_type_hash: u64,
 
     pub class: Name,
@@ -184,7 +184,7 @@ impl Node {
             name_offset: 0u32,
             size: 0i32,
             index: 0i32,
-            meta_flag: 0i32,
+            meta_flag: 0u32,
 
             /// version > 19
             ref_type_hash: 0u64,
@@ -195,7 +195,7 @@ impl Node {
     }
 
     pub fn align(&self) -> bool {
-        self.meta_flag & 0x4000i32 != 0
+        self.meta_flag & 0x4000u32 != 0
     }
 
     pub fn read<R>(reader: &mut R, metadata: &Metadata) -> Result<Self, Error>
@@ -210,7 +210,7 @@ impl Node {
             name_offset: reader.read_u32_by(metadata.big_endian)?,
             size: reader.read_i32_by(metadata.big_endian)?,
             index: reader.read_i32_by(metadata.big_endian)?,
-            meta_flag: reader.read_i32_by(metadata.big_endian)?,
+            meta_flag: reader.read_u32_by(metadata.big_endian)?,
 
             ref_type_hash: match metadata.version >= 19 {
                 true => reader.read_u64_by(metadata.big_endian)?,
@@ -247,6 +247,13 @@ impl Display for Node {
             "{:indent$}Class offset: {}",
             "",
             self.index,
+            indent = indent
+        )?;
+        writeln!(
+            f,
+            "{:indent$}Meta flag:    {:#010x}",
+            "",
+            self.meta_flag,
             indent = indent
         )?;
         writeln!(
