@@ -345,7 +345,7 @@ impl TypeTree {
             node.class = read_name(node.class_offset)?;
             node.name = read_name(node.name_offset)?;
 
-            log::trace!("asset class node {}:\n{:#?}", i, node)
+            log::trace!("asset class node {}:\n{}", i, node)
         }
 
         Ok(type_tree)

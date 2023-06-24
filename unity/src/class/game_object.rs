@@ -4,7 +4,7 @@ use crate::error::Error;
 use crate::traits::{ReadAlignedString, ReadIntExt};
 
 use std::fmt::{Display, Formatter};
-use std::io::Read;
+use std::io::{Read, Seek};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct GameObject {
@@ -23,7 +23,7 @@ impl GameObject {
 
     pub fn read<R>(reader: &mut R, class_info: &ClassInfo) -> Result<Self, Error>
     where
-        R: Read,
+        R: Read + Seek,
     {
         let mut game_object = Self::new();
         game_object.version = class_info.version;
@@ -36,7 +36,7 @@ impl GameObject {
         }
 
         game_object.layer = reader.read_i32_by(class_info.big_endian)?;
-        game_object.name = reader.read_aligned_string(class_info.big_endian)?;
+        game_object.name = reader.read_aligned_string(class_info.big_endian, 4)?;
 
         Ok(game_object)
     }

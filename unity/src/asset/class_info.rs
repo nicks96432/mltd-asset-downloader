@@ -8,6 +8,7 @@ use crate::utils::bool_to_yes_no;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use num_traits::FromPrimitive;
 
+use std::backtrace::Backtrace;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek, Write};
 
@@ -79,7 +80,10 @@ impl ClassInfo {
     }
 
     pub fn object_type(&self) -> Result<ClassIDType, Error> {
-        ClassIDType::from_i32(self.class_id).ok_or_else(|| Error::UnknownClassIDType)
+        ClassIDType::from_i32(self.class_id).ok_or_else(|| Error::UnknownClassIDType {
+            class_id: self.class_id,
+            backtrace: Backtrace::capture(),
+        })
     }
 
     pub fn read<R>(reader: &mut R, metadata: &Metadata) -> Result<Self, Error>

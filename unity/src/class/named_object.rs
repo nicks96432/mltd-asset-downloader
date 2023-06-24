@@ -3,6 +3,7 @@ use crate::asset::ClassInfo;
 use crate::error::Error;
 use crate::traits::ReadAlignedString;
 
+use std::any::type_name;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek, SeekFrom};
 
@@ -25,7 +26,8 @@ impl NamedObject {
         named_object.editor_extension = EditorExtension::read(reader, class_info)?;
 
         reader.seek(SeekFrom::Start(class_info.data_offset))?;
-        named_object.name = reader.read_aligned_string(class_info.big_endian)?;
+        named_object.name = reader.read_aligned_string(class_info.big_endian, 4)?;
+        log::trace!("name: {}", named_object.name);
 
         Ok(named_object)
     }
@@ -36,7 +38,13 @@ impl Display for NamedObject {
         // XXX: maybe try a different way to indent output?
         let indent = f.width().unwrap_or(0);
 
-        writeln!(f, "{:indent$}Super:", "", indent = indent)?;
+        writeln!(
+            f,
+            "{:indent$}Super ({}):",
+            "",
+            type_name::<EditorExtension>(),
+            indent = indent
+        )?;
         write!(f, "{:indent$}", self.editor_extension, indent = indent + 4)?;
         writeln!(f, "{:indent$}Name: {}", "", self.name, indent = indent)?;
 

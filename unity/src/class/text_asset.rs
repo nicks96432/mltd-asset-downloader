@@ -3,6 +3,7 @@ use crate::asset::ClassInfo;
 use crate::error::Error;
 use crate::traits::ReadVecExt;
 
+use std::any::type_name;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek};
 
@@ -34,7 +35,13 @@ impl Display for TextAsset {
         // XXX: maybe try a different way to indent output?
         let indent = f.width().unwrap_or(0);
 
-        writeln!(f, "{:indent$}Super:", "", indent = indent)?;
+        writeln!(
+            f,
+            "{:indent$}Super ({}):",
+            "",
+            type_name::<NamedObject>(),
+            indent = indent
+        )?;
         write!(f, "{:indent$}", self.named_object, indent = indent + 4)?;
         writeln!(
             f,

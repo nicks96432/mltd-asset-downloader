@@ -162,7 +162,7 @@ impl Metadata {
         }
         if version >= 8 {
             metadata.target_platform = Platform::from_u32(asset.reader.read_u32_by(big_endian)?)
-                .ok_or_else(|| Error::UnknownSignature)?;
+                .ok_or_else(|| Error::UnknownPlatform)?;
         }
 
         if version >= 13 {
@@ -225,7 +225,7 @@ impl Metadata {
             metadata.class_infos.push(object_info);
         }
 
-        if class_types.len() > 0 {
+        if !class_types.is_empty() {
             log::warn!("there are still class_types left, some information may be lost!");
         }
 

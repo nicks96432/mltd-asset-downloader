@@ -1,5 +1,6 @@
 use crate::error::Error;
 
+use std::backtrace::Backtrace;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
@@ -20,7 +21,10 @@ impl FromStr for Signature {
             "UnityWeb" => Ok(Self::UnityWeb),
             "UnityRaw" => Ok(Self::UnityRaw),
             "UnityArchive" => Ok(Self::UnityArchive),
-            _ => Err(Error::UnknownSignature),
+            _ => Err(Error::UnknownSignature {
+                signature: s.to_string(),
+                backtrace: Backtrace::capture(),
+            }),
         }
     }
 }

@@ -258,13 +258,14 @@ pub(crate) trait ReadVecExt: ReadIntExt {
 
 impl<R> ReadVecExt for R where R: Read {}
 
-pub(crate) trait ReadAlignedString: Read + ReadIntExt + ReadVecExt {
+pub(crate) trait ReadAlignedString: Read + SeekAlign + ReadIntExt + ReadVecExt {
     #[inline]
-    fn read_aligned_string(&mut self, endian: bool) -> Result<String, Error> {
+    fn read_aligned_string(&mut self, endian: bool, alignment: u64) -> Result<String, Error> {
         let buf = self.read_u8_vec_by(endian)?;
+        self.seek_align(alignment)?;
 
         Ok(String::from_utf8(buf)?)
     }
 }
 
-impl<R> ReadAlignedString for R where R: Read + ReadIntExt + ReadVecExt {}
+impl<R> ReadAlignedString for R where R: Read + SeekAlign + ReadIntExt + ReadVecExt {}

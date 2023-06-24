@@ -4,6 +4,7 @@ use crate::compression::Compressor;
 use crate::error::Error;
 use crate::traits::SeekAlign;
 
+use std::backtrace::Backtrace;
 use std::fmt::{Display, Formatter};
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::mem::size_of;
@@ -30,7 +31,11 @@ impl UnityFS {
         log::debug!("reading unityfs header");
         unityfs.header = UnityFSHeader::read(reader)?;
         if unityfs.header.signature != Signature::UnityFS {
-            return Err(Error::UnknownSignature);
+            return Err(Error::InvalidSignature {
+                expected: Signature::UnityFS,
+                got: unityfs.header.signature,
+                backtrace: Backtrace::capture(),
+            });
         }
 
         if !unityfs.header.flags.info_block_combined() {
@@ -187,16 +192,22 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn test_read() {
+    fn test_read() -> Result<(), Error> {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests")
             .join("test.unity3d");
         let mut file = File::open(path).unwrap();
 
         match UnityFS::read(&mut file) {
-            Ok(bundle) => println!("{}", bundle),
-            Err(err) => println!("{:#?}", err),
-        };
+            Ok(bundle) => {
+                println!("{}", bundle);
+                Ok(())
+            }
+            Err(err) => {
+                println!("{:#?}", err);
+                Err(err)
+            }
+        }
     }
 
     #[test]

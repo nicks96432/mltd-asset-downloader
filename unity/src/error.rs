@@ -6,6 +6,8 @@ use std::io::Error as IOError;
 use std::num::{ParseIntError, TryFromIntError};
 use std::string::FromUtf8Error;
 
+use crate::bundle::Signature;
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("{source}")]
@@ -26,6 +28,15 @@ pub enum Error {
     FromUtf8Error {
         #[from]
         source: FromUtf8Error,
+        backtrace: Backtrace,
+    },
+
+    #[error("invalid asset bundle signature, expected {expected}, got {got}")]
+    InvalidSignature {
+        expected: Signature,
+        got: Signature,
+
+        #[backtrace]
         backtrace: Backtrace,
     },
 
@@ -59,7 +70,7 @@ pub enum Error {
     },
 
     #[error("unknown asset class id type")]
-    UnknownClassIDType,
+    UnknownClassIDType { class_id: i32, backtrace: Backtrace },
 
     #[error("unknown asset class common name")]
     UnknownCommonName,
@@ -68,7 +79,10 @@ pub enum Error {
     UnknownPlatform,
 
     #[error("unknown asset bundle signature")]
-    UnknownSignature,
+    UnknownSignature {
+        signature: String,
+        backtrace: Backtrace,
+    },
 
     #[cfg(feature = "lz4")]
     #[error("cannot compress: {0}")]

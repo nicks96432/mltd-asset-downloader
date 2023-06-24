@@ -3,6 +3,7 @@ use crate::asset::ClassInfo;
 use crate::error::Error;
 use crate::traits::{ReadAlignedString, ReadIntExt};
 
+use std::any::type_name;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek};
@@ -76,6 +77,8 @@ impl AssetBundle {
         let mut asset_bundle = Self::new();
         asset_bundle.named_object = NamedObject::read(reader, class_info)?;
 
+        log::trace!("cursor is now at {}", reader.stream_position()?);
+
         let preload_table_size = reader.read_u32_by(class_info.big_endian)?;
         for _ in 0..preload_table_size {
             asset_bundle
@@ -85,7 +88,7 @@ impl AssetBundle {
 
         let container_size = reader.read_u32_by(class_info.big_endian)?;
         for _ in 0..container_size {
-            let key = reader.read_aligned_string(class_info.big_endian)?;
+            let key = reader.read_aligned_string(class_info.big_endian, 4)?;
             let asset_info = AssetInfo::read(reader, class_info)?;
 
             match asset_bundle.container.get_mut(&key) {
@@ -98,6 +101,8 @@ impl AssetBundle {
             };
         }
 
+        println!("{}", reader.stream_position()?);
+
         Ok(asset_bundle)
     }
 }
@@ -107,7 +112,13 @@ impl Display for AssetBundle {
         // XXX: maybe try a different way to indent output?
         let indent = f.width().unwrap_or(0);
 
-        writeln!(f, "{:indent$}Super:", "", indent = indent)?;
+        writeln!(
+            f,
+            "{:indent$}Super ({}):",
+            "",
+            type_name::<NamedObject>(),
+            indent = indent
+        )?;
         write!(f, "{:indent$}", self.named_object, indent = indent + 4)?;
 
         writeln!(f, "{:indent$}Preload table:", "", indent = indent)?;
@@ -132,6 +143,7 @@ impl Display for AssetBundle {
                 asset_info_count += 1;
             }
         }
+
         Ok(())
     }
 }

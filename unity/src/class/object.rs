@@ -3,7 +3,7 @@ use crate::error::Error;
 use crate::traits::ReadIntExt;
 
 use std::fmt::{Display, Formatter};
-use std::io::Read;
+use std::io::{Read, Seek};
 
 use super::Class;
 
@@ -22,7 +22,7 @@ impl Object {
 
     pub fn read<R>(reader: &mut R, class_info: &ClassInfo) -> Result<Self, Error>
     where
-        R: Read,
+        R: Read + Seek,
     {
         let mut object = Self::new();
         object.version = class_info.version;
@@ -31,6 +31,8 @@ impl Object {
         if class_info.target_platform == Platform::NoTarget {
             object.hide_flags = reader.read_u32_by(class_info.big_endian)?;
         }
+
+        reader.seek(std::io::SeekFrom::Start(class_info.data_offset))?;
 
         Ok(object)
     }

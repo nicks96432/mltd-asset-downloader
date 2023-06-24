@@ -51,7 +51,7 @@ impl Asset {
 
         for (i, class_info) in asset.metadata.class_infos.iter().enumerate() {
             let class = ClassReader::read(&mut asset.reader, class_info)?;
-            log::trace!("class {}:\n{:#?}", i, class);
+            log::trace!("class {}:\n{}", i, class);
             asset.classes.push(class);
         }
 
