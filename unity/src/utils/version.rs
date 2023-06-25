@@ -31,7 +31,7 @@ impl Version {
     ///
     /// ```
     /// use std::str::FromStr;
-    /// use unity::bundle::Version;
+    /// use unity::utils::Version;
     ///
     /// assert!(Version::from_str("2020.3.34f1").unwrap().is_new());
     /// assert!(Version::from_str("2021.3.2f1").unwrap().is_new());
