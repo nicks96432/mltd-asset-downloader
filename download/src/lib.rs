@@ -73,7 +73,7 @@ pub fn download_assets(args: &DownloaderArgs) -> Result<(), DownloadError> {
 
     log::trace!("create ProgressBar array");
     let mut progress_bars = Vec::with_capacity(args.parallel);
-    for i in 0..args.parallel {
+    for i in 0usize..args.parallel {
         log::trace!("create ProgressBar {}", i);
         let progress_bar =
             multi_progress.add(ProgressBar::new(0).with_finish(ProgressFinish::Abandon));

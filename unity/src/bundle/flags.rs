@@ -2,14 +2,13 @@ use crate::compression::Method as CompressionMethod;
 use crate::error::Error;
 use crate::utils::bool_to_yes_no;
 
+use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Flags {
-    pub bits: u32,
-}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, FromPrimitive, ToPrimitive)]
+pub struct Flags(pub u32);
 
 impl Flags {
     /// Creates a new [`Flags`] of old Unity version.
@@ -17,8 +16,8 @@ impl Flags {
     /// For version differences, see [`AssetBundleVersion`][v] for more details.
     ///
     /// [v]: crate::bundle::Version
-    pub fn new(flag: u32) -> Self {
-        Self { bits: flag }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Returns the compression method of this [`Flags`].
@@ -28,7 +27,7 @@ impl Flags {
     /// This function will return [`Error::UnknownCompressionMethod`] if
     /// the compression method is unknown.
     pub fn compression_method(&self) -> Result<CompressionMethod, Error> {
-        let value = self.bits & 0x3f;
+        let value = self.0 & 0x3f;
 
         CompressionMethod::from_u32(value).ok_or_else(|| Error::UnknownCompressionMethod)
     }
@@ -38,7 +37,7 @@ impl Flags {
     ///
     /// [InfoBlock]: crate::bundle::InfoBlock
     pub fn info_block_combined(&self) -> bool {
-        self.bits & 0x40 != 0
+        self.0 & 0x40 != 0
     }
 
     /// Returns whether the [`InfoBlock`][InfoBlock] is at the end of this
@@ -46,14 +45,14 @@ impl Flags {
     ///
     /// [InfoBlock]: crate::bundle::InfoBlock
     pub fn info_block_end(&self) -> bool {
-        self.bits & 0x80 != 0
+        self.0 & 0x80 != 0
     }
 
     /// Returns whether the [`InfoBlock`][InfoBlock] has padding at start.
     ///
     /// [InfoBlock]: crate::bundle::InfoBlock
     pub fn info_block_padding(&self) -> bool {
-        self.bits & 0x200 != 0
+        self.0 & 0x200 != 0
     }
 }
 
@@ -66,7 +65,7 @@ impl Display for Flags {
             f,
             "{:indent$}Flags: (raw {:#010x})",
             "",
-            self.bits,
+            self.0,
             indent = indent
         )?;
 

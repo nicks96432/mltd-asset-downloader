@@ -3,7 +3,7 @@ use num_derive::{FromPrimitive, ToPrimitive};
 /// From [UnityPy](
 ///     https://github.com/K0lb3/UnityPy/blob/master/UnityPy/enums/BuildTarget.py
 /// )
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, FromPrimitive, ToPrimitive)]
 pub enum Platform {
     DashboardWidget = 1,
     StandaloneOSX,
@@ -40,12 +40,7 @@ pub enum Platform {
     TVOS,
     Switch,
 
+    #[default]
     UnknownPlatform = 3716,
     NoTarget = -2,
-}
-
-impl Default for Platform {
-    fn default() -> Self {
-        Self::UnknownPlatform
-    }
 }

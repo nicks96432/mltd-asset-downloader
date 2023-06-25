@@ -1,7 +1,7 @@
 use super::Metadata;
 use crate::error::Error;
 use crate::macros::impl_default;
-use crate::traits::{ReadIntExt, ReadString};
+use crate::traits::{ReadPrimitiveExt, ReadString};
 
 use byteorder::ReadBytesExt;
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -320,7 +320,7 @@ impl TypeTree {
 
         type_tree.string_buffer_size = reader.read_i32_by(metadata.big_endian)?;
 
-        for _ in 0..node_count {
+        for _ in 0i32..node_count {
             type_tree.nodes.push(Node::read(reader, metadata)?);
         }
 

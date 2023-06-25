@@ -53,7 +53,34 @@ pub(crate) trait SeekAlign: Seek {
 
 impl<S> SeekAlign for S where S: Seek {}
 
-macro_rules! read_int_by {
+/// Extends [`Write`] [`Seek`] with methods for writing byte alignment.
+pub(crate) trait WriteAlign: Write + Seek {
+    /// Write bytes alignment.
+    ///
+    /// # Errors
+    ///
+    /// This function will return [`Error::IOError`]
+    /// if the writer is unavailable.
+    ///
+    /// This function will return [`Error::TryFromIntError`]
+    /// if integer conversion is failed.
+    #[inline]
+    fn write_align(&mut self, alignment: u64) -> Result<(), Error> {
+        let pos = i64::try_from(self.stream_position()?)?;
+        let alignment = i64::try_from(alignment)?;
+        let alignment = (alignment - pos % alignment) % alignment;
+
+        for _ in 0i64..alignment {
+            self.write_u8(0u8)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl<W> WriteAlign for W where W: Write + Seek {}
+
+macro_rules! read_type_by {
     ($reader:ident, $type:ident, $endian:ident) => {
         paste! {
             match $endian {
@@ -64,7 +91,7 @@ macro_rules! read_int_by {
     };
 }
 
-macro_rules! write_int_by {
+macro_rules! write_type_by {
     ($writer:ident, $type:ident, $endian:ident, $n:ident) => {
         paste! {
             match $endian {
@@ -78,124 +105,144 @@ macro_rules! write_int_by {
 macro_rules! read_array_by {
     ($reader:ident, $type:ident, $endian:ident) => {
         paste! {
-            (0..$reader.read_u32_by($endian)?)
+            (0u32..$reader.read_u32_by($endian)?)
                 .map(|_| $reader.[<read_ $type _by>]($endian)).collect()
         }
     };
 }
 
-pub(crate) trait ReadIntExt: Read {
+pub(crate) trait ReadPrimitiveExt: Read {
     #[inline]
     fn read_i16_by(&mut self, endian: bool) -> Result<i16, IOError> {
-        read_int_by!(self, i16, endian)
+        read_type_by!(self, i16, endian)
     }
 
     #[inline]
     fn read_i24_by(&mut self, endian: bool) -> Result<i32, IOError> {
-        read_int_by!(self, i24, endian)
+        read_type_by!(self, i24, endian)
     }
 
     #[inline]
     fn read_i32_by(&mut self, endian: bool) -> Result<i32, IOError> {
-        read_int_by!(self, i32, endian)
+        read_type_by!(self, i32, endian)
     }
 
     #[inline]
     fn read_i48_by(&mut self, endian: bool) -> Result<i64, IOError> {
-        read_int_by!(self, i48, endian)
+        read_type_by!(self, i48, endian)
     }
 
     #[inline]
     fn read_i64_by(&mut self, endian: bool) -> Result<i64, IOError> {
-        read_int_by!(self, i64, endian)
+        read_type_by!(self, i64, endian)
     }
 
     #[inline]
     fn read_u16_by(&mut self, endian: bool) -> Result<u16, IOError> {
-        read_int_by!(self, u16, endian)
+        read_type_by!(self, u16, endian)
     }
 
     #[inline]
     fn read_u24_by(&mut self, endian: bool) -> Result<u32, IOError> {
-        read_int_by!(self, u24, endian)
+        read_type_by!(self, u24, endian)
     }
 
     #[inline]
     fn read_u32_by(&mut self, endian: bool) -> Result<u32, IOError> {
-        read_int_by!(self, u32, endian)
+        read_type_by!(self, u32, endian)
     }
 
     #[inline]
     fn read_u48_by(&mut self, endian: bool) -> Result<u64, IOError> {
-        read_int_by!(self, u48, endian)
+        read_type_by!(self, u48, endian)
     }
 
     #[inline]
     fn read_u64_by(&mut self, endian: bool) -> Result<u64, IOError> {
-        read_int_by!(self, u64, endian)
+        read_type_by!(self, u64, endian)
+    }
+
+    #[inline]
+    fn read_f32_by(&mut self, endian: bool) -> Result<f32, IOError> {
+        read_type_by!(self, f32, endian)
+    }
+
+    #[inline]
+    fn read_f64_by(&mut self, endian: bool) -> Result<f64, IOError> {
+        read_type_by!(self, f64, endian)
     }
 }
 
-impl<R> ReadIntExt for R where R: Read {}
+impl<R> ReadPrimitiveExt for R where R: Read {}
 
-pub(crate) trait WriteIntExt: Write {
+pub(crate) trait WritePrimitiveExt: Write {
     #[inline]
     fn write_i16_by(&mut self, n: i16, endian: bool) -> Result<(), IOError> {
-        write_int_by!(self, i16, endian, n)
+        write_type_by!(self, i16, endian, n)
     }
 
     #[inline]
     fn write_i24_by(&mut self, n: i32, endian: bool) -> Result<(), IOError> {
-        write_int_by!(self, i24, endian, n)
+        write_type_by!(self, i24, endian, n)
     }
 
     #[inline]
     fn write_i32_by(&mut self, n: i32, endian: bool) -> Result<(), IOError> {
-        write_int_by!(self, i32, endian, n)
+        write_type_by!(self, i32, endian, n)
     }
 
     #[inline]
     fn write_i48_by(&mut self, n: i64, endian: bool) -> Result<(), IOError> {
-        write_int_by!(self, i48, endian, n)
+        write_type_by!(self, i48, endian, n)
     }
 
     #[inline]
     fn write_i64_by(&mut self, n: i64, endian: bool) -> Result<(), IOError> {
-        write_int_by!(self, i64, endian, n)
+        write_type_by!(self, i64, endian, n)
     }
 
     #[inline]
     fn write_u16_by(&mut self, n: u16, endian: bool) -> Result<(), IOError> {
-        write_int_by!(self, u16, endian, n)
+        write_type_by!(self, u16, endian, n)
     }
 
     #[inline]
     fn write_u24_by(&mut self, n: u32, endian: bool) -> Result<(), IOError> {
-        write_int_by!(self, u24, endian, n)
+        write_type_by!(self, u24, endian, n)
     }
 
     #[inline]
     fn write_u32_by(&mut self, n: u32, endian: bool) -> Result<(), IOError> {
-        write_int_by!(self, u32, endian, n)
+        write_type_by!(self, u32, endian, n)
     }
 
     #[inline]
     fn write_u48_by(&mut self, n: u64, endian: bool) -> Result<(), IOError> {
-        write_int_by!(self, u48, endian, n)
+        write_type_by!(self, u48, endian, n)
     }
 
     #[inline]
     fn write_u64_by(&mut self, n: u64, endian: bool) -> Result<(), IOError> {
-        write_int_by!(self, u64, endian, n)
+        write_type_by!(self, u64, endian, n)
+    }
+
+    #[inline]
+    fn write_f32_by(&mut self, n: f32, endian: bool) -> Result<(), IOError> {
+        write_type_by!(self, f32, endian, n)
+    }
+
+    #[inline]
+    fn write_f64_by(&mut self, n: f64, endian: bool) -> Result<(), IOError> {
+        write_type_by!(self, f64, endian, n)
     }
 }
 
-impl<W> WriteIntExt for W where W: Write {}
+impl<W> WritePrimitiveExt for W where W: Write {}
 
-pub(crate) trait ReadVecExt: ReadIntExt {
+pub(crate) trait ReadVecExt: ReadPrimitiveExt {
     #[inline]
     fn read_i8_vec_by(&mut self, endian: bool) -> Result<Vec<i8>, IOError> {
-        let iter = 0..self.read_u32_by(endian)?;
+        let iter = 0u32..self.read_u32_by(endian)?;
         iter.map(|_| self.read_i8()).collect()
     }
 
@@ -226,7 +273,7 @@ pub(crate) trait ReadVecExt: ReadIntExt {
 
     #[inline]
     fn read_u8_vec_by(&mut self, endian: bool) -> Result<Vec<u8>, IOError> {
-        let iter = 0..self.read_u32_by(endian)?;
+        let iter = 0u32..self.read_u32_by(endian)?;
         iter.map(|_| self.read_u8()).collect()
     }
 
@@ -258,7 +305,9 @@ pub(crate) trait ReadVecExt: ReadIntExt {
 
 impl<R> ReadVecExt for R where R: Read {}
 
-pub(crate) trait ReadAlignedString: Read + SeekAlign + ReadIntExt + ReadVecExt {
+pub(crate) trait ReadAlignedString:
+    Read + SeekAlign + ReadPrimitiveExt + ReadVecExt
+{
     #[inline]
     fn read_aligned_string(&mut self, endian: bool, alignment: u64) -> Result<String, Error> {
         let buf = self.read_u8_vec_by(endian)?;
@@ -268,4 +317,4 @@ pub(crate) trait ReadAlignedString: Read + SeekAlign + ReadIntExt + ReadVecExt {
     }
 }
 
-impl<R> ReadAlignedString for R where R: Read + SeekAlign + ReadIntExt + ReadVecExt {}
+impl<R> ReadAlignedString for R where R: Read + SeekAlign + ReadPrimitiveExt + ReadVecExt {}

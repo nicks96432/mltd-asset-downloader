@@ -29,12 +29,7 @@ pub struct Asset {
 
 impl Asset {
     pub fn new() -> Self {
-        Self {
-            header: Header::new(),
-            metadata: Metadata::new(),
-            classes: Vec::new(),
-            reader: Cursor::new(Vec::new()),
-        }
+        Self::default()
     }
 
     pub fn read(reader: Cursor<Vec<u8>>) -> Result<Self, Error> {

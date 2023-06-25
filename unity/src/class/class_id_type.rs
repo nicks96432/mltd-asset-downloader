@@ -3,9 +3,11 @@ use num_derive::{FromPrimitive, ToPrimitive};
 /// From [UnityPy](
 ///     https://github.com/K0lb3/UnityPy/blob/master/UnityPy/files/ObjectReader.py
 /// )
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, FromPrimitive, ToPrimitive)]
 pub enum ClassIDType {
+    #[default]
     Unknown = -1,
+
     Object = 0,
     GameObject = 1,
     Component = 2,

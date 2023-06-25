@@ -192,7 +192,7 @@ impl InfoBlock {
         let block_count = reader.read_u32::<BigEndian>()?;
         log::trace!("{} asset block info(s)", block_count);
 
-        for i in 0..block_count {
+        for i in 0u32..block_count {
             let block_info = BlockInfo::read(reader)?;
             log::trace!("asset block info {}:\n{}", i, block_info);
             info_block.block_infos.push(block_info);
@@ -202,7 +202,7 @@ impl InfoBlock {
         let path_count = reader.read_u32::<BigEndian>()?;
         log::trace!("{} asset path info(s)", path_count);
 
-        for i in 0..path_count {
+        for i in 0u32..path_count {
             let path_info = PathInfo::read(reader)?;
             log::trace!("asset path info {}:\n{}", i, path_info);
             info_block.path_infos.push(path_info);
@@ -330,7 +330,7 @@ mod tests {
             .unwrap();
 
         let mut block_infos = Vec::new();
-        for _ in 0..block_count {
+        for _ in 0usize..block_count {
             let mut buf = rand_bytes(BlockInfo::BASE_SIZE);
 
             block_infos.push(BlockInfo::read(&mut buf).unwrap());
@@ -351,12 +351,12 @@ mod tests {
             .unwrap();
 
         let mut path_infos = Vec::new();
-        for _ in 0..path_count {
+        for _ in 0usize..path_count {
             const SIZE: usize = PathInfo::BASE_SIZE;
             let mut buf = rand_bytes(SIZE);
             buf.set_position(u64::try_from(SIZE).unwrap());
 
-            let mut path = rand_ascii_string(rand_range(30..40));
+            let mut path = rand_ascii_string(rand_range(30usize..40usize));
             copy(&mut path, &mut buf).unwrap();
             buf.set_position(0);
 

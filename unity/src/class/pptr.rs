@@ -1,7 +1,7 @@
 use crate::asset::ClassInfo;
 use crate::error::Error;
-use crate::traits::ReadIntExt;
-use crate::traits::WriteIntExt;
+use crate::traits::ReadPrimitiveExt;
+use crate::traits::WritePrimitiveExt;
 
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -38,7 +38,7 @@ impl PPtr {
         Ok(pptr)
     }
 
-    pub fn write<W>(&self, writer: &mut W) -> Result<(), Error>
+    pub fn save<W>(&self, writer: &mut W) -> Result<(), Error>
     where
         W: Write,
     {

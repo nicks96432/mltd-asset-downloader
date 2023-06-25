@@ -1,7 +1,7 @@
 use super::{Class, PPtr};
 use crate::asset::ClassInfo;
 use crate::error::Error;
-use crate::traits::{ReadAlignedString, ReadIntExt};
+use crate::traits::{ReadAlignedString, ReadPrimitiveExt};
 
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek};
@@ -29,8 +29,8 @@ impl GameObject {
         game_object.version = class_info.version;
         game_object.big_endian = class_info.big_endian;
 
-        let component_size = reader.read_i32_by(class_info.big_endian)?;
-        for _ in 0..component_size {
+        let component_size = reader.read_u32_by(class_info.big_endian)?;
+        for _ in 0u32..component_size {
             let component = PPtr::read(reader, class_info)?;
             game_object.components.push(component);
         }

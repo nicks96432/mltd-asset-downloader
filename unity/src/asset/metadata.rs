@@ -1,7 +1,7 @@
 use super::{Asset, ClassType, Platform};
 use crate::asset::ClassInfo;
 use crate::error::Error;
-use crate::traits::{ReadIntExt, ReadString, SeekAlign, WriteIntExt};
+use crate::traits::{ReadPrimitiveExt, ReadString, SeekAlign, WritePrimitiveExt};
 use crate::utils::{bool_to_yes_no, Version};
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
@@ -245,7 +245,7 @@ impl Metadata {
             log::debug!("reading asset ref types");
             let ref_type_count = asset.reader.read_u32_by(big_endian)?;
             log::trace!("{} asset ref type(s)", ref_type_count);
-            for i in 0..ref_type_count {
+            for i in 0u32..ref_type_count {
                 let ref_type = ClassType::read(&mut asset.reader, &metadata, true)?;
                 log::trace!("asset ref type {}:\n{}", i, &ref_type);
                 metadata.ref_types.push(ref_type);
@@ -269,7 +269,7 @@ impl Metadata {
 
         if self.version >= 8 {
             writer.write_u32_by(
-                ToPrimitive::to_u32(&self.target_platform).ok_or_else(|| Error::UnknownPlatform)?,
+                ToPrimitive::to_u32(&self.target_platform).ok_or(Error::UnknownPlatform)?,
                 self.big_endian,
             )?;
         }

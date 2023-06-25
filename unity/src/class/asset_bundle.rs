@@ -1,7 +1,7 @@
 use super::{Class, NamedObject, PPtr};
 use crate::asset::ClassInfo;
 use crate::error::Error;
-use crate::traits::{ReadAlignedString, ReadIntExt};
+use crate::traits::{ReadAlignedString, ReadPrimitiveExt};
 
 use std::any::type_name;
 use std::collections::HashMap;
@@ -38,6 +38,7 @@ impl Display for AssetInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // XXX: maybe try a different way to indent output?
         let indent = f.width().unwrap_or(0);
+
         writeln!(
             f,
             "{:indent$}Preload index: {}",
@@ -80,14 +81,14 @@ impl AssetBundle {
         log::trace!("cursor is now at {}", reader.stream_position()?);
 
         let preload_table_size = reader.read_u32_by(class_info.big_endian)?;
-        for _ in 0..preload_table_size {
+        for _ in 0u32..preload_table_size {
             asset_bundle
                 .preload_table
                 .push(PPtr::read(reader, class_info)?);
         }
 
         let container_size = reader.read_u32_by(class_info.big_endian)?;
-        for _ in 0..container_size {
+        for _ in 0u32..container_size {
             let key = reader.read_aligned_string(class_info.big_endian, 4)?;
             let asset_info = AssetInfo::read(reader, class_info)?;
 

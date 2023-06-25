@@ -26,21 +26,13 @@ impl UnityFSHeader {
     pub fn new() -> Self {
         Self {
             signature: Signature::UnityFS,
-            version_format: 0,
-            version_target: Version {
-                major: 0,
-                minor: String::new(),
-                patch: String::new(),
-            },
-            version_engine: Version {
-                major: 0,
-                minor: String::new(),
-                patch: String::new(),
-            },
+            version_format: 0u32,
+            version_target: Version::new(),
+            version_engine: Version::new(),
             bundle_size: 0u64,
             info_block_compressed_size: 0u32,
             info_block_decompressed_size: 0u32,
-            flags: Flags::new(0u32),
+            flags: Flags::new(),
         }
     }
 
@@ -50,6 +42,7 @@ impl UnityFSHeader {
     {
         let signature = reader.read_string()?;
         log::trace!("signature: {}", signature);
+
         Ok(Self {
             signature: Signature::from_str(&signature)?,
             version_format: reader.read_u32::<BigEndian>()?,
@@ -58,7 +51,7 @@ impl UnityFSHeader {
             bundle_size: reader.read_u64::<BigEndian>()?,
             info_block_compressed_size: reader.read_u32::<BigEndian>()?,
             info_block_decompressed_size: reader.read_u32::<BigEndian>()?,
-            flags: Flags::new(reader.read_u32::<BigEndian>()?),
+            flags: Flags(reader.read_u32::<BigEndian>()?),
         })
     }
 
@@ -80,7 +73,7 @@ impl UnityFSHeader {
         writer.write_u64::<BigEndian>(self.bundle_size)?;
         writer.write_u32::<BigEndian>(self.info_block_compressed_size)?;
         writer.write_u32::<BigEndian>(self.info_block_decompressed_size)?;
-        writer.write_u32::<BigEndian>(self.flags.bits)?;
+        writer.write_u32::<BigEndian>(self.flags.0)?;
 
         Ok(())
     }
@@ -179,7 +172,7 @@ mod tests {
             "2021.3.18f1",
             "2023.1.0a4",
         ];
-        let version_engine = choices[rand_range(0..choices.len())];
+        let version_engine = choices[rand_range(0usize..choices.len())];
         log::trace!("chosen version_engine: {}", version_engine);
         buf.write_all(version_engine.as_bytes()).unwrap();
         buf.write_u8(0u8).unwrap();
@@ -208,9 +201,6 @@ mod tests {
             unityfs_header.info_block_decompressed_size,
             buf.read_u32::<BigEndian>().unwrap()
         );
-        assert_eq!(
-            unityfs_header.flags.bits,
-            buf.read_u32::<BigEndian>().unwrap()
-        );
+        assert_eq!(unityfs_header.flags.0, buf.read_u32::<BigEndian>().unwrap());
     }
 }

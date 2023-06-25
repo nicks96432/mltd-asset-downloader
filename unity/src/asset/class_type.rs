@@ -1,16 +1,16 @@
 use super::{Metadata, TypeTree};
 use crate::class::ClassIDType;
 use crate::error::Error;
-use crate::macros::impl_default;
-use crate::traits::{ReadIntExt, ReadString, ReadVecExt};
+use crate::traits::{ReadPrimitiveExt, ReadString, ReadVecExt};
 
 use byteorder::ReadBytesExt;
 use num_traits::{FromPrimitive, ToPrimitive};
 
+use std::backtrace::Backtrace;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Write};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ClassType {
     /// Negative for script types
     pub class_id: i32,
@@ -31,18 +31,8 @@ pub struct ClassType {
 impl ClassType {
     pub fn new() -> Self {
         Self {
-            class_id: 0i32,
-            stripped: false,
             script_index: -1i16,
-            script_hash: [0u8; 16],
-            type_hash: [0u8; 16],
-            type_tree: TypeTree::new(),
-            type_dependencies: Vec::new(),
-            class_name: String::new(),
-            namespace: String::new(),
-            assembly_name: String::new(),
-            big_endian: false,
-            version: 0u32,
+            ..Default::default()
         }
     }
 
@@ -70,7 +60,7 @@ impl ClassType {
                 || (metadata.version >= 16
                     // MonoBehavior is a script type
                     && class_type.class_id
-                            == ToPrimitive::to_i32(&ClassIDType::MonoBehaviour).unwrap_or(0))
+                            == ToPrimitive::to_i32(&ClassIDType::MonoBehaviour).ok_or_else(||Error::UnknownClassIDType { class_id:0, backtrace: Backtrace::capture() })?)
             {
                 reader.read_exact(&mut class_type.script_hash)?;
             }
@@ -172,5 +162,3 @@ impl Display for ClassType {
         Ok(())
     }
 }
-
-impl_default!(ClassType);

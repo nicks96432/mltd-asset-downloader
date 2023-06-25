@@ -4,13 +4,15 @@ use crate::error::Error;
 
 use std::any::type_name;
 use std::fmt::{Display, Formatter};
-use std::io::{Read, Seek};
+use std::io::{Read, Seek, Write};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct EditorExtension {
     pub object: Object,
     pub prefab_parent_object: PPtr,
     pub prefab_internal: PPtr,
+
+    pub(crate) target_platform: Platform,
 }
 
 impl EditorExtension {
@@ -23,6 +25,7 @@ impl EditorExtension {
         R: Read + Seek,
     {
         let mut editor_extension = Self::new();
+        editor_extension.target_platform = class_info.target_platform;
 
         editor_extension.object = Object::read(reader, class_info)?;
         if class_info.target_platform == Platform::NoTarget {
@@ -31,6 +34,20 @@ impl EditorExtension {
         }
 
         Ok(editor_extension)
+    }
+
+    pub fn save<W>(&self, writer: &mut W) -> Result<(), Error>
+    where
+        W: Write,
+    {
+        self.object.save(writer)?;
+
+        if self.target_platform == Platform::NoTarget {
+            self.prefab_parent_object.save(writer)?;
+            self.prefab_internal.save(writer)?;
+        }
+
+        Ok(())
     }
 }
 

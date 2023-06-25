@@ -1,9 +1,8 @@
 use super::{ClassType, Metadata, Platform};
 use crate::class::ClassIDType;
 use crate::error::Error;
-use crate::macros::impl_default;
-use crate::traits::{ReadIntExt, SeekAlign, WriteIntExt};
-use crate::utils::bool_to_yes_no;
+use crate::traits::{ReadPrimitiveExt, SeekAlign, WritePrimitiveExt};
+use crate::utils::{bool_to_yes_no, Version};
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use num_traits::FromPrimitive;
@@ -12,7 +11,7 @@ use std::backtrace::Backtrace;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek, Write};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ClassInfo {
     pub id: u64,
 
@@ -56,26 +55,15 @@ pub struct ClassInfo {
     pub(crate) big_endian: bool,
     pub(crate) big_id_enabled: bool,
     pub(crate) target_platform: Platform,
+    pub(crate) unity_version: Version,
     pub(crate) version: u32,
 }
 
 impl ClassInfo {
     pub fn new() -> Self {
         Self {
-            id: 0u64,
-            data_offset: 0u64,
-            data_size: 0u32,
-            type_id: 0u32,
-            class_id: 0i32,
-            is_destroyed: false,
             script_index: -1i16,
-            stripped: false,
-
-            class_type: ClassType::new(),
-            big_endian: false,
-            big_id_enabled: false,
-            target_platform: Platform::UnknownPlatform,
-            version: 0,
+            ..Default::default()
         }
     }
 
@@ -91,24 +79,24 @@ impl ClassInfo {
         R: Read + Seek,
     {
         let big_endian = metadata.big_endian;
-        let version = metadata.version;
 
         let mut object_info = Self::new();
         object_info.big_endian = big_endian;
         object_info.big_id_enabled = metadata.big_id_enabled;
         object_info.target_platform = metadata.target_platform;
-        object_info.version = version;
+        object_info.unity_version = metadata.unity_version.clone();
+        object_info.version = metadata.version;
 
         if metadata.big_id_enabled {
             object_info.id = reader.read_u64_by(big_endian)?;
-        } else if version <= 13 {
+        } else if metadata.version <= 13 {
             object_info.id = u64::from(reader.read_u32_by(big_endian)?);
         } else {
             reader.seek_align(4)?;
             object_info.id = reader.read_u64_by(big_endian)?;
         }
 
-        object_info.data_offset = match version >= 22 {
+        object_info.data_offset = match metadata.version >= 22 {
             true => reader.read_u64_by(big_endian)?,
             false => u64::from(reader.read_u32_by(big_endian)?),
         };
@@ -116,19 +104,19 @@ impl ClassInfo {
         object_info.data_size = reader.read_u32_by(big_endian)?;
 
         object_info.type_id = reader.read_u32_by(big_endian)?;
-        if version <= 15 {
+        if metadata.version <= 15 {
             object_info.class_id = i32::from(reader.read_u16_by(big_endian)?);
         }
 
-        if version <= 10 {
+        if metadata.version <= 10 {
             object_info.is_destroyed = reader.read_u16_by(big_endian)? > 0;
         }
 
-        if (11..=16).contains(&version) {
+        if (11..=16).contains(&metadata.version) {
             object_info.script_index = reader.read_i16_by(big_endian)?;
         }
 
-        if version == 15 || version == 16 {
+        if metadata.version == 15 || metadata.version == 16 {
             object_info.stripped = reader.read_u8()? > 0;
         }
 
@@ -251,5 +239,3 @@ impl Display for ClassInfo {
         Ok(())
     }
 }
-
-impl_default!(ClassInfo);

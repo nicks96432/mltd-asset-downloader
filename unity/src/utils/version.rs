@@ -13,6 +13,10 @@ pub struct Version {
 }
 
 impl Version {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Returns whether this [`Version`] is a newer Unity version.
     ///
     /// from [UnityPy](https://github.com/K0lb3/UnityPy/blob/c8d41de4ee914bb63d765fcbeb063531e1eea460/UnityPy/files/BundleFile.py#L99):

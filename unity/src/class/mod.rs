@@ -6,6 +6,8 @@ mod named_object;
 mod object;
 mod pptr;
 mod text_asset;
+mod texture;
+mod texture_2d;
 
 pub use self::asset_bundle::*;
 pub use self::class_id_type::*;
@@ -15,6 +17,8 @@ pub use self::named_object::*;
 pub use self::object::*;
 pub use self::pptr::*;
 pub use self::text_asset::*;
+pub use self::texture::*;
+pub use self::texture_2d::*;
 
 use crate::asset::ClassInfo;
 use crate::error::Error;
