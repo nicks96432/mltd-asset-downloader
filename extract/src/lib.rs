@@ -22,8 +22,10 @@ pub struct ExtractorArgs {
 
 pub fn extract_media(args: &ExtractorArgs) -> Result<(), Box<dyn Error>> {
     let mut f = File::open(&args.input)?;
+
+    log::info!("loading UnityFS bundle: {}", args.input.to_string_lossy());
     let bundle = UnityFS::read(&mut f)?;
     println!("{}", bundle);
 
-    todo!() // TODO: implement extract_media
+    Ok(())
 }

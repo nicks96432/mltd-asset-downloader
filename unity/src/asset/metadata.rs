@@ -172,9 +172,9 @@ impl Metadata {
             }
         }
 
-        log::debug!("reading asset types");
+        log::debug!("reading class types");
         let types_count = asset.reader.read_u32_by(big_endian)?;
-        log::trace!("{} asset serialized type(s)", types_count);
+        log::trace!("{} class type(s)", types_count);
 
         let mut class_types = HashMap::new();
         for i in 0usize..usize::try_from(types_count)? {
@@ -188,17 +188,9 @@ impl Metadata {
             metadata.big_id_enabled = asset.reader.read_i32_by(big_endian)? > 0i32;
         }
 
-        log::debug!("reading objects");
+        log::debug!("reading object infos");
         let object_count = asset.reader.read_u32_by(big_endian)?;
-        log::trace!("{} asset object(s)", object_count);
-
-        if types_count != object_count {
-            log::warn!(
-                "The number of types and object_infos are not the same: {} != {}",
-                types_count,
-                object_count
-            )
-        }
+        log::trace!("{} asset object info(s)", object_count);
 
         for i in 0usize..usize::try_from(object_count)? {
             let mut object_info = ClassInfo::read(&mut asset.reader, &metadata)?;
@@ -207,7 +199,7 @@ impl Metadata {
                 false => i,
             };
 
-            match class_types.remove(&key) {
+            match class_types.get(&key) {
                 Some(class_type) => {
                     if version >= 16 {
                         object_info.class_id = class_type.class_id;
@@ -216,17 +208,15 @@ impl Metadata {
                         object_info.stripped = class_type.stripped;
                         object_info.script_index = class_type.script_index;
                     }
-                    object_info.class_type = class_type;
+                    object_info.class_type = class_type.clone();
                 }
-                None => log::error!("class_type of index {} not found", key),
+                None => {
+                    log::error!("class_type of index {} not found", key)
+                }
             };
 
             log::trace!("asset object {}:\n{}", i, &object_info);
             metadata.class_infos.push(object_info);
-        }
-
-        if !class_types.is_empty() {
-            log::warn!("there are still class_types left, some information may be lost!");
         }
 
         if version >= 11 {

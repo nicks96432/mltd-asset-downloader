@@ -28,10 +28,10 @@ path = "../utils"
 
 [dependencies.serde_json]
 optional = true
-version = "1.0.97"
+version = "1.0.99"
 
 [dependencies.serde_yaml]
-version = "0.9.21"
+version = "0.9.22"
 optional = true
 
 [dev-dependencies]
