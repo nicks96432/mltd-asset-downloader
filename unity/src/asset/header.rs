@@ -2,10 +2,8 @@ use crate::error::Error;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use std::{
-    fmt::{Display, Formatter},
-    io::{Read, Seek, SeekFrom, Write},
-};
+use std::fmt::{Display, Formatter};
+use std::io::{Read, Seek, SeekFrom, Write};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Header {

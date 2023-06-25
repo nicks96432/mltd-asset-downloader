@@ -1,10 +1,10 @@
-use std::fmt::{Display, Formatter};
-
 use crate::compression::Method as CompressionMethod;
 use crate::error::Error;
 use crate::utils::bool_to_yes_no;
 
 use num_traits::FromPrimitive;
+
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Flags {

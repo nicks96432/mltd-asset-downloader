@@ -9,11 +9,12 @@ use mltd_utils::fetch_asset;
 use rayon::current_thread_index;
 use rayon::prelude::{ParallelBridge, ParallelIterator};
 use rayon::ThreadPoolBuilder;
+use ureq::AgentBuilder;
+
 use std::fs::{create_dir_all, File};
 use std::io::copy;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use ureq::AgentBuilder;
 
 #[derive(Debug, clap::Args)]
 #[command(author, version, about, arg_required_else_help(true))]

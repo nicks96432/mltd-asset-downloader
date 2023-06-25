@@ -969,7 +969,6 @@ dependencies = [
  "ctor",
  "env_logger",
  "hex",
- "linked-hash-map",
  "log",
  "lz4_flex",
  "lzham",

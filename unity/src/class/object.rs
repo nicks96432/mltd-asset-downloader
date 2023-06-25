@@ -1,11 +1,10 @@
+use super::Class;
 use crate::asset::{ClassInfo, Platform};
 use crate::error::Error;
 use crate::traits::ReadIntExt;
 
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek};
-
-use super::Class;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Object {

@@ -1,3 +1,5 @@
+use crate::bundle::Signature;
+
 use thiserror::Error;
 
 use std::backtrace::Backtrace;
@@ -5,8 +7,6 @@ use std::cell::{BorrowError, BorrowMutError};
 use std::io::Error as IOError;
 use std::num::{ParseIntError, TryFromIntError};
 use std::string::FromUtf8Error;
-
-use crate::bundle::Signature;
 
 #[derive(Debug, Error)]
 pub enum Error {
