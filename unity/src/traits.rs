@@ -305,9 +305,7 @@ pub trait ReadVecExt: ReadPrimitiveExt {
 
 impl<R> ReadVecExt for R where R: Read {}
 
-pub trait ReadAlignedString:
-    Read + SeekAlign + ReadPrimitiveExt + ReadVecExt
-{
+pub trait ReadAlignedString: Read + SeekAlign + ReadPrimitiveExt + ReadVecExt {
     #[inline]
     fn read_aligned_string(&mut self, endian: bool, alignment: u64) -> Result<String, Error> {
         let buf = self.read_u8_vec_by(endian)?;
