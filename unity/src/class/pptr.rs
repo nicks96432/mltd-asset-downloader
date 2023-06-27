@@ -12,8 +12,8 @@ pub struct PPtr {
     pub file_id: u32,
     pub path_id: u64,
 
-    pub(crate) version: u32,
-    pub(crate) big_endian: bool,
+    pub version: i32,
+    pub big_endian: bool,
 }
 
 impl PPtr {

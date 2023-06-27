@@ -3,7 +3,6 @@ use crate::asset::ClassInfo;
 use crate::error::Error;
 use crate::traits::{ReadAlignedString, ReadPrimitiveExt};
 
-use std::any::type_name;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek};
@@ -102,8 +101,6 @@ impl AssetBundle {
             };
         }
 
-        println!("{}", reader.stream_position()?);
-
         Ok(asset_bundle)
     }
 }
@@ -117,7 +114,7 @@ impl Display for AssetBundle {
             f,
             "{:indent$}Super ({}):",
             "",
-            type_name::<NamedObject>(),
+            self.named_object.name(),
             indent = indent
         )?;
         write!(f, "{:indent$}", self.named_object, indent = indent + 4)?;

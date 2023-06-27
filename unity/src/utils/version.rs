@@ -44,6 +44,10 @@ impl Version {
             || (self.major == 2021 && self >= &Version::from_str("2021.3.2f1").unwrap())
             || (self.major == 2020 && self >= &Version::from_str("2020.3.34f1").unwrap())
     }
+
+    pub fn is_patch(&self) -> bool {
+        self.patch.contains('p')
+    }
 }
 
 impl Debug for Version {
@@ -72,8 +76,6 @@ impl FromStr for Version {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        log::trace!("input version: {}", s);
-
         let nums: Vec<&str> = s.split('.').collect();
         if nums.len() != 3 {
             return Err(Error::InvalidVersion {

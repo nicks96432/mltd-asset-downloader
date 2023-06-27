@@ -1,4 +1,4 @@
-use super::{Asset, ClassType, Platform};
+use super::{ClassType, Header, Platform};
 use crate::asset::ClassInfo;
 use crate::error::Error;
 use crate::traits::{ReadPrimitiveExt, ReadString, SeekAlign, WritePrimitiveExt};
@@ -139,8 +139,8 @@ pub struct Metadata {
     pub user_information: String,
 
     pub(crate) big_endian: bool,
-    pub(crate) data_offset: u64,
-    pub(crate) version: u32,
+    pub(crate) data_offset: i64,
+    pub(crate) version: i32,
 }
 
 impl Metadata {
@@ -148,52 +148,55 @@ impl Metadata {
         Self::default()
     }
 
-    pub fn read(asset: &mut Asset) -> Result<Self, Error> {
-        let version = asset.header.version;
-        let big_endian = asset.header.big_endian;
+    pub fn read<R>(reader: &mut R, header: &Header) -> Result<Self, Error>
+    where
+        R: Read + Seek,
+    {
+        let version = header.version;
+        let big_endian = header.big_endian;
 
         let mut metadata = Self::new();
         metadata.big_endian = big_endian;
-        metadata.data_offset = asset.header.data_offset;
+        metadata.data_offset = header.data_offset;
         metadata.version = version;
 
         if version >= 7 {
-            metadata.unity_version = Version::from_str(&asset.reader.read_string()?)?;
+            metadata.unity_version = Version::from_str(&reader.read_string()?)?;
         }
         if version >= 8 {
-            metadata.target_platform = Platform::from_u32(asset.reader.read_u32_by(big_endian)?)
+            metadata.target_platform = Platform::from_u32(reader.read_u32_by(big_endian)?)
                 .ok_or_else(|| Error::UnknownPlatform)?;
         }
 
         if version >= 13 {
-            metadata.has_type_tree = asset.reader.read_u8()? > 0;
+            metadata.has_type_tree = reader.read_u8()? > 0;
             if metadata.has_type_tree {
                 log::trace!("this asset has type tree");
             }
         }
 
         log::debug!("reading class types");
-        let types_count = asset.reader.read_u32_by(big_endian)?;
+        let types_count = reader.read_u32_by(big_endian)?;
         log::trace!("{} class type(s)", types_count);
 
         let mut class_types = HashMap::new();
         for i in 0usize..usize::try_from(types_count)? {
-            let class_type = ClassType::read(&mut asset.reader, &metadata, false)?;
+            let class_type = ClassType::read(reader, &metadata, false)?;
             log::trace!("asset type {}:\n{}", i, class_type);
             class_types.insert(i, class_type);
         }
 
-        if (7u32..14u32).contains(&version) {
+        if (7i32..14i32).contains(&version) {
             log::trace!("reading big_id_enabled");
-            metadata.big_id_enabled = asset.reader.read_i32_by(big_endian)? > 0i32;
+            metadata.big_id_enabled = reader.read_i32_by(big_endian)? > 0i32;
         }
 
         log::debug!("reading object infos");
-        let object_count = asset.reader.read_u32_by(big_endian)?;
+        let object_count = reader.read_u32_by(big_endian)?;
         log::trace!("{} asset object info(s)", object_count);
 
         for i in 0usize..usize::try_from(object_count)? {
-            let mut object_info = ClassInfo::read(&mut asset.reader, &metadata)?;
+            let mut object_info = ClassInfo::read(reader, &metadata)?;
             let key = match version >= 16 {
                 true => usize::try_from(object_info.type_id)?,
                 false => i,
@@ -221,39 +224,39 @@ impl Metadata {
 
         if version >= 11 {
             log::debug!("reading asset scripts");
-            let script_count = asset.reader.read_u32_by(big_endian)?;
+            let script_count = reader.read_u32_by(big_endian)?;
             log::trace!("{} asset script(s)", script_count);
 
             for i in 0usize..usize::try_from(script_count)? {
-                let script_info = ScriptInfo::read(&mut asset.reader, &metadata)?;
+                let script_info = ScriptInfo::read(reader, &metadata)?;
                 log::trace!("asset script {}:\n{}", i, &script_info);
                 metadata.script_infos.push(script_info);
             }
         }
 
         log::debug!("reading external files");
-        let external_file_count = asset.reader.read_u32_by(big_endian)?;
+        let external_file_count = reader.read_u32_by(big_endian)?;
         log::trace!("{} asset external file(s)", external_file_count);
 
         for i in 0usize..usize::try_from(external_file_count)? {
-            let externa_filel_info = ExternalFileInfo::read(&mut asset.reader, &metadata)?;
+            let externa_filel_info = ExternalFileInfo::read(reader, &metadata)?;
             log::trace!("asset external {}:\n{}", i, &externa_filel_info);
             metadata.externa_file_infos.push(externa_filel_info);
         }
 
         if version >= 20 {
             log::debug!("reading asset ref types");
-            let ref_type_count = asset.reader.read_u32_by(big_endian)?;
+            let ref_type_count = reader.read_u32_by(big_endian)?;
             log::trace!("{} asset ref type(s)", ref_type_count);
             for i in 0u32..ref_type_count {
-                let ref_type = ClassType::read(&mut asset.reader, &metadata, true)?;
+                let ref_type = ClassType::read(reader, &metadata, true)?;
                 log::trace!("asset ref type {}:\n{}", i, &ref_type);
                 metadata.ref_types.push(ref_type);
             }
         }
 
         if version >= 5 {
-            metadata.user_information = asset.reader.read_string()?;
+            metadata.user_information = reader.read_string()?;
         }
 
         Ok(metadata)
@@ -269,7 +272,7 @@ impl Metadata {
 
         if self.version >= 8 {
             writer.write_u32_by(
-                ToPrimitive::to_u32(&self.target_platform).ok_or(Error::UnknownPlatform)?,
+                ToPrimitive::to_u32(&self.target_platform).ok_or_else(|| Error::UnknownPlatform)?,
                 self.big_endian,
             )?;
         }

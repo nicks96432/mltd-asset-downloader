@@ -2,19 +2,21 @@ use super::Class;
 use crate::asset::{ClassInfo, Platform};
 use crate::error::Error;
 use crate::traits::{ReadPrimitiveExt, WritePrimitiveExt};
+use crate::utils::Version;
 
 use byteorder::WriteBytesExt;
 
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek, Write};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Object {
     pub hide_flags: u32,
 
-    pub(crate) target_platform: Platform,
-    pub(crate) big_endian: bool,
-    pub(crate) data_offset: u64,
+    pub big_endian: bool,
+    pub data_offset: i64,
+    pub target_platform: Platform,
+    pub unity_version: Version,
 }
 
 impl Object {
@@ -30,12 +32,15 @@ impl Object {
         object.target_platform = class_info.target_platform;
         object.big_endian = class_info.big_endian;
         object.data_offset = class_info.data_offset;
+        object.unity_version = class_info.unity_version.clone();
 
         if class_info.target_platform == Platform::NoTarget {
             object.hide_flags = reader.read_u32_by(class_info.big_endian)?;
         }
 
-        reader.seek(std::io::SeekFrom::Start(class_info.data_offset))?;
+        reader.seek(std::io::SeekFrom::Start(u64::try_from(
+            class_info.data_offset,
+        )?))?;
 
         Ok(object)
     }
@@ -48,7 +53,7 @@ impl Object {
             writer.write_u32_by(self.hide_flags, self.big_endian)?;
         }
 
-        for _ in 0u64..self.data_offset {
+        for _ in 0i64..self.data_offset {
             writer.write_u8(0u8)?;
         }
 

@@ -3,8 +3,10 @@ use crate::asset::Asset;
 use crate::compression::Compressor;
 use crate::error::Error;
 use crate::traits::SeekAlign;
+use crate::utils::FileType;
 
 use std::backtrace::Backtrace;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::mem::size_of;
@@ -15,6 +17,7 @@ pub struct UnityFS {
     pub info_block: InfoBlock,
     pub data: Vec<u8>,
     pub assets: Vec<Asset>,
+    pub resources: HashMap<String, Cursor<Vec<u8>>>,
 }
 
 impl UnityFS {
@@ -51,7 +54,7 @@ impl UnityFS {
         let compressed_size = usize::try_from(unityfs.header.info_block_compressed_size)?;
         let decompressed_size = usize::try_from(unityfs.header.info_block_decompressed_size)?;
         log::trace!(
-            "info block size: {}, unccompressed size: {})",
+            "info block size: {} (decompressed {})",
             compressed_size,
             decompressed_size
         );
@@ -100,14 +103,26 @@ impl UnityFS {
         }
         log::trace!("data block total size: {}", unityfs.data.len());
 
-        log::debug!("parsing assets");
+        log::debug!("parsing files");
         for (i, path_info) in unityfs.info_block.path_infos.iter().enumerate() {
             let begin = usize::try_from(path_info.offset)?;
-            let end = usize::try_from(path_info.decompressed_size)?;
+            let end = usize::try_from(path_info.offset + path_info.decompressed_size)?;
 
-            log::trace!("asset {}:", i);
-            let asset = Asset::read(Cursor::new(unityfs.data[begin..end].to_vec()))?;
-            unityfs.assets.push(asset);
+            log::trace!("file {}:", i);
+            let mut reader = Cursor::new(unityfs.data[begin..end].to_vec());
+            let file_type = FileType::parse(&mut reader)?;
+            log::debug!("files type: {:?}", file_type);
+
+            match file_type {
+                FileType::Asset => {
+                    let asset = Asset::read(&mut reader)?;
+                    unityfs.assets.push(asset);
+                }
+                FileType::Resource => {
+                    unityfs.resources.insert(path_info.path.to_owned(), reader);
+                }
+                f => log::warn!("this file type is not implemented yet: {:?}", f),
+            };
         }
 
         Ok(unityfs)
@@ -188,26 +203,30 @@ fn init() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
+    use std::fs::{read_dir, File};
     use std::path::Path;
 
     #[test]
     fn test_read() -> Result<(), Error> {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests")
-            .join("test.unity3d");
-        let mut file = File::open(path).unwrap();
+        let testcase_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+        let testcase_dir = read_dir(testcase_dir)?;
 
-        match UnityFS::read(&mut file) {
-            Ok(bundle) => {
-                println!("{}", bundle);
-                Ok(())
-            }
-            Err(err) => {
-                println!("{:#?}", err);
-                Err(err)
-            }
+        for entry in testcase_dir {
+            let mut file = File::open(entry?.path()).unwrap();
+
+            match UnityFS::read(&mut file) {
+                Ok(bundle) => {
+                    println!("{}", bundle);
+                    return Ok(());
+                }
+                Err(err) => {
+                    println!("{:#?}", err);
+                    return Err(err);
+                }
+            };
         }
+
+        Ok(())
     }
 
     #[test]

@@ -2,7 +2,6 @@ use super::{Class, Object, PPtr};
 use crate::asset::{ClassInfo, Platform};
 use crate::error::Error;
 
-use std::any::type_name;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek, Write};
 
@@ -11,8 +10,6 @@ pub struct EditorExtension {
     pub object: Object,
     pub prefab_parent_object: PPtr,
     pub prefab_internal: PPtr,
-
-    pub(crate) target_platform: Platform,
 }
 
 impl EditorExtension {
@@ -25,7 +22,6 @@ impl EditorExtension {
         R: Read + Seek,
     {
         let mut editor_extension = Self::new();
-        editor_extension.target_platform = class_info.target_platform;
 
         editor_extension.object = Object::read(reader, class_info)?;
         if class_info.target_platform == Platform::NoTarget {
@@ -42,7 +38,7 @@ impl EditorExtension {
     {
         self.object.save(writer)?;
 
-        if self.target_platform == Platform::NoTarget {
+        if self.object.target_platform == Platform::NoTarget {
             self.prefab_parent_object.save(writer)?;
             self.prefab_internal.save(writer)?;
         }
@@ -60,7 +56,7 @@ impl Display for EditorExtension {
             f,
             "{:indent$}Super ({}):",
             "",
-            type_name::<Object>(),
+            self.object.name(),
             indent = indent
         )?;
         write!(f, "{:indent$}", self.object, indent = indent + 4)?;

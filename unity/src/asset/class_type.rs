@@ -25,7 +25,7 @@ pub struct ClassType {
     pub assembly_name: String,
 
     pub(crate) big_endian: bool,
-    pub(crate) version: u32,
+    pub(crate) version: i32,
 }
 
 impl ClassType {

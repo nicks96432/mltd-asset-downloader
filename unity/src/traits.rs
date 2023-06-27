@@ -6,12 +6,12 @@ use paste::paste;
 use std::io::{Error as IOError, Read, Seek, SeekFrom, Write};
 
 /// Extends [`Read`] with methods for reading strings.
-pub(crate) trait ReadString: Read {
+pub trait ReadString: Read {
     /// Reads a null-terminated string.
     ///
     /// # Errors
     ///
-    /// This function will return [`Error::IOError`]if the reader is unavailable.
+    /// This function will return [`Error::IOError`] if the reader is unavailable.
     #[inline]
     fn read_string(&mut self) -> Result<String, Error> {
         let mut buf = Vec::new();
@@ -30,7 +30,7 @@ pub(crate) trait ReadString: Read {
 impl<R> ReadString for R where R: Read {}
 
 /// Extends [`Seek`] with methods for seeking to byte alignment.
-pub(crate) trait SeekAlign: Seek {
+pub trait SeekAlign: Seek {
     /// Seeks to alignment.
     ///
     /// # Errors
@@ -54,7 +54,7 @@ pub(crate) trait SeekAlign: Seek {
 impl<S> SeekAlign for S where S: Seek {}
 
 /// Extends [`Write`] [`Seek`] with methods for writing byte alignment.
-pub(crate) trait WriteAlign: Write + Seek {
+pub trait WriteAlign: Write + Seek {
     /// Write bytes alignment.
     ///
     /// # Errors
@@ -111,7 +111,7 @@ macro_rules! read_array_by {
     };
 }
 
-pub(crate) trait ReadPrimitiveExt: Read {
+pub trait ReadPrimitiveExt: Read {
     #[inline]
     fn read_i16_by(&mut self, endian: bool) -> Result<i16, IOError> {
         read_type_by!(self, i16, endian)
@@ -175,7 +175,7 @@ pub(crate) trait ReadPrimitiveExt: Read {
 
 impl<R> ReadPrimitiveExt for R where R: Read {}
 
-pub(crate) trait WritePrimitiveExt: Write {
+pub trait WritePrimitiveExt: Write {
     #[inline]
     fn write_i16_by(&mut self, n: i16, endian: bool) -> Result<(), IOError> {
         write_type_by!(self, i16, endian, n)
@@ -239,7 +239,7 @@ pub(crate) trait WritePrimitiveExt: Write {
 
 impl<W> WritePrimitiveExt for W where W: Write {}
 
-pub(crate) trait ReadVecExt: ReadPrimitiveExt {
+pub trait ReadVecExt: ReadPrimitiveExt {
     #[inline]
     fn read_i8_vec_by(&mut self, endian: bool) -> Result<Vec<i8>, IOError> {
         let iter = 0u32..self.read_u32_by(endian)?;
@@ -305,7 +305,7 @@ pub(crate) trait ReadVecExt: ReadPrimitiveExt {
 
 impl<R> ReadVecExt for R where R: Read {}
 
-pub(crate) trait ReadAlignedString:
+pub trait ReadAlignedString:
     Read + SeekAlign + ReadPrimitiveExt + ReadVecExt
 {
     #[inline]

@@ -12,8 +12,8 @@ pub struct GameObject {
     pub name: String,
     pub components: Vec<PPtr>,
 
-    pub(crate) big_endian: bool,
-    pub(crate) version: u32,
+    pub big_endian: bool,
+    pub version: i32,
 }
 
 impl GameObject {

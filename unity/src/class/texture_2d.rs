@@ -10,7 +10,6 @@ use byteorder::{ReadBytesExt, WriteBytesExt};
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 
-use std::any::type_name;
 use std::backtrace::Backtrace;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek, Write};
@@ -22,8 +21,8 @@ pub struct StreamingInfo {
     pub size: u32,
     pub path: String,
 
-    pub(crate) unity_version: Version,
-    pub(crate) big_endian: bool,
+    pub unity_version: Version,
+    pub big_endian: bool,
 }
 
 impl StreamingInfo {
@@ -289,9 +288,6 @@ pub struct Texture2D {
     pub platform_blob: Vec<u8>,
     pub image_data: Vec<u8>,
     pub stream_data: StreamingInfo,
-
-    pub(crate) big_endian: bool,
-    pub(crate) unity_version: Version,
 }
 
 impl Texture2D {
@@ -304,8 +300,6 @@ impl Texture2D {
         R: Read + Seek,
     {
         let mut texture_2d = Self::new();
-        texture_2d.big_endian = class_info.big_endian;
-        texture_2d.unity_version = class_info.unity_version.clone();
 
         texture_2d.texture = Texture::read(reader, class_info)?;
 
@@ -385,73 +379,79 @@ impl Texture2D {
     where
         W: Write + Seek,
     {
+        let object = &self.texture.named_object.editor_extension.object;
+        let big_endian = object.big_endian;
+        let unity_version = object.unity_version.clone();
+
         self.texture.save(writer)?;
 
-        writer.write_u32_by(self.width, self.big_endian)?;
-        writer.write_u32_by(self.height, self.big_endian)?;
-        writer.write_u32_by(self.complete_image_size, self.big_endian)?;
+        writer.write_u32_by(self.width, big_endian)?;
+        writer.write_u32_by(self.height, big_endian)?;
+        writer.write_u32_by(self.complete_image_size, big_endian)?;
 
-        if self.unity_version >= Version::from_str("2020.0.0").unwrap() {
-            writer.write_u32_by(self.mips_stripped, self.big_endian)?;
+        if unity_version >= Version::from_str("2020.0.0").unwrap() {
+            writer.write_u32_by(self.mips_stripped, big_endian)?;
         }
 
         writer.write_u32_by(
-            ToPrimitive::to_u32(&self.texture_format).ok_or(Error::UnknownTextureFormat {
-                format: 0,
-                backtrace: Backtrace::capture(),
+            ToPrimitive::to_u32(&self.texture_format).ok_or_else(|| {
+                Error::UnknownTextureFormat {
+                    format: 0,
+                    backtrace: Backtrace::capture(),
+                }
             })?,
-            self.big_endian,
+            big_endian,
         )?;
 
-        if self.unity_version < Version::from_str("5.2.0").unwrap() {
+        if unity_version < Version::from_str("5.2.0").unwrap() {
             writer.write_u8(u8::from(self.mip_map))?;
         } else {
-            writer.write_u32_by(self.mip_count, self.big_endian)?;
+            writer.write_u32_by(self.mip_count, big_endian)?;
         }
 
-        if self.unity_version >= Version::from_str("2.6.0").unwrap() {
+        if unity_version >= Version::from_str("2.6.0").unwrap() {
             writer.write_u8(u8::from(self.is_readable))?;
         }
-        if self.unity_version >= Version::from_str("2020.0.0").unwrap() {
+        if unity_version >= Version::from_str("2020.0.0").unwrap() {
             writer.write_u8(u8::from(self.is_readable))?;
         }
-        if self.unity_version >= Version::from_str("2019.3.0").unwrap() {
+        if unity_version >= Version::from_str("2019.3.0").unwrap() {
             writer.write_u8(u8::from(self.ignore_master_texture_limit))?;
         }
-        if self.unity_version >= Version::from_str("3.0.0").unwrap()
-            && self.unity_version <= Version::from_str("5.4.0").unwrap()
+        if unity_version >= Version::from_str("3.0.0").unwrap()
+            && unity_version <= Version::from_str("5.4.0").unwrap()
         {
             writer.write_u8(u8::from(self.read_allowed))?;
         }
-        if self.unity_version >= Version::from_str("2018.2.0").unwrap() {
+        if unity_version >= Version::from_str("2018.2.0").unwrap() {
             writer.write_u8(u8::from(self.streaming_mipmaps))?;
         }
 
         writer.write_align(4)?;
 
-        if self.unity_version >= Version::from_str("2018.2.0").unwrap() {
-            writer.write_u32_by(self.streaming_mipmaps_priority, self.big_endian)?;
+        if unity_version >= Version::from_str("2018.2.0").unwrap() {
+            writer.write_u32_by(self.streaming_mipmaps_priority, big_endian)?;
         }
-        writer.write_u32_by(self.image_count, self.big_endian)?;
-        writer.write_u32_by(self.texture_dimension, self.big_endian)?;
+        writer.write_u32_by(self.image_count, big_endian)?;
+        writer.write_u32_by(self.texture_dimension, big_endian)?;
         self.texture_settings.save(writer)?;
 
-        if self.unity_version >= Version::from_str("3.0.0").unwrap() {
-            writer.write_u32_by(self.lightmap_format, self.big_endian)?;
+        if unity_version >= Version::from_str("3.0.0").unwrap() {
+            writer.write_u32_by(self.lightmap_format, big_endian)?;
         }
-        if self.unity_version >= Version::from_str("3.5.0").unwrap() {
-            writer.write_u32_by(self.color_space, self.big_endian)?;
+        if unity_version >= Version::from_str("3.5.0").unwrap() {
+            writer.write_u32_by(self.color_space, big_endian)?;
         }
-        if self.unity_version >= Version::from_str("2020.2.0").unwrap() {
-            writer.write_u32_by(u32::try_from(self.platform_blob.len())?, self.big_endian)?;
+        if unity_version >= Version::from_str("2020.2.0").unwrap() {
+            writer.write_u32_by(u32::try_from(self.platform_blob.len())?, big_endian)?;
             writer.write_all(&self.platform_blob)?;
             writer.write_align(4)?;
         }
 
-        writer.write_u32_by(u32::try_from(self.image_data.len())?, self.big_endian)?;
+        writer.write_u32_by(u32::try_from(self.image_data.len())?, big_endian)?;
         writer.write_all(&self.image_data)?;
 
-        if self.unity_version >= Version::from_str("5.3.0").unwrap() {
+        if unity_version >= Version::from_str("5.3.0").unwrap() {
             self.stream_data.save(writer)?;
         }
 
@@ -464,11 +464,14 @@ impl Display for Texture2D {
         // XXX: maybe try a different way to indent output?
         let indent = f.width().unwrap_or(0);
 
+        let object = &self.texture.named_object.editor_extension.object;
+        let unity_version = object.unity_version.clone();
+
         writeln!(
             f,
             "{:indent$}Super ({}):",
             "",
-            type_name::<Texture>(),
+            self.texture.name(),
             indent = indent
         )?;
         write!(f, "{:indent$}", self.texture, indent = indent + 4)?;
@@ -494,7 +497,7 @@ impl Display for Texture2D {
             self.complete_image_size,
             indent = indent
         )?;
-        if self.unity_version >= Version::from_str("2020.0.0").unwrap() {
+        if unity_version >= Version::from_str("2020.0.0").unwrap() {
             writeln!(
                 f,
                 "{:indent$}Mips stripped:               {}",
@@ -511,7 +514,7 @@ impl Display for Texture2D {
             indent = indent
         )?;
 
-        if self.unity_version < Version::from_str("5.2.0").unwrap() {
+        if unity_version < Version::from_str("5.2.0").unwrap() {
             writeln!(
                 f,
                 "{:indent$}Mip map?                     {}",
@@ -529,7 +532,7 @@ impl Display for Texture2D {
             )?;
         }
 
-        if self.unity_version >= Version::from_str("2.6.0").unwrap() {
+        if unity_version >= Version::from_str("2.6.0").unwrap() {
             writeln!(
                 f,
                 "{:indent$}Is readable?                 {}",
@@ -538,7 +541,7 @@ impl Display for Texture2D {
                 indent = indent
             )?;
         }
-        if self.unity_version >= Version::from_str("2020.0.0").unwrap() {
+        if unity_version >= Version::from_str("2020.0.0").unwrap() {
             writeln!(
                 f,
                 "{:indent$}Is preprocessed?             {}",
@@ -547,7 +550,7 @@ impl Display for Texture2D {
                 indent = indent
             )?;
         }
-        if self.unity_version >= Version::from_str("2019.3.0").unwrap() {
+        if unity_version >= Version::from_str("2019.3.0").unwrap() {
             writeln!(
                 f,
                 "{:indent$}Ignore master texture limit? {}",
@@ -556,8 +559,8 @@ impl Display for Texture2D {
                 indent = indent
             )?;
         }
-        if self.unity_version >= Version::from_str("3.0.0").unwrap()
-            && self.unity_version <= Version::from_str("5.4.0").unwrap()
+        if unity_version >= Version::from_str("3.0.0").unwrap()
+            && unity_version <= Version::from_str("5.4.0").unwrap()
         {
             writeln!(
                 f,
@@ -567,7 +570,7 @@ impl Display for Texture2D {
                 indent = indent
             )?;
         }
-        if self.unity_version >= Version::from_str("2018.2.0").unwrap() {
+        if unity_version >= Version::from_str("2018.2.0").unwrap() {
             writeln!(
                 f,
                 "{:indent$}Streaming mipmaps?           {}",
@@ -577,7 +580,7 @@ impl Display for Texture2D {
             )?;
         }
 
-        if self.unity_version >= Version::from_str("2018.2.0").unwrap() {
+        if unity_version >= Version::from_str("2018.2.0").unwrap() {
             writeln!(
                 f,
                 "{:indent$}Streaming mipmaps priority:  {}",
@@ -601,9 +604,9 @@ impl Display for Texture2D {
             indent = indent
         )?;
         writeln!(f, "{:indent$}Texture settings:", "", indent = indent)?;
-        write!(f, "{:indent$}:", self.texture_settings, indent = indent + 4)?;
+        write!(f, "{:indent$}", self.texture_settings, indent = indent + 4)?;
 
-        if self.unity_version >= Version::from_str("3.0.0").unwrap() {
+        if unity_version >= Version::from_str("3.0.0").unwrap() {
             writeln!(
                 f,
                 "{:indent$}Lightmap format:             {}",
@@ -612,7 +615,7 @@ impl Display for Texture2D {
                 indent = indent
             )?;
         }
-        if self.unity_version >= Version::from_str("3.5.0").unwrap() {
+        if unity_version >= Version::from_str("3.5.0").unwrap() {
             writeln!(
                 f,
                 "{:indent$}Color space:                 {}",
@@ -621,7 +624,7 @@ impl Display for Texture2D {
                 indent = indent
             )?;
         }
-        if self.unity_version >= Version::from_str("2020.2.0").unwrap() {
+        if unity_version >= Version::from_str("2020.2.0").unwrap() {
             writeln!(
                 f,
                 "{:indent$}Platform blob:               {} byte(s)",
@@ -639,7 +642,7 @@ impl Display for Texture2D {
             indent = indent
         )?;
 
-        if self.unity_version >= Version::from_str("5.3.0").unwrap() {
+        if unity_version >= Version::from_str("5.3.0").unwrap() {
             writeln!(f, "{:indent$}Stream data:", "", indent = indent)?;
             writeln!(f, "{:indent$}", self.stream_data, indent = indent + 4)?;
         }

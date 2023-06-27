@@ -87,6 +87,9 @@ pub enum Error {
     #[error("unknown texture format")]
     UnknownTextureFormat { format: u32, backtrace: Backtrace },
 
+    #[error("unknown vertex format")]
+    UnknownVertexFormat { format: u8, backtrace: Backtrace },
+
     #[cfg(feature = "lz4")]
     #[error("cannot compress: {0}")]
     Lz4CompressError(#[from] lz4_flex::block::CompressError),

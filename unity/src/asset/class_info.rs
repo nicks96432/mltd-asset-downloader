@@ -19,7 +19,7 @@ pub struct ClassInfo {
     /// offset to the object data.
     ///
     /// [Header]: super::Header
-    pub data_offset: u64,
+    pub data_offset: i64,
     pub data_size: u32,
 
     /// Negative for script types.
@@ -56,7 +56,7 @@ pub struct ClassInfo {
     pub(crate) big_id_enabled: bool,
     pub(crate) target_platform: Platform,
     pub(crate) unity_version: Version,
-    pub(crate) version: u32,
+    pub(crate) version: i32,
 }
 
 impl ClassInfo {
@@ -97,8 +97,8 @@ impl ClassInfo {
         }
 
         object_info.data_offset = match metadata.version >= 22 {
-            true => reader.read_u64_by(big_endian)?,
-            false => u64::from(reader.read_u32_by(big_endian)?),
+            true => reader.read_i64_by(big_endian)?,
+            false => i64::from(reader.read_i32_by(big_endian)?),
         };
         object_info.data_offset += metadata.data_offset;
         object_info.data_size = reader.read_u32_by(big_endian)?;
@@ -137,7 +137,7 @@ impl ClassInfo {
         }
 
         match self.version >= 22 {
-            true => writer.write_u64_by(self.data_offset, self.big_endian)?,
+            true => writer.write_i64_by(self.data_offset, self.big_endian)?,
             false => writer.write_u32_by(u32::try_from(self.data_offset)?, self.big_endian)?,
         };
 

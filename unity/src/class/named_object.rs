@@ -5,7 +5,6 @@ use crate::traits::{ReadAlignedString, WriteAlign, WritePrimitiveExt};
 
 use byteorder::WriteBytesExt;
 
-use std::any::type_name;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek, SeekFrom, Write};
 
@@ -13,9 +12,6 @@ use std::io::{Read, Seek, SeekFrom, Write};
 pub struct NamedObject {
     pub editor_extension: EditorExtension,
     pub name: String,
-
-    pub(crate) big_endian: bool,
-    pub(crate) data_offset: u64,
 }
 
 impl NamedObject {
@@ -28,14 +24,11 @@ impl NamedObject {
         R: Read + Seek,
     {
         let mut named_object = Self::new();
-        named_object.big_endian = class_info.big_endian;
-        named_object.data_offset = class_info.data_offset;
 
         named_object.editor_extension = EditorExtension::read(reader, class_info)?;
 
-        reader.seek(SeekFrom::Start(class_info.data_offset))?;
+        reader.seek(SeekFrom::Start(u64::try_from(class_info.data_offset)?))?;
         named_object.name = reader.read_aligned_string(class_info.big_endian, 4)?;
-        log::trace!("name: {}", named_object.name);
 
         Ok(named_object)
     }
@@ -47,12 +40,16 @@ impl NamedObject {
         self.editor_extension.save(writer)?;
 
         // XXX: maybe there are some data in this gap?
-        let gap = self.data_offset - writer.stream_position()?;
+        let gap =
+            u64::try_from(self.editor_extension.object.data_offset)? - writer.stream_position()?;
         for _ in 0u64..gap {
             writer.write_u8(0u8)?;
         }
 
-        writer.write_u32_by(u32::try_from(self.name.len())?, self.big_endian)?;
+        writer.write_u32_by(
+            u32::try_from(self.name.len())?,
+            self.editor_extension.object.big_endian,
+        )?;
         writer.write_all(self.name.as_bytes())?;
         writer.write_align(4)?;
 
@@ -69,7 +66,7 @@ impl Display for NamedObject {
             f,
             "{:indent$}Super ({}):",
             "",
-            type_name::<EditorExtension>(),
+            self.editor_extension.name(),
             indent = indent
         )?;
         write!(f, "{:indent$}", self.editor_extension, indent = indent + 4)?;

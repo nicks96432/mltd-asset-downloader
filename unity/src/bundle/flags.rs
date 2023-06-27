@@ -63,7 +63,7 @@ impl Display for Flags {
 
         writeln!(
             f,
-            "{:indent$}Flags: (raw {:#010x})",
+            "{:indent$}Flags (raw {:#010x}):",
             "",
             self.0,
             indent = indent
