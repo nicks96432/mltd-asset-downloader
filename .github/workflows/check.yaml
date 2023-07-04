@@ -50,7 +50,6 @@ jobs:
           cargo deny check
           cargo outdated --exit-code 1
           cargo udeps
-          rm -rf ~/.cargo/advisory-db
           cargo audit
           cargo pants
 
