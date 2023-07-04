@@ -9,19 +9,21 @@ env:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    name: Check
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
 
     steps:
       - name: Check out
         uses: actions/checkout@v3
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt, clippy
-          override: true
-          profile: minimal
-          toolchain: nightly
 
       - name: Set up cargo cache
         uses: actions/cache@v3
