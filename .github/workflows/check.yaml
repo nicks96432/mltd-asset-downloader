@@ -43,14 +43,25 @@ jobs:
           cargo clippy -- -D warnings
 
       - name: Install cargo check tools
-        run: cargo install cargo-deny cargo-outdated cargo-udeps cargo-audit cargo-pants
+        run: cargo install cargo-deny cargo-outdated cargo-udeps cargo-audit cargo-pants || true
 
-      - name: Check
+      - name: Remove advisory database
+        if: ${{ !contains('Windows', runner.os) }}
         run: |
           cargo deny check
           cargo outdated --exit-code 1
           cargo udeps
           rm -rf ~/.cargo/advisory-db
+          cargo audit
+          cargo pants
+
+      - name: Remove advisory database
+        if: ${{ contains('Windows', runner.os) }}
+        run: |
+          cargo deny check
+          cargo outdated --exit-code 1
+          cargo udeps
+          rm -Recurse -Force ~/.cargo/advisory-db
           cargo audit
           cargo pants
 

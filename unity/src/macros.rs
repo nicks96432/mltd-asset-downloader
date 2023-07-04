@@ -8,30 +8,10 @@ macro_rules! impl_default {
     };
 }
 
-macro_rules! impl_from_file_error {
-    ($type:ident) => {
-        impl From<$type> for crate::UnityError {
-            fn from(value: $type) -> Self {
-                crate::UnityError::FileError(crate::FileError::$type(value))
-            }
-        }
-    };
-}
-
-macro_rules! impl_from_for_error {
-    ($type:ident) => {
-        impl From<$type> for crate::UnityError {
-            fn from(value: $type) -> Self {
-                crate::UnityError::$type(value)
-            }
-        }
-    };
-}
-
 macro_rules! impl_try_from_into_vec {
     ($type:ident) => {
         impl TryFrom<Vec<u8>> for $type {
-            type Error = crate::UnityError;
+            type Error = crate::error::Error;
 
             fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
                 Self::read(&mut std::io::Cursor::new(&value))
@@ -39,11 +19,11 @@ macro_rules! impl_try_from_into_vec {
         }
 
         impl TryInto<Vec<u8>> for $type {
-            type Error = crate::UnityError;
+            type Error = crate::error::Error;
 
             fn try_into(self) -> Result<Vec<u8>, Self::Error> {
                 let mut buf = Vec::new();
-                self.write(&mut buf)?;
+                self.save(&mut buf)?;
 
                 Ok(buf)
             }
@@ -52,6 +32,4 @@ macro_rules! impl_try_from_into_vec {
 }
 
 pub(crate) use impl_default;
-pub(crate) use impl_from_file_error;
-pub(crate) use impl_from_for_error;
 pub(crate) use impl_try_from_into_vec;

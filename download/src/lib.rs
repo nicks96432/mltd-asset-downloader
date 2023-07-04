@@ -9,11 +9,12 @@ use mltd_utils::fetch_asset;
 use rayon::current_thread_index;
 use rayon::prelude::{ParallelBridge, ParallelIterator};
 use rayon::ThreadPoolBuilder;
+use ureq::AgentBuilder;
+
 use std::fs::{create_dir_all, File};
 use std::io::copy;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use ureq::AgentBuilder;
 
 #[derive(Debug, clap::Args)]
 #[command(author, version, about, arg_required_else_help(true))]
@@ -35,22 +36,19 @@ pub fn download_assets(args: &DownloaderArgs) -> Result<(), DownloadError> {
     log::debug!("getting manifest");
     let manifest = match Manifest::download(&args.os_variant) {
         Ok(m) => m,
-        Err(e) => return Err(DownloadError::ManifestError(e)), // TODO: add DownloadError
+        Err(e) => return Err(DownloadError::ManifestError(e)),
     };
 
     let output_path = args.output.join(manifest.version.to_string());
 
-    #[cfg(not(feature = "debug"))]
-    {
-        log::debug!("creating output directory");
-        if let Err(e) = create_dir_all(&args.output) {
-            return Err(DownloadError::FileCreateFailed(e));
-        }
+    log::debug!("creating output directory");
+    if let Err(e) = create_dir_all(&args.output) {
+        return Err(DownloadError::FileCreateFailed(e));
+    }
 
-        log::debug!("creating asset directory");
-        if let Err(e) = create_dir_all(&output_path) {
-            return Err(DownloadError::FileCreateFailed(e));
-        }
+    log::debug!("creating asset directory");
+    if let Err(e) = create_dir_all(&output_path) {
+        return Err(DownloadError::FileCreateFailed(e));
     }
 
     log::debug!("setting progress bar");
@@ -75,7 +73,7 @@ pub fn download_assets(args: &DownloaderArgs) -> Result<(), DownloadError> {
 
     log::trace!("create ProgressBar array");
     let mut progress_bars = Vec::with_capacity(args.parallel);
-    for i in 0..args.parallel {
+    for i in 0usize..args.parallel {
         log::trace!("create ProgressBar {}", i);
         let progress_bar =
             multi_progress.add(ProgressBar::new(0).with_finish(ProgressFinish::Abandon));

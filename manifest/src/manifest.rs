@@ -1,13 +1,15 @@
 use super::error::ManifestError;
 use super::os_variant::OsVariant;
+
 use linked_hash_map::LinkedHashMap;
 use mltd_utils::{fetch_asset, trace_request, trace_response};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_tuple::Deserialize_tuple as DeserializeTuple;
 use serde_tuple::Serialize_tuple as SerializeTuple;
-use std::io::{copy, Cursor};
 use ureq::AgentBuilder;
+
+use std::io::{copy, Cursor};
 
 /// Type of an entry in the manifest file.
 ///

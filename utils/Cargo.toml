@@ -11,6 +11,7 @@ optional = true
 workspace = true
 
 [dependencies.log]
+optional = true
 workspace = true
 
 [dependencies.rand]
@@ -28,6 +29,6 @@ workspace = true
 
 [features]
 default = []
-log = ["dep:env_logger"]
+log = ["dep:log", "dep:env_logger"]
 rand = ["rand/std", "rand/std_rng", "dep:rand_xoshiro"]
 request = ["dep:ureq"]

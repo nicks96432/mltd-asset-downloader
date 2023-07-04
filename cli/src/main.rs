@@ -39,7 +39,7 @@ fn main() {
     let args = Cli::parse();
 
     env_logger::Builder::new()
-        .filter_module(env!("CARGO_PKG_NAME"), args.verbose.log_level_filter())
+        .filter_level(args.verbose.log_level_filter())
         .format(log_formatter)
         .init();
 
@@ -52,7 +52,11 @@ fn main() {
         }
 
         #[cfg(feature = "extract")]
-        Command::Extract(e) => extract_media(&e),
+        Command::Extract(e) => {
+            if let Err(e) = extract_media(&e) {
+                log::error!("asset extract failed: {}", e);
+            }
+        }
 
         #[cfg(feature = "manifest")]
         Command::Manifest(m) => {

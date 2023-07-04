@@ -1,36 +1,19 @@
-use crate::error::UnityError;
-use byteorder::ReadBytesExt;
-use std::io::Result as IOResult;
-use std::io::{Read, Seek, SeekFrom, Write};
+use crate::error::Error;
 
-/// Extends [`Read`] with methods for reading exact number of bytes.
-pub(crate) trait ReadExact: Read {
-    /// Read the exact number of bytes.
-    ///
-    /// # Errors
-    ///
-    /// This function will return [`UnityError::FileError`] if the reader is unavailable.
-    fn read_exact_bytes<const N: usize>(&mut self) -> IOResult<[u8; N]>;
+use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
+use paste::paste;
 
+use std::io::{Error as IOError, Read, Seek, SeekFrom, Write};
+
+/// Extends [`Read`] with methods for reading strings.
+pub trait ReadString: Read {
     /// Reads a null-terminated string.
     ///
     /// # Errors
     ///
-    /// This function will return [`UnityError::FileError`] if the reader is unavailable.
-    fn read_string(&mut self) -> IOResult<String>;
-}
-
-impl<R: Read> ReadExact for R {
+    /// This function will return [`Error::IOError`] if the reader is unavailable.
     #[inline]
-    fn read_exact_bytes<const SIZE: usize>(&mut self) -> IOResult<[u8; SIZE]> {
-        let mut buf = [0u8; SIZE];
-        self.read_exact(&mut buf)?;
-
-        Ok(buf)
-    }
-
-    #[inline]
-    fn read_string(&mut self) -> IOResult<String> {
+    fn read_string(&mut self) -> Result<String, Error> {
         let mut buf = Vec::new();
         loop {
             let byte = self.read_u8()?;
@@ -40,56 +23,296 @@ impl<R: Read> ReadExact for R {
             buf.push(byte);
         }
 
-        Ok(String::from_utf8_lossy(&buf).into_owned())
+        Ok(String::from_utf8(buf)?)
     }
 }
 
-/// Extends [`Seek`] with methods for reading exact number of bytes.
-pub(crate) trait SeekAlign: Seek {
+impl<R> ReadString for R where R: Read {}
+
+/// Extends [`Seek`] with methods for seeking to byte alignment.
+pub trait SeekAlign: Seek {
     /// Seeks to alignment.
     ///
     /// # Errors
     ///
-    /// This function will return [`UnityError::FileError`]
+    /// This function will return [`Error::IOError`]
     /// if the reader is unavailable.
     ///
-    /// This function will return [`UnityError::TryFromIntError`]
+    /// This function will return [`Error::TryFromIntError`]
     /// if integer conversion is failed.
     #[inline]
-    fn seek_align(&mut self, alignment: u64) -> Result<(), UnityError> {
+    fn seek_align(&mut self, alignment: u64) -> Result<(), Error> {
         let pos = i64::try_from(self.stream_position()?)?;
         let alignment = i64::try_from(alignment)?;
-        let align = (alignment - pos % alignment) % alignment;
-        self.seek(SeekFrom::Current(align))?;
+        let alignment = (alignment - pos % alignment) % alignment;
+        self.seek(SeekFrom::Current(alignment))?;
 
         Ok(())
     }
 }
 
-impl<R: Seek> SeekAlign for R {}
+impl<S> SeekAlign for S where S: Seek {}
 
-pub trait UnityIO: Sized {
-    /// Reads the struct from `reader`, assuming that the data start
-    /// from current position.
+/// Extends [`Write`] [`Seek`] with methods for writing byte alignment.
+pub trait WriteAlign: Write + Seek {
+    /// Write bytes alignment.
     ///
     /// # Errors
     ///
-    /// This function will return [`UnityError::FileError`] if `reader`
-    /// is unavailable.
+    /// This function will return [`Error::IOError`]
+    /// if the writer is unavailable.
     ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use std::io::Cursor;
-    /// use unity::{AssetBlockInfo, UnityIO};
-    ///
-    /// let mut file = Cursor::new(vec![0u8; 10]);
-    /// let header = AssetBlockInfo::read(&mut file).unwrap();
-    ///
-    /// let decompressed_size = header.decompressed_size;
-    /// assert_eq!(decompressed_size, 0);
-    /// ```
-    fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, UnityError>;
+    /// This function will return [`Error::TryFromIntError`]
+    /// if integer conversion is failed.
+    #[inline]
+    fn write_align(&mut self, alignment: u64) -> Result<(), Error> {
+        let pos = i64::try_from(self.stream_position()?)?;
+        let alignment = i64::try_from(alignment)?;
+        let alignment = (alignment - pos % alignment) % alignment;
 
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), UnityError>;
+        for _ in 0i64..alignment {
+            self.write_u8(0u8)?;
+        }
+
+        Ok(())
+    }
 }
+
+impl<W> WriteAlign for W where W: Write + Seek {}
+
+macro_rules! read_type_by {
+    ($reader:ident, $type:ident, $endian:ident) => {
+        paste! {
+            match $endian {
+                true => $reader.[<read_ $type>]::<BigEndian>(),
+                false => $reader.[<read_ $type>]::<LittleEndian>(),
+            }
+        }
+    };
+}
+
+macro_rules! write_type_by {
+    ($writer:ident, $type:ident, $endian:ident, $n:ident) => {
+        paste! {
+            match $endian {
+                true => $writer.[<write_ $type>]::<BigEndian>($n),
+                false => $writer.[<write_ $type>]::<LittleEndian>($n),
+            }
+        }
+    };
+}
+
+macro_rules! read_array_by {
+    ($reader:ident, $type:ident, $endian:ident) => {
+        paste! {
+            (0u32..$reader.read_u32_by($endian)?)
+                .map(|_| $reader.[<read_ $type _by>]($endian)).collect()
+        }
+    };
+}
+
+pub trait ReadPrimitiveExt: Read {
+    #[inline]
+    fn read_i16_by(&mut self, endian: bool) -> Result<i16, IOError> {
+        read_type_by!(self, i16, endian)
+    }
+
+    #[inline]
+    fn read_i24_by(&mut self, endian: bool) -> Result<i32, IOError> {
+        read_type_by!(self, i24, endian)
+    }
+
+    #[inline]
+    fn read_i32_by(&mut self, endian: bool) -> Result<i32, IOError> {
+        read_type_by!(self, i32, endian)
+    }
+
+    #[inline]
+    fn read_i48_by(&mut self, endian: bool) -> Result<i64, IOError> {
+        read_type_by!(self, i48, endian)
+    }
+
+    #[inline]
+    fn read_i64_by(&mut self, endian: bool) -> Result<i64, IOError> {
+        read_type_by!(self, i64, endian)
+    }
+
+    #[inline]
+    fn read_u16_by(&mut self, endian: bool) -> Result<u16, IOError> {
+        read_type_by!(self, u16, endian)
+    }
+
+    #[inline]
+    fn read_u24_by(&mut self, endian: bool) -> Result<u32, IOError> {
+        read_type_by!(self, u24, endian)
+    }
+
+    #[inline]
+    fn read_u32_by(&mut self, endian: bool) -> Result<u32, IOError> {
+        read_type_by!(self, u32, endian)
+    }
+
+    #[inline]
+    fn read_u48_by(&mut self, endian: bool) -> Result<u64, IOError> {
+        read_type_by!(self, u48, endian)
+    }
+
+    #[inline]
+    fn read_u64_by(&mut self, endian: bool) -> Result<u64, IOError> {
+        read_type_by!(self, u64, endian)
+    }
+
+    #[inline]
+    fn read_f32_by(&mut self, endian: bool) -> Result<f32, IOError> {
+        read_type_by!(self, f32, endian)
+    }
+
+    #[inline]
+    fn read_f64_by(&mut self, endian: bool) -> Result<f64, IOError> {
+        read_type_by!(self, f64, endian)
+    }
+}
+
+impl<R> ReadPrimitiveExt for R where R: Read {}
+
+pub trait WritePrimitiveExt: Write {
+    #[inline]
+    fn write_i16_by(&mut self, n: i16, endian: bool) -> Result<(), IOError> {
+        write_type_by!(self, i16, endian, n)
+    }
+
+    #[inline]
+    fn write_i24_by(&mut self, n: i32, endian: bool) -> Result<(), IOError> {
+        write_type_by!(self, i24, endian, n)
+    }
+
+    #[inline]
+    fn write_i32_by(&mut self, n: i32, endian: bool) -> Result<(), IOError> {
+        write_type_by!(self, i32, endian, n)
+    }
+
+    #[inline]
+    fn write_i48_by(&mut self, n: i64, endian: bool) -> Result<(), IOError> {
+        write_type_by!(self, i48, endian, n)
+    }
+
+    #[inline]
+    fn write_i64_by(&mut self, n: i64, endian: bool) -> Result<(), IOError> {
+        write_type_by!(self, i64, endian, n)
+    }
+
+    #[inline]
+    fn write_u16_by(&mut self, n: u16, endian: bool) -> Result<(), IOError> {
+        write_type_by!(self, u16, endian, n)
+    }
+
+    #[inline]
+    fn write_u24_by(&mut self, n: u32, endian: bool) -> Result<(), IOError> {
+        write_type_by!(self, u24, endian, n)
+    }
+
+    #[inline]
+    fn write_u32_by(&mut self, n: u32, endian: bool) -> Result<(), IOError> {
+        write_type_by!(self, u32, endian, n)
+    }
+
+    #[inline]
+    fn write_u48_by(&mut self, n: u64, endian: bool) -> Result<(), IOError> {
+        write_type_by!(self, u48, endian, n)
+    }
+
+    #[inline]
+    fn write_u64_by(&mut self, n: u64, endian: bool) -> Result<(), IOError> {
+        write_type_by!(self, u64, endian, n)
+    }
+
+    #[inline]
+    fn write_f32_by(&mut self, n: f32, endian: bool) -> Result<(), IOError> {
+        write_type_by!(self, f32, endian, n)
+    }
+
+    #[inline]
+    fn write_f64_by(&mut self, n: f64, endian: bool) -> Result<(), IOError> {
+        write_type_by!(self, f64, endian, n)
+    }
+}
+
+impl<W> WritePrimitiveExt for W where W: Write {}
+
+pub trait ReadVecExt: ReadPrimitiveExt {
+    #[inline]
+    fn read_i8_vec_by(&mut self, endian: bool) -> Result<Vec<i8>, IOError> {
+        let iter = 0u32..self.read_u32_by(endian)?;
+        iter.map(|_| self.read_i8()).collect()
+    }
+
+    #[inline]
+    fn read_i16_vec_by(&mut self, endian: bool) -> Result<Vec<i16>, IOError> {
+        read_array_by!(self, i16, endian)
+    }
+
+    #[inline]
+    fn read_i24_vec_by(&mut self, endian: bool) -> Result<Vec<i32>, IOError> {
+        read_array_by!(self, i24, endian)
+    }
+
+    #[inline]
+    fn read_i32_vec_by(&mut self, endian: bool) -> Result<Vec<i32>, IOError> {
+        read_array_by!(self, i32, endian)
+    }
+
+    #[inline]
+    fn read_i48_vec_by(&mut self, endian: bool) -> Result<Vec<i64>, IOError> {
+        read_array_by!(self, i48, endian)
+    }
+
+    #[inline]
+    fn read_i64_vec_by(&mut self, endian: bool) -> Result<Vec<i64>, IOError> {
+        read_array_by!(self, i64, endian)
+    }
+
+    #[inline]
+    fn read_u8_vec_by(&mut self, endian: bool) -> Result<Vec<u8>, IOError> {
+        let iter = 0u32..self.read_u32_by(endian)?;
+        iter.map(|_| self.read_u8()).collect()
+    }
+
+    #[inline]
+    fn read_u16_vec_by(&mut self, endian: bool) -> Result<Vec<u16>, IOError> {
+        read_array_by!(self, u16, endian)
+    }
+
+    #[inline]
+    fn read_u24_vec_by(&mut self, endian: bool) -> Result<Vec<u32>, IOError> {
+        read_array_by!(self, u24, endian)
+    }
+
+    #[inline]
+    fn read_u32_vec_by(&mut self, endian: bool) -> Result<Vec<u32>, IOError> {
+        read_array_by!(self, u32, endian)
+    }
+
+    #[inline]
+    fn read_u48_vec_by(&mut self, endian: bool) -> Result<Vec<u64>, IOError> {
+        read_array_by!(self, u48, endian)
+    }
+
+    #[inline]
+    fn read_u64_vec_by(&mut self, endian: bool) -> Result<Vec<u64>, IOError> {
+        read_array_by!(self, u64, endian)
+    }
+}
+
+impl<R> ReadVecExt for R where R: Read {}
+
+pub trait ReadAlignedString: Read + SeekAlign + ReadPrimitiveExt + ReadVecExt {
+    #[inline]
+    fn read_aligned_string(&mut self, endian: bool, alignment: u64) -> Result<String, Error> {
+        let buf = self.read_u8_vec_by(endian)?;
+        self.seek_align(alignment)?;
+
+        Ok(String::from_utf8(buf)?)
+    }
+}
+
+impl<R> ReadAlignedString for R where R: Read + SeekAlign + ReadPrimitiveExt + ReadVecExt {}

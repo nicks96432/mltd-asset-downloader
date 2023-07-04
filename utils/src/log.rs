@@ -34,7 +34,7 @@ macro_rules! init_test_logger {
     () => {
         let _ = env_logger::builder()
             .is_test(true)
-            .filter_module(env!("CARGO_PKG_NAME"), log::LevelFilter::Trace)
+            .filter_module(env!("CARGO_PKG_NAME"), log::LevelFilter::Debug)
             .format(mltd_utils::log_formatter)
             .try_init();
     };

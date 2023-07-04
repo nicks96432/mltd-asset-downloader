@@ -1,9 +1,13 @@
-mod asset_bundle;
-mod compression;
-mod error;
-mod macros;
-mod traits;
+// thiserror need these
+#![feature(error_generic_member_access, provide_any, seek_stream_len)]
 
-pub use self::asset_bundle::*;
-pub use self::error::*;
-pub use self::traits::*;
+pub mod asset;
+pub mod bundle;
+pub mod class;
+pub mod compression;
+pub mod environment;
+pub mod error;
+pub mod macros;
+pub mod utils;
+
+pub(crate) mod traits;

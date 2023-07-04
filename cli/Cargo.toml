@@ -13,7 +13,7 @@ version = "2.0.0-beta"
 
 [dependencies]
 clap = { workspace = true }
-clap-verbosity-flag = "2.0.0"
+clap-verbosity-flag = "2.0.1"
 env_logger = { workspace = true }
 log = { workspace = true }
 mltd-utils = { path = "../utils" }
