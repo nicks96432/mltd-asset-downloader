@@ -230,38 +230,42 @@ mod tests {
     }
 
     #[test]
-    fn test_write() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests")
-            .join("test.unity3d");
-        let mut file = File::open(path).unwrap();
-        let expect = UnityFS::read(&mut file).unwrap();
+    fn test_write() -> Result<(), Error> {
+        let testcase_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+        let testcase_dir = read_dir(testcase_dir)?;
 
-        let mut buf = Vec::new();
-        expect.save(&mut buf).unwrap();
-        log::trace!(
-            "before: {}, after: {}",
-            file.metadata().unwrap().len(),
-            buf.len()
-        );
+        for entry in testcase_dir {
+            let mut file = File::open(entry?.path()).unwrap();
+            let expect = UnityFS::read(&mut file).unwrap();
 
-        let got = UnityFS::read(&mut Cursor::new(&buf)).unwrap();
+            let mut buf = Vec::new();
+            expect.save(&mut buf).unwrap();
+            log::trace!(
+                "before: {}, after: {}",
+                file.metadata().unwrap().len(),
+                buf.len()
+            );
 
-        assert_eq!(expect.header.signature, got.header.signature);
-        assert_eq!(expect.header.flags, got.header.flags);
-        assert_eq!(expect.header.version_format, got.header.version_format);
-        assert_eq!(expect.header.version_engine, got.header.version_engine);
-        assert_eq!(expect.header.version_target, got.header.version_target);
+            let got = UnityFS::read(&mut Cursor::new(&buf)).unwrap();
 
-        assert_eq!(
-            expect.info_block.block_infos.len(),
-            got.info_block.block_infos.len()
-        );
-        assert_eq!(
-            expect.info_block.path_infos.len(),
-            got.info_block.path_infos.len()
-        );
+            assert_eq!(expect.header.signature, got.header.signature);
+            assert_eq!(expect.header.flags, got.header.flags);
+            assert_eq!(expect.header.version_format, got.header.version_format);
+            assert_eq!(expect.header.version_engine, got.header.version_engine);
+            assert_eq!(expect.header.version_target, got.header.version_target);
 
-        assert_eq!(expect.data, got.data);
+            assert_eq!(
+                expect.info_block.block_infos.len(),
+                got.info_block.block_infos.len()
+            );
+            assert_eq!(
+                expect.info_block.path_infos.len(),
+                got.info_block.path_infos.len()
+            );
+
+            assert_eq!(expect.data, got.data);
+        }
+
+        Ok(())
     }
 }
