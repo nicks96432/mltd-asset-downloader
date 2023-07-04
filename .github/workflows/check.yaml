@@ -43,7 +43,7 @@ jobs:
           cargo clippy -- -D warnings
 
       - name: Install cargo check tools
-        run: cargo install cargo-deny cargo-outdated cargo-udeps cargo-audit cargo-pants
+        run: cargo install cargo-deny cargo-outdated cargo-udeps cargo-audit cargo-pants || true
 
       - name: Check
         run: |
