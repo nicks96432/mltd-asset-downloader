@@ -1,10 +1,11 @@
 use super::{Class, NamedObject};
 use crate::asset::ClassInfo;
 use crate::error::Error;
-use crate::traits::ReadVecExt;
+use crate::traits::{ReadVecExt, WritePrimitiveExt};
 
+use std::any::Any;
 use std::fmt::{Display, Formatter};
-use std::io::{Read, Seek};
+use std::io::{Read, Seek, Write};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TextAsset {
@@ -26,6 +27,24 @@ impl TextAsset {
         text_asset.script = reader.read_u8_vec_by(class_info.big_endian)?;
 
         Ok(text_asset)
+    }
+
+    pub fn save<W>(&self, writer: &mut W) -> Result<(), Error>
+    where
+        W: Write + Seek,
+    {
+        self.named_object.save(writer)?;
+        writer.write_u32_by(
+            u32::try_from(self.script.len())?,
+            self.named_object.editor_extension.object.big_endian,
+        )?;
+        writer.write_all(&self.script)?;
+
+        Ok(())
+    }
+
+    pub fn data(&self) -> Vec<u8> {
+        self.script.clone()
     }
 }
 
@@ -54,4 +73,12 @@ impl Display for TextAsset {
     }
 }
 
-impl Class for TextAsset {}
+impl Class for TextAsset {
+    fn class_id(&self) -> super::ClassIDType {
+        super::ClassIDType::TextAsset
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}

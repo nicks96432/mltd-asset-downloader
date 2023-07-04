@@ -5,6 +5,7 @@ use crate::traits::{ReadAlignedString, WriteAlign, WritePrimitiveExt};
 
 use byteorder::WriteBytesExt;
 
+use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek, SeekFrom, Write};
 
@@ -76,4 +77,12 @@ impl Display for NamedObject {
     }
 }
 
-impl Class for NamedObject {}
+impl Class for NamedObject {
+    fn class_id(&self) -> super::ClassIDType {
+        super::ClassIDType::NamedObject
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}

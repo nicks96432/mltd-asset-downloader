@@ -29,7 +29,7 @@ pub use self::texture_2d::*;
 use crate::asset::ClassInfo;
 use crate::error::Error;
 
-use std::any::type_name;
+use std::any::{type_name, Any};
 use std::fmt::{Debug, Display};
 use std::io::{Read, Seek};
 
@@ -67,4 +67,8 @@ pub trait Class: Debug + Display {
     fn name(&self) -> &'static str {
         return type_name::<Self>();
     }
+
+    fn class_id(&self) -> ClassIDType;
+
+    fn as_any(&self) -> &dyn Any;
 }

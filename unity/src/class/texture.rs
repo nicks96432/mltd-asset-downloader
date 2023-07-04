@@ -6,6 +6,7 @@ use crate::utils::Version;
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
+use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek, Write};
 use std::str::FromStr;
@@ -113,4 +114,12 @@ impl Display for Texture {
     }
 }
 
-impl Class for Texture {}
+impl Class for Texture {
+    fn class_id(&self) -> super::ClassIDType {
+        super::ClassIDType::Texture
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}

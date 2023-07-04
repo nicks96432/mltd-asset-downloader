@@ -1,4 +1,5 @@
 use unity::bundle::UnityFS;
+use unity::class::{ClassIDType, TextAsset};
 
 use std::error::Error;
 use std::fs::File;
@@ -25,7 +26,15 @@ pub fn extract_media(args: &ExtractorArgs) -> Result<(), Box<dyn Error>> {
 
     log::info!("loading UnityFS bundle: {}", args.input.to_string_lossy());
     let bundle = UnityFS::read(&mut f)?;
-    println!("{}", bundle);
+    for asset in bundle.assets.iter() {
+        for class in asset.classes.iter() {
+            if class.class_id() == ClassIDType::TextAsset {
+                if let Some(_text_asset) = class.as_any().downcast_ref::<TextAsset>() {
+                    todo!()
+                }
+            }
+        }
+    }
 
     Ok(())
 }

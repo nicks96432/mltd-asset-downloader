@@ -3,6 +3,7 @@ use crate::asset::ClassInfo;
 use crate::error::Error;
 use crate::traits::{ReadAlignedString, ReadPrimitiveExt};
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek};
@@ -146,4 +147,12 @@ impl Display for AssetBundle {
     }
 }
 
-impl Class for AssetBundle {}
+impl Class for AssetBundle {
+    fn class_id(&self) -> super::ClassIDType {
+        super::ClassIDType::AssetBundle
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}

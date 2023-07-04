@@ -2,6 +2,7 @@ use super::{Class, Object, PPtr};
 use crate::asset::{ClassInfo, Platform};
 use crate::error::Error;
 
+use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek, Write};
 
@@ -76,4 +77,12 @@ impl Display for EditorExtension {
     }
 }
 
-impl Class for EditorExtension {}
+impl Class for EditorExtension {
+    fn class_id(&self) -> super::ClassIDType {
+        super::ClassIDType::EditorExtension
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}

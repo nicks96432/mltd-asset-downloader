@@ -6,6 +6,7 @@ use crate::utils::Version;
 
 use byteorder::WriteBytesExt;
 
+use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek, Write};
 
@@ -78,4 +79,12 @@ impl Display for Object {
     }
 }
 
-impl Class for Object {}
+impl Class for Object {
+    fn class_id(&self) -> super::ClassIDType {
+        super::ClassIDType::Object
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}

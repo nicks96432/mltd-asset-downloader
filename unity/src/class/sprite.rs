@@ -13,6 +13,7 @@ use byteorder::WriteBytesExt;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 
+use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek, Write};
 use std::str::FromStr;
@@ -771,4 +772,12 @@ impl Display for Sprite {
     }
 }
 
-impl Class for Sprite {}
+impl Class for Sprite {
+    fn class_id(&self) -> super::ClassIDType {
+        super::ClassIDType::Sprite
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}

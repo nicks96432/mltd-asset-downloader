@@ -10,6 +10,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt};
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 
+use std::any::Any;
 use std::backtrace::Backtrace;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek, Write};
@@ -650,4 +651,12 @@ impl Display for Texture2D {
     }
 }
 
-impl Class for Texture2D {}
+impl Class for Texture2D {
+    fn class_id(&self) -> super::ClassIDType {
+        super::ClassIDType::Texture2D
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}

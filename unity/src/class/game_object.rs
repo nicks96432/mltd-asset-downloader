@@ -3,6 +3,7 @@ use crate::asset::ClassInfo;
 use crate::error::Error;
 use crate::traits::{ReadAlignedString, ReadPrimitiveExt};
 
+use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Seek};
 
@@ -79,4 +80,12 @@ impl Display for GameObject {
     }
 }
 
-impl Class for GameObject {}
+impl Class for GameObject {
+    fn class_id(&self) -> super::ClassIDType {
+        super::ClassIDType::GameObject
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
