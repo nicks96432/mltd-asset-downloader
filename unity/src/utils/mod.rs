@@ -78,7 +78,7 @@ impl FileType {
         reader.seek(SeekFrom::Start(0u64))?;
 
         let range = 0i64..=i64::try_from(reader.stream_len()?)?;
-        if vec![
+        if [
             header.asset_size,
             i64::from(header.metadata_size),
             i64::from(header.version),
