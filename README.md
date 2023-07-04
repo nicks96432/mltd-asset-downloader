@@ -1,5 +1,11 @@
 # MLTD-asset-downloader
 
+![GitHub Check Status](https://img.shields.io/github/actions/workflow/status/nicks96432/mltd-asset-downloader/check.yaml?label=Check)
+![GitHub Build Status](https://img.shields.io/github/actions/workflow/status/nicks96432/mltd-asset-downloader/build.yaml)
+![GitHub Repo stars](https://img.shields.io/github/stars/nicks96432/mltd-asset-downloader)
+![GitHub top language](https://img.shields.io/github/languages/top/nicks96432/mltd-asset-downloader)
+[![License](https://img.shields.io/github/license/nicks96432/mltd-asset-downloader)](LICENSE)
+
 English | [繁體中文](README.zh-TW.md) | [한국어](README.ko-KR.md)
 
 Game asset downloader for THE IDOLM@STER MILLION LIVE! Theater Days (MLTD), written in Rust.

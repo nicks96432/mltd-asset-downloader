@@ -1,5 +1,11 @@
 # 밀리시타-에셋-다운로더
 
+[![GitHub Check Status](https://img.shields.io/github/actions/workflow/status/nicks96432/mltd-asset-downloader/check.yaml?label=Check)](https://github.com/nicks96432/mltd-asset-downloader/actions/workflows/check.yaml)
+[![GitHub Build Status](https://img.shields.io/github/actions/workflow/status/nicks96432/mltd-asset-downloader/build.yaml)](https://github.com/nicks96432/mltd-asset-downloader/actions/workflows/build.yaml)
+![GitHub Repo stars](https://img.shields.io/github/stars/nicks96432/mltd-asset-downloader)
+![GitHub top language](https://img.shields.io/github/languages/top/nicks96432/mltd-asset-downloader)
+[![License](https://img.shields.io/github/license/nicks96432/mltd-asset-downloader)](LICENSE)
+
 [English](README.md) | [繁體中文](README.zh-TW.md) | 한국어
 
 러스트 기반 THE IDOLM@STER MILLION LIVE! Theater Days (MLTD) 에셋 다운로더.
