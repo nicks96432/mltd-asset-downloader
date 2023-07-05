@@ -8,15 +8,11 @@ license.workspace = true
 repository.workspace = true
 version = "0.1.0"
 
-[lib]
-crate-type = ["cdylib", "lib"]
-
 [dependencies]
 ctor = { workspace = true }
 cxx = "1.0.97"
 env_logger = { workspace = true }
 log = { workspace = true }
-
 
 [dependencies.mltd-utils]
 features = ["log"]

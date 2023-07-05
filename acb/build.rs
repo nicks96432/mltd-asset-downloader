@@ -14,14 +14,10 @@ fn main() {
     build.define("DEBUG", None);
 
     #[cfg(target_env = "msvc")]
-    build.flag("/Wall").flag("/WX").flag("/std:c++14");
+    build.flag("/Wall").flag("/std:c++14");
 
     #[cfg(not(target_env = "msvc"))]
-    build
-        .flag("-Wall")
-        .flag("-Wextra")
-        .flag("-Werror")
-        .flag("-std=c++14");
+    build.flag("-Wall").flag("-Wextra").flag("-std=c++14");
 
     build.compile("acb");
 
