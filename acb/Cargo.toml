@@ -1,0 +1,34 @@
+[package]
+authors.workspace = true
+build = "build.rs"
+description = "Rust bindings for libcgss"
+edition.workspace = true
+name = "acb"
+license.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+ctor = { workspace = true }
+cxx = "1.0.97"
+env_logger = { workspace = true }
+log = { workspace = true }
+
+
+[dependencies.mltd-utils]
+features = ["log"]
+path = "../utils"
+
+[build-dependencies]
+cmake = "0.1.50"
+
+[build-dependencies.cxx-build]
+features = ["parallel"]
+version = "1.0.97"
+
+[features]
+default = []
+debug = []

@@ -1,5 +1,6 @@
-/assets
-/target
-**/build
+assets/
+target/
+output/
+build/
 
-.vscode
+.vscode/

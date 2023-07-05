@@ -42,10 +42,6 @@ impl TextAsset {
 
         Ok(())
     }
-
-    pub fn data(&self) -> Vec<u8> {
-        self.script.clone()
-    }
 }
 
 impl Display for TextAsset {

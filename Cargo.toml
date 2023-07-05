@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli", "download", "extract", "manifest", "unity", "utils"]
+members = ["acb", "cli", "download", "extract", "manifest", "unity", "utils"]
 resolver = "2"
 
 [workspace.package]
