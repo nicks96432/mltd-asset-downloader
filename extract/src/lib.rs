@@ -69,7 +69,9 @@ where
                         }
                     }
                 }
-                _ => {}
+                c => {
+                    log::warn!("this type is not implemented yet: {:?}", c);
+                }
             }
         }
     }
