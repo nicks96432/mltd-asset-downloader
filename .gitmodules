@@ -1,0 +1,3 @@
+[submodule "acb/libcgss"]
+	path = acb/libcgss
+	url = https://github.com/nicks96432/libcgss.git

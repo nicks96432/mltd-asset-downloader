@@ -8,6 +8,7 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
+acb = { path = "../acb" }
 log = { workspace = true }
 num_cpus = { workspace = true }
 unity = { path = "../unity" }

@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v3
+        with:
+          submodules: true
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@nightly
@@ -45,7 +47,7 @@ jobs:
       - name: Install cargo check tools
         run: cargo install cargo-deny cargo-outdated cargo-udeps cargo-audit cargo-pants || true
 
-      - name: Remove advisory database
+      - name: Check
         if: ${{ !contains('Windows', runner.os) }}
         run: |
           cargo deny check
@@ -55,7 +57,7 @@ jobs:
           cargo audit
           cargo pants
 
-      - name: Remove advisory database
+      - name: Check
         if: ${{ contains('Windows', runner.os) }}
         run: |
           cargo deny check
