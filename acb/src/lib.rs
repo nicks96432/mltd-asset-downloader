@@ -19,12 +19,6 @@ pub fn to_wav(buf: &Vec<u8>) -> Result<Vec<Track>, cxx::Exception> {
 }
 
 #[cfg(test)]
-#[ctor::ctor]
-fn init() {
-    mltd_utils::init_test_logger!();
-}
-
-#[cfg(test)]
 mod tests {
     use crate::to_wav;
 
