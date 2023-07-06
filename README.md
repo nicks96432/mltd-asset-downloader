@@ -8,7 +8,7 @@
 
 English | [繁體中文](README.zh-TW.md) | [한국어](README.ko-KR.md)
 
-Game asset downloader for THE IDOLM@STER MILLION LIVE! Theater Days (MLTD), written in Rust.
+Game asset downloader for THE iDOLM@STER® MILLION LIVE! THEATER DAYS (MLTD), written in Rust.
 
 ## Usage
 
@@ -32,6 +32,12 @@ Options:
 ```
 
 ## Build
+
+The following is required:
+
+* nightly version of rust toolchain.
+* cmake >= 3.2 (for libcgss)
+* MSVC v142 or newer version. (Windows)
 
 ```shell
 cargo build --release

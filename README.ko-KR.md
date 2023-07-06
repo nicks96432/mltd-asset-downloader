@@ -8,13 +8,13 @@
 
 [English](README.md) | [繁體中文](README.zh-TW.md) | 한국어
 
-러스트 기반 THE IDOLM@STER MILLION LIVE! Theater Days (MLTD) 에셋 다운로더.
+러스트 기반 THE iDOLM@STER® MILLION LIVE! THEATER DAYS (MLTD) 에셋 다운로더.
 
 ## 사용법
 
 ```console
 $ ./mltd --help
-THE IDOLM@STER MILLION LIVE! Theater Days (MLTD) 에셋 다운로더
+THE iDOLM@STER® MILLION LIVE! THEATER DAYS (MLTD) 에셋 다운로더
 
 Usage: mltd [OPTIONS] <COMMAND>
 
@@ -32,6 +32,12 @@ Options:
 ```
 
 ## 빌드
+
+The following is required:
+
+* nightly version of rust toolchain.
+* cmake >= 3.2 (for libcgss)
+* MSVC v142 or newer version. (Windows)
 
 ```shell
 cargo build --release

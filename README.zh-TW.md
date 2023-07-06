@@ -33,12 +33,20 @@ Commands:
 
 ## 編譯
 
+你需要這些東西:
+
+* nightly版的rust.
+* cmake >= 3.2 (libcgss要用到)
+* MSVC v142或者更新. (Windows)
+
 ```shell
 cargo build --release
 ```
+
+執行檔會出現在`target/release`資料夾裡。
 
 ## 授權條款
 
 本軟體遵守[MIT](LICENSE)授權條款。
 
-所有從本軟體下載的資料版權由萬代南夢宮娛樂所有
+所有從本軟體下載的資料版權由萬代南夢宮娛樂所有。
