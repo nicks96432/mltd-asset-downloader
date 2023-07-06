@@ -21,8 +21,17 @@ fn main() {
 
     build.compile("acb");
 
-    println!("cargo:rustc-link-search=native={}/lib", dst.display());
-    println!("cargo:rustc-link-lib=dylib=cgss");
-    println!("cargo:return-if-changed=src/acb.cc");
-    println!("cargo:return-if-changed=src/acb.h");
+    println!(
+        "cargo:rustc-link-search=native={}",
+        dst.join("lib").display()
+    );
+    println!("cargo:rustc-link-lib=static=cgss");
+    println!(
+        "cargo:return-if-changed={}",
+        Path::new("src").join("acb.cc").display()
+    );
+    println!(
+        "cargo:return-if-changed={}",
+        Path::new("src").join("acb.h").display()
+    );
 }
