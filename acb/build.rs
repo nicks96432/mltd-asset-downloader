@@ -14,15 +14,24 @@ fn main() {
     build.define("DEBUG", None);
 
     #[cfg(target_env = "msvc")]
-    build.flag("/Wall").flag("/std:c++14");
+    build.flag("/Wall").flag("/MT").flag("/std:c++14");
 
     #[cfg(not(target_env = "msvc"))]
     build.flag("-Wall").flag("-Wextra").flag("-std=c++14");
 
     build.compile("acb");
 
-    println!("cargo:rustc-link-search=native={}/lib", dst.display());
-    println!("cargo:rustc-link-lib=dylib=cgss");
-    println!("cargo:return-if-changed=src/acb.cc");
-    println!("cargo:return-if-changed=src/acb.h");
+    println!(
+        "cargo:rustc-link-search=native={}",
+        dst.join("lib").display()
+    );
+    println!("cargo:rustc-link-lib=static=cgss");
+    println!(
+        "cargo:return-if-changed={}",
+        Path::new("src").join("acb.cc").display()
+    );
+    println!(
+        "cargo:return-if-changed={}",
+        Path::new("src").join("acb.h").display()
+    );
 }
