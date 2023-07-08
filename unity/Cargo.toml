@@ -14,7 +14,7 @@ log = { workspace = true }
 num-derive = "0.4.0"
 num-traits = "0.2.15"
 paste = "1.0.13"
-thiserror = "1.0.41"
+thiserror = "1.0.43"
 
 [dependencies.lz4_flex]
 optional = true

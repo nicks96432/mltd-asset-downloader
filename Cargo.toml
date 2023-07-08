@@ -35,9 +35,6 @@ version = "0.17.5"
 features = ["json", "native-certs"]
 version = "2.7.1"
 
-[profile.dev]
-codegen-units = 20
-
 [profile.release]
 codegen-units = 20
 lto = "thin"
