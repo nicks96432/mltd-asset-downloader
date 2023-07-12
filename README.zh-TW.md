@@ -35,9 +35,10 @@ Commands:
 
 你需要這些東西:
 
-* nightly版的rust.
+* nightly版的rust
 * cmake >= 3.2 (libcgss要用到)
-* MSVC v142或者更新. (Windows)
+* MSVC v142或者更新 (Windows)
+* ...或是其他支援C++14的編譯器 (gnu環境)
 
 ```shell
 cargo build --release
