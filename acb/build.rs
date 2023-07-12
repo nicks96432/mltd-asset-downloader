@@ -5,19 +5,19 @@ fn main() {
     let dst = cmake::Config::new(libcgss_path)
         .pic(true)
         .uses_cxx11()
+        .define("LIBCGSS_BUILD_SHARED_LIB", "OFF")
         .build();
 
     let mut build = cxx_build::bridge("src/lib.rs");
     build.file("src/acb.cc").include(&dst.join("include"));
 
-    #[cfg(feature = "debug")]
-    build.define("DEBUG", None);
+    build.flag("-Wall").flag("-std=c++14");
 
-    #[cfg(target_env = "msvc")]
-    build.flag("/Wall").flag("/std:c++14");
+    #[cfg(all(target_os = "windows", target_env = "gnu"))]
+    build.flag("-static").flag("-static-libstdc++");
 
     #[cfg(not(target_env = "msvc"))]
-    build.flag("-Wall").flag("-Wextra").flag("-std=c++14");
+    build.flag("-Wextra");
 
     build.compile("acb");
 
