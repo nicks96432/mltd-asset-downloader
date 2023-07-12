@@ -38,6 +38,7 @@ The following is required:
 * nightly version of rust toolchain.
 * cmake >= 3.2 (for libcgss)
 * MSVC v142 or newer version. (Windows)
+* ... or any compiler that supports C++14. (gnu environment)
 
 ```shell
 cargo build --release
