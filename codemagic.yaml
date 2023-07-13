@@ -1,6 +1,5 @@
 workflows:
   aarch64-darwin-build:
-    instance-type: mac_mini_m1
     scripts:
       - name: Update submodule
         script: git submodule update --init --recursive
