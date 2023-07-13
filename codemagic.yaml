@@ -6,7 +6,7 @@ workflows:
         script: git submodule update --init --recursive
       - name: Install rust non-interactively
         script: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-      -name: Setup rust environment
+      - name: Setup rust environment
         script: source $HOME/.cargo/env
       - name: Use nightly rust
         script: rustup default nightly
