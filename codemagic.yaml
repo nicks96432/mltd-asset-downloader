@@ -1,5 +1,5 @@
 workflows:
-  ios-build:
+  aarch64-darwin-build:
     environment:
       xcode: 13.3
     scripts:
