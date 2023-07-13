@@ -1,6 +1,5 @@
 workflows:
   aarch64-darwin-build
-    instance_type: mac_mini_m1
     environment:
       xcode: 13.3
     scripts:
