@@ -1,0 +1,16 @@
+workflows:
+  ios-build:
+    environment:
+      xcode: 13.3
+    scripts:
+      - name: Update submodule
+        script: git submodule update --init --recursive
+      - name: Install rust
+        script: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+      - name: Use nightly rust
+        script: rustup default nightly
+      - name: Build
+        script: cargo build --release
+
+    artifacts:
+      - target/release/mltd
