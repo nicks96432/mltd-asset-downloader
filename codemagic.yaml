@@ -1,12 +1,13 @@
 workflows:
-  aarch64-darwin-build:
+  aarch64-darwin-build
+    instance_type: mac_mini_m1
     environment:
       xcode: 13.3
     scripts:
       - name: Update submodule
         script: git submodule update --init --recursive
-      - name: Install rust
-        script: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+      - name: Install rust non-interactively
+        script: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
       - name: Use nightly rust
         script: rustup default nightly
       - name: Build
