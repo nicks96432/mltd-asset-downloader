@@ -12,9 +12,9 @@ byteorder = "1.4.3"
 hex = "0.4.3"
 log = { workspace = true }
 num-derive = "0.4.0"
-num-traits = "0.2.15"
-paste = "1.0.13"
-thiserror = "1.0.43"
+num-traits = "0.2.16"
+paste = "1.0.14"
+thiserror = "1.0.44"
 
 [dependencies.lz4_flex]
 optional = true
