@@ -9,14 +9,14 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
-cxx = "1.0.102"
+cxx = "1.0.103"
 
 [build-dependencies]
 cmake = "0.1.50"
 
 [build-dependencies.cxx-build]
 features = ["parallel"]
-version = "1.0.102"
+version = "1.0.103"
 
 [features]
 default = []

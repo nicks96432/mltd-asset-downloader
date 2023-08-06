@@ -14,7 +14,7 @@ linked-hash-map = "0.5.6"
 log = "0.4.19"
 num_cpus = "1.16.0"
 rayon = "1.7.0"
-serde = "1.0.175"
+serde = "1.0.182"
 
 [workspace.dependencies.clap]
 default-features = false
@@ -29,7 +29,7 @@ version = "0.10.0"
 [workspace.dependencies.indicatif]
 default-features = false
 features = ["rayon"]
-version = "0.17.5"
+version = "0.17.6"
 
 [workspace.dependencies.ureq]
 features = ["json", "native-certs"]
