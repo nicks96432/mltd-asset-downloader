@@ -46,8 +46,14 @@ cargo build --release
 
 The executable will be in the `target/release` directory.
 
+## Disclaimer
+
+None of the repo, the tool, nor the repo owner is affiliated with, or sponsored or authorized by
+Bandai Namco Entertainment and Unity Technologies, nor their affiliates or subsidiaries.
+
 ## License
 
 Licensed under [MIT](LICENSE).
 
-The copyright of anything that downloaded from this program belongs to Bandai Namco Entertainment.
+The copyright of anything that downloaded or extracted from this program belongs to
+Bandai Namco Entertainment.
