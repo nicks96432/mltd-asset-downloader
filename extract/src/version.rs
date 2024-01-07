@@ -85,7 +85,7 @@ mod tests {
             rand_range(0..5000),
             rand_range(0..5000),
             rand_range(0..5000),
-            rand_ascii_string(1).into_inner()[0],
+            rand_range(0x61u8..0x7bu8) as char,
             rand_range(0..5000),
         );
         Version::from_str(&version).unwrap();
