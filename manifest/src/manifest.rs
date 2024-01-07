@@ -5,26 +5,16 @@ use linked_hash_map::LinkedHashMap;
 use mltd_utils::{fetch_asset, trace_request, trace_response};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use serde_tuple::Deserialize_tuple as DeserializeTuple;
-use serde_tuple::Serialize_tuple as SerializeTuple;
 use ureq::AgentBuilder;
 
 use std::io::{copy, Cursor};
 
-/// Type of an entry in the manifest file.
+/// An entry in the manifest file.
 ///
-/// The order of the members matters because it's deserialized from an array.
-#[derive(Debug, Clone, SerializeTuple, DeserializeTuple)]
-pub struct ManifestEntry {
-    /// SHA1 hash of the file.
-    pub hash: String,
-
-    /// File name on the server.
-    pub filename: String,
-
-    /// File size.
-    pub size: u64,
-}
+/// It contains the SHA1 hash of the file, the file name on the server and the
+/// file size.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManifestEntry(pub String, pub String, pub u64);
 
 type RawManifest = [LinkedHashMap<String, ManifestEntry>; 1];
 
@@ -42,11 +32,7 @@ pub struct Manifest {
 
 impl Manifest {
     pub fn new() -> Self {
-        Self {
-            data: [LinkedHashMap::new(); 1],
-            name: String::new(),
-            version: 0u64,
-        }
+        Self { data: [LinkedHashMap::new(); 1], name: String::new(), version: 0u64 }
     }
 
     pub fn len(&self) -> usize {
@@ -105,16 +91,10 @@ impl Manifest {
         log::debug!("getting version from matsurihi.me");
         let (manifest_name, manifest_version) = Self::latest_version()?;
 
-        log::info!(
-            "the latest version is {}, manifest file {}",
-            manifest_version,
-            manifest_name
-        );
+        log::info!("the latest version is {}, manifest file {}", manifest_version, manifest_name);
 
         log::debug!("building request agent");
-        let agent_builder = AgentBuilder::new()
-            .https_only(true)
-            .user_agent(variant.user_agent());
+        let agent_builder = AgentBuilder::new().https_only(true).user_agent(variant.user_agent());
         let agent = agent_builder.build();
 
         let asset_url_base = format!("/{}/production/2018/{}", manifest_version, variant);
@@ -198,11 +178,7 @@ impl Default for Manifest {
 
 impl From<RawManifest> for Manifest {
     fn from(value: RawManifest) -> Self {
-        Self {
-            data: value,
-            name: String::new(),
-            version: 0u64,
-        }
+        Self { data: value, name: String::new(), version: 0u64 }
     }
 }
 
@@ -227,9 +203,7 @@ mod tests {
 
     #[test]
     fn test_manifest_msgpack() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests")
-            .join("test.msgpack");
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("test.msgpack");
 
         let mut file = File::open(path).unwrap();
         let mut buf = Vec::new();

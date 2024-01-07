@@ -9,10 +9,26 @@ version = "0.1.0"
 
 [dependencies]
 acb = { path = "../acb" }
+byteorder = "1.5.0"
 log = { workspace = true }
+num-derive = "0.4.1"
+num-traits = "0.2.17"
 num_cpus = { workspace = true }
-unity = { path = "../unity" }
+rabex = "0.0.3"
+texture2ddecoder = "0.0.5"
 
 [dependencies.clap]
 features = ["derive"]
 workspace = true
+
+[dependencies.image]
+features = ["webp-encoder"]
+version = "0.24.7"
+
+[dev-dependencies]
+ctor = { workspace = true }
+env_logger = { workspace = true }
+
+[dev-dependencies.mltd-utils]
+features = ["log", "rand"]
+path = "../utils"

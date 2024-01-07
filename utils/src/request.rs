@@ -41,12 +41,7 @@ pub fn trace_response(res: &Response) {
     let header_names = res.headers_names();
     let iter = header_names.iter();
 
-    log::trace!(
-        "{} {} {}",
-        res.status(),
-        res.status_text(),
-        res.http_version()
-    );
+    log::trace!("{} {} {}", res.status(), res.status_text(), res.http_version());
 
     iter.for_each(|h| log::trace!("{}: {}", h, res.header(h).unwrap_or("")));
 }

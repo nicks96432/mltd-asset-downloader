@@ -32,6 +32,7 @@ enum Command {
     Extract(ExtractorArgs),
 
     #[cfg(feature = "manifest")]
+    /// Download manifest from MLTD asset server
     Manifest(ManifestArgs),
 }
 
