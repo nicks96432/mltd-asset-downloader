@@ -1,0 +1,215 @@
+use std::error::Error;
+use std::io::{Cursor, Read, Seek};
+use std::mem::size_of_val;
+use std::slice::from_raw_parts;
+use std::str::FromStr;
+
+use byteorder::{ByteOrder, ReadBytesExt};
+use rabex::files::SerializedFile;
+use rabex::objects::classes::{AssetBundle, AssetBundleScriptInfo, AssetInfo};
+use rabex::objects::PPtr;
+use rabex::read_ext::ReadUrexExt;
+
+use crate::utils::ReadAlignedExt;
+use crate::version::Version;
+
+pub fn construct_p_ptr<R, E>(
+    reader: &mut R,
+    serialized_file: &SerializedFile,
+) -> Result<PPtr, Box<dyn Error>>
+where
+    R: Read + Seek,
+    E: ByteOrder,
+{
+    // XXX: This is a hack to get the version from the serialized file header.
+    let version = Cursor::new(
+        &unsafe {
+            from_raw_parts(
+                (&serialized_file.m_Header as *const _) as *const u8,
+                size_of_val(&serialized_file.m_Header),
+            )
+        }[0x1c..0x20],
+    )
+    .read_u32::<E>()?;
+
+    Ok(PPtr {
+        m_FileID: reader.read_i32::<E>()? as i64,
+        m_PathID: if version < 14 {
+            reader.read_i32::<E>()? as i64
+        } else {
+            reader.read_i64::<E>()?
+        },
+    })
+}
+
+pub fn construct_asset_info<R, E>(
+    reader: &mut R,
+    serialized_file: &SerializedFile,
+) -> Result<AssetInfo, Box<dyn Error>>
+where
+    R: Read + Seek,
+    E: ByteOrder,
+{
+    Ok(AssetInfo {
+        preloadIndex: reader.read_i32::<E>()?,
+        preloadSize: reader.read_i32::<E>()?,
+        asset: construct_p_ptr::<_, E>(reader, serialized_file)?,
+    })
+}
+
+pub fn construct_asset_bundle<E>(
+    data: &[u8],
+    serialized_file: &SerializedFile,
+) -> Result<AssetBundle, Box<dyn Error>>
+where
+    E: ByteOrder,
+{
+    let mut reader = Cursor::new(data);
+    let unity_version = Version::from_str(serialized_file.m_UnityVersion.as_ref().unwrap())?;
+
+    Ok(AssetBundle {
+        m_Name: reader.read_aligned_string::<E>()?,
+        m_PreloadTable: match Version::from_str("3.4.0").unwrap() <= unity_version
+            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        {
+            true => {
+                let preload_table_len = reader.read_array_len::<E>()?;
+                let mut preload_table = Vec::with_capacity(preload_table_len);
+
+                for _ in 0..preload_table_len {
+                    preload_table.push(construct_p_ptr::<_, E>(&mut reader, serialized_file)?);
+                }
+
+                preload_table
+            }
+            false => Vec::new(),
+        },
+        m_Container: {
+            let container_len = reader.read_array_len::<E>()?;
+            let mut container = Vec::with_capacity(container_len);
+
+            for _ in 0..container_len {
+                let key = reader.read_aligned_string::<E>()?;
+
+                let value = construct_asset_info::<_, E>(&mut reader, serialized_file)?;
+                container.push((key, value));
+            }
+
+            container
+        },
+        m_MainAsset: construct_asset_info::<_, E>(&mut reader, serialized_file)?,
+        m_ScriptCompatibility: match Version::from_str("3.4.0").unwrap() <= unity_version
+            && unity_version <= Version::from_str("4.7.2").unwrap()
+        {
+            true => {
+                let script_compatibility_len = reader.read_array_len::<E>()?;
+                let mut script_compatibility = Vec::with_capacity(script_compatibility_len);
+
+                for _ in 0..script_compatibility_len {
+                    script_compatibility.push(AssetBundleScriptInfo {
+                        className: reader.read_aligned_string::<E>()?,
+                        nameSpace: reader.read_aligned_string::<E>()?,
+                        assemblyName: reader.read_aligned_string::<E>()?,
+                        hash: reader.read_u32::<E>()?,
+                    });
+                }
+
+                Some(script_compatibility)
+            }
+            false => None,
+        },
+        m_ClassCompatibility: match Version::from_str("3.5.0").unwrap() <= unity_version
+            && unity_version <= Version::from_str("4.7.2").unwrap()
+        {
+            true => {
+                let class_compatibility_len = reader.read_array_len::<E>()?;
+                let mut class_compatibility = Vec::with_capacity(class_compatibility_len);
+
+                for _ in 0..class_compatibility_len {
+                    class_compatibility.push((reader.read_i32::<E>()?, reader.read_u32::<E>()?));
+                }
+
+                Some(class_compatibility)
+            }
+            false => None,
+        },
+        m_ClassVersionMap: match Version::from_str("5.4.0f3").unwrap() <= unity_version
+            && unity_version <= Version::from_str("5.4.6f3").unwrap()
+        {
+            true => {
+                let version_map_len = reader.read_array_len::<E>()?;
+                let mut version_map = Vec::with_capacity(version_map_len);
+
+                for _ in 0..version_map_len {
+                    version_map.push((reader.read_i32::<E>()?, reader.read_i32::<E>()?));
+                }
+
+                Some(version_map)
+            }
+            false => None,
+        },
+        m_RuntimeCompatibility: match Version::from_str("4.2.0").unwrap() <= unity_version
+            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        {
+            true => Some(reader.read_u32::<E>()?),
+            false => None,
+        },
+        m_AssetBundleName: match Version::from_str("5.0.0f4").unwrap() <= unity_version
+            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        {
+            true => Some(reader.read_aligned_string::<E>()?),
+            false => None,
+        },
+        m_Dependencies: match Version::from_str("5.0.0f4").unwrap() <= unity_version
+            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        {
+            true => {
+                let dependencies_len = reader.read_array_len::<E>()?;
+                let mut dependencies = Vec::with_capacity(dependencies_len);
+
+                for _ in 0..dependencies_len {
+                    dependencies.push(reader.read_aligned_string::<E>()?);
+                }
+
+                Some(dependencies)
+            }
+            false => None,
+        },
+        m_IsStreamedSceneAssetBundle: match Version::from_str("5.0.0f4").unwrap() <= unity_version
+            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        {
+            true => Some(reader.read_bool()?),
+            false => None,
+        },
+        m_ExplicitDataLayout: match Version::from_str("2017.3.0b1").unwrap() <= unity_version
+            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        {
+            true => Some(reader.read_i32::<E>()?),
+            false => None,
+        },
+        m_PathFlags: match Version::from_str("2017.1.0b2").unwrap() <= unity_version
+            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        {
+            true => Some(reader.read_i32::<E>()?),
+            false => None,
+        },
+        m_SceneHashes: match Version::from_str("2017.3.0b1").unwrap() <= unity_version
+            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        {
+            true => {
+                let scene_hashes_len = reader.read_array_len::<E>()?;
+                let mut scene_hashes = Vec::with_capacity(scene_hashes_len);
+
+                for _ in 0..scene_hashes_len {
+                    scene_hashes.push((
+                        reader.read_aligned_string::<E>()?,
+                        reader.read_aligned_string::<E>()?,
+                    ));
+                }
+
+                Some(scene_hashes)
+            }
+            false => None,
+        },
+    })
+}

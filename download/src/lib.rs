@@ -59,8 +59,7 @@ pub fn download_assets(args: &DownloaderArgs) -> Result<(), DownloadError> {
     multi_progress.set_move_cursor(true);
 
     log::trace!("create ProgressStyle");
-    let template =
-        "{msg:60} {bytes:12} {binary_bytes_per_sec:12} {eta:4} [{wide_bar:.cyan/blue}] {percent:3}%";
+    let template = "{msg:60} {bytes:12} {binary_bytes_per_sec:12} {eta:4} [{wide_bar:.cyan/blue}] {percent:3}%";
     let progress_bar_style = match ProgressStyle::with_template(template) {
         Ok(style) => style,
         Err(_) => {
@@ -95,9 +94,8 @@ pub fn download_assets(args: &DownloaderArgs) -> Result<(), DownloadError> {
     }
 
     log::debug!("building request agent");
-    let agent_builder = AgentBuilder::new()
-        .https_only(true)
-        .user_agent(args.os_variant.user_agent());
+    let agent_builder =
+        AgentBuilder::new().https_only(true).user_agent(args.os_variant.user_agent());
     let agent = agent_builder.build();
 
     log::debug!("start downloading assets");
@@ -108,12 +106,12 @@ pub fn download_assets(args: &DownloaderArgs) -> Result<(), DownloadError> {
         let tid = current_thread_index().unwrap_or_default();
         let progress_bar = &progress_bars[tid];
         progress_bar.reset();
-        progress_bar.set_length(entry.size);
+        progress_bar.set_length(entry.2);
         progress_bar.set_position(0);
         progress_bar.set_style(progress_bar_style.clone());
         progress_bar.set_message(filename.clone());
 
-        let asset_url = format!("{}/{}", asset_url_base, entry.filename);
+        let asset_url = format!("{}/{}", asset_url_base, entry.1);
         let asset_res = match fetch_asset(&agent, &asset_url) {
             Ok(res) => res,
             Err(e) => {
@@ -145,7 +143,7 @@ pub fn download_assets(args: &DownloaderArgs) -> Result<(), DownloadError> {
         }
 
         let cur_dounloaded_count = downloaded_count.fetch_add(1, Ordering::AcqRel);
-        total_progress_bar.inc(entry.size);
+        total_progress_bar.inc(entry.2);
         total_progress_bar.set_message(format!(
             "Total ({}/{})",
             cur_dounloaded_count,

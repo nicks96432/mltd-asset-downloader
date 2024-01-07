@@ -35,9 +35,9 @@ decode_stream(cgss::CMemoryStream *stream, const cgss::CHcaDecoderConfig &config
     return decoded_data;
 }
 
-rust::Vec<Track> to_wav(const rust::Vec<std::uint8_t> &buf) {
-    std::vector<std::uint8_t> buf_clone = {buf.cbegin(), buf.cend()};
-    cgss::CMemoryStream stream{buf_clone.data(), static_cast<std::uint64_t>(buf.size()), false};
+rust::Vec<Track> to_tracks(rust::Slice<const std::uint8_t> buf) {
+    std::vector<std::uint8_t> buf_clone = {buf.begin(), buf.end()};
+    cgss::CMemoryStream stream{buf_clone.data(), static_cast<std::uint64_t>(buf_clone.size()), false};
     cgss::CAcbFile acb{&stream, ""};
     acb.Initialize();
 

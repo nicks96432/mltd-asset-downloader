@@ -8,19 +8,19 @@ mod ffi {
     unsafe extern "C++" {
         include!("acb/src/acb.h");
 
-        pub fn to_wav(buf: &Vec<u8>) -> Result<Vec<Track>>;
+        pub fn to_tracks(buf: &[u8]) -> Result<Vec<Track>>;
     }
 }
 
 pub use ffi::Track;
 
-pub fn to_wav(buf: &Vec<u8>) -> Result<Vec<Track>, cxx::Exception> {
-    ffi::to_wav(buf)
+pub fn to_tracks(buf: &[u8]) -> Result<Vec<Track>, cxx::Exception> {
+    ffi::to_tracks(buf)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::to_wav;
+    use crate::to_tracks;
 
     use std::fs::File;
     use std::io::Read;
@@ -28,15 +28,13 @@ mod tests {
 
     #[test]
     fn test_to_wav() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests")
-            .join("test.acb");
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("test.acb");
         let mut f = File::open(&path).unwrap();
 
         let mut buf = Vec::new();
         f.read_to_end(&mut buf).unwrap();
 
-        let tracks = to_wav(&buf).unwrap();
+        let tracks = to_tracks(&buf).unwrap();
         let track = tracks.get(0).unwrap();
 
         let mut expected_file = File::open("tests/test.wav").unwrap();

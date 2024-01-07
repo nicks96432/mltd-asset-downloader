@@ -5,7 +5,7 @@ fn main() {
     let dst = cmake::Config::new(libcgss_path)
         .pic(true)
         .uses_cxx11()
-        .define("LIBCGSS_BUILD_SHARED_LIB", "OFF")
+        .define("LIBCGSS_BUILD_SHARED_LIBS", "OFF")
         .build();
 
     let mut build = cxx_build::bridge("src/lib.rs");
@@ -21,17 +21,8 @@ fn main() {
 
     build.compile("acb");
 
-    println!(
-        "cargo:rustc-link-search=native={}",
-        dst.join("lib").display()
-    );
+    println!("cargo:rustc-link-search=native={}", dst.join("lib").display());
     println!("cargo:rustc-link-lib=static=cgss");
-    println!(
-        "cargo:return-if-changed={}",
-        Path::new("src").join("acb.cc").display()
-    );
-    println!(
-        "cargo:return-if-changed={}",
-        Path::new("src").join("acb.h").display()
-    );
+    println!("cargo:return-if-changed={}", Path::new("src").join("acb.cc").display());
+    println!("cargo:return-if-changed={}", Path::new("src").join("acb.h").display());
 }

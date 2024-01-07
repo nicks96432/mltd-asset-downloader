@@ -8,11 +8,42 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
+# For decoding ACB audio
 acb = { path = "../acb" }
+
+# For reading numbers from binary data
+byteorder = "1.5.0"
+
 log = { workspace = true }
+num-derive = "0.4.1"
+num-traits = "0.2.17"
 num_cpus = { workspace = true }
-unity = { path = "../unity" }
+
+# For unpacking unity assets
+rabex = "0.0.3"
+
+# For decoding Texture2D
+texture2ddecoder = "0.0.5"
 
 [dependencies.clap]
 features = ["derive"]
 workspace = true
+
+# For image encoding
+[dependencies.image]
+features = ["webp-encoder"]
+version = "0.24.7"
+
+# For regex matching in texture name
+[dependencies.lazy-regex]
+default-features = false
+features = ["std", "perf"]
+version = "3.1.0"
+
+[dev-dependencies]
+ctor = { workspace = true }
+env_logger = { workspace = true }
+
+[dev-dependencies.mltd-utils]
+features = ["log", "rand"]
+path = "../utils"

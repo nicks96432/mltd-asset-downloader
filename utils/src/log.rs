@@ -39,5 +39,3 @@ macro_rules! init_test_logger {
             .try_init();
     };
 }
-
-pub use init_test_logger;

@@ -37,6 +37,7 @@ impl Display for OsVariant {
 
 impl FromStr for OsVariant {
     type Err = ManifestError;
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase() {
             s if s == "android" => Ok(Self::Android),
