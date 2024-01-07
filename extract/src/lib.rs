@@ -3,18 +3,14 @@ mod environment;
 mod utils;
 mod version;
 
-use std::collections::HashMap;
 use std::error::Error;
 use std::fs::{create_dir_all, read_dir, File};
 use std::io::{Cursor, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::exit;
 
-use byteorder::{ByteOrder, LittleEndian};
+use byteorder::LittleEndian;
 use environment::Environment;
-use image::codecs::webp::{WebPEncoder, WebPQuality};
-use image::ColorType;
-use num_traits::FromPrimitive;
 use rabex::config::ExtractionConfig;
 use rabex::files::{BundleFile, SerializedFile};
 use rabex::objects::map;
@@ -22,10 +18,8 @@ use rabex::read_ext::ReadUrexExt;
 use utils::ReadAlignedExt;
 
 use crate::class::asset_bundle::construct_asset_bundle;
-use crate::class::sprite::construct_sprite;
-use crate::class::texture_2d::{construct_texture_2d, decode_texture, TextureFormat};
+use crate::class::texture_2d::extract_texture_2d;
 use crate::environment::{check_file_type, FileType};
-use crate::utils::solve_puzzle;
 
 #[derive(Debug, clap::Args)]
 #[command(author, version, about, arg_required_else_help(true))]
@@ -199,87 +193,5 @@ where
     log::info!("writing audio to {}", path.display());
     file.write_all(&track.data)?;
 
-    Ok(())
-}
-
-fn extract_texture_2d<P, E>(
-    data: &[u8],
-    output_dir: &P,
-    serialized_file: &SerializedFile,
-    env: &Environment,
-) -> Result<(), Box<dyn Error>>
-where
-    P: AsRef<Path>,
-    E: ByteOrder,
-{
-    let texture = construct_texture_2d::<E>(data, serialized_file)?;
-
-    log::trace!("{:#?}", texture);
-
-    if texture.m_StreamData.is_none() {
-        return Err("Texture2D does not have a stream data".into());
-    }
-
-    let resource_name = Path::new(&texture.m_StreamData.as_ref().unwrap().path)
-        .file_name()
-        .ok_or("invalid stream data path")?
-        .to_string_lossy();
-
-    let resource = env.get_cab(resource_name.as_ref());
-    if resource.is_none() {
-        return Err("Texture2D stream data not found in resources".into());
-    }
-    let resource = resource.unwrap();
-    let img = decode_texture(
-        resource,
-        TextureFormat::from_i32(texture.m_TextureFormat).ok_or("invalid texture format")?,
-        texture.m_Width as usize,
-        texture.m_Height as usize,
-    )?;
-
-    let rects = serialized_file
-        .m_Objects
-        .iter()
-        .filter(|&o| o.m_ClassID == map::Sprite)
-        .map(|s| {
-            let sprite_data = env.get_object(s.m_PathID).unwrap();
-            construct_sprite::<E>(sprite_data, serialized_file)
-        })
-        .collect::<Result<Vec<_>, Box<dyn Error>>>()?
-        .into_iter()
-        .map(|s| (s.m_Name, s.m_Rect))
-        .collect::<HashMap<_, _>>();
-
-    let imgs = match solve_puzzle(&texture.m_Name, &img, &rects) {
-        Ok(imgs) => imgs,
-        Err(e) => {
-            log::warn!("failed to solve puzzle: {}, using the raw image", e);
-            vec![img]
-        }
-    };
-
-    if imgs.len() == 1 {
-        let img = imgs.first().unwrap();
-        let output_path = output_dir.as_ref().join(format!("{}.webp", texture.m_Name));
-
-        // XXX: Don't hardcode output image format
-        let encoder =
-            WebPEncoder::new_with_quality(File::create(&output_path)?, WebPQuality::lossless());
-
-        log::info!("writing image to {}", output_path.display());
-        encoder.encode(img.as_bytes(), img.width(), img.height(), ColorType::Rgba8)?;
-        return Ok(());
-    }
-
-    for (i, img) in imgs.iter().enumerate() {
-        let output_path = output_dir.as_ref().join(format!("{}_{}.webp", texture.m_Name, i));
-
-        // XXX: Don't hardcode output image format
-        let encoder =
-            WebPEncoder::new_with_quality(File::create(&output_path)?, WebPQuality::lossless());
-
-        log::info!("writing image to {}", output_path.display());
-        encoder.encode(img.as_bytes(), img.width(), img.height(), ColorType::Rgba8)?;
-    }
     Ok(())
 }

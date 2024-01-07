@@ -1,15 +1,23 @@
+use std::collections::HashMap;
 use std::error::Error;
+use std::fs::File;
 use std::io::Cursor;
+use std::path::Path;
 use std::str::FromStr;
 
 use byteorder::{ByteOrder, ReadBytesExt};
-use image::{DynamicImage, GrayImage, RgbaImage};
+use image::codecs::webp::{WebPEncoder, WebPQuality};
+use image::{ColorType, DynamicImage, GrayImage, RgbaImage};
+use num_traits::FromPrimitive;
 use rabex::files::SerializedFile;
 use rabex::objects::classes::{GLTextureSettings, StreamingInfo, Texture2D};
+use rabex::objects::map;
 use rabex::read_ext::{ReadSeekUrexExt, ReadUrexExt};
 
-use crate::utils::ReadAlignedExt;
-use crate::version::Version;
+use crate::class::sprite::construct_sprite;
+use crate::environment::Environment;
+use crate::utils::{solve_puzzle, ReadAlignedExt};
+use crate::version::*;
 
 pub fn construct_texture_2d<E>(
     data: &[u8],
@@ -25,20 +33,20 @@ where
 
     Ok(Texture2D {
         m_Name: reader.read_aligned_string::<E>()?,
-        m_ForcedFallbackFormat: match Version::from_str("2017.3.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_ForcedFallbackFormat: match UNITY_VERSION_2017_3_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_i32::<E>()?),
             false => None,
         },
-        m_DownscaleFallback: match Version::from_str("2017.3.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_DownscaleFallback: match UNITY_VERSION_2017_3_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_bool()?),
             false => None,
         },
-        m_IsAlphaChannelOptional: match Version::from_str("2020.2.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_IsAlphaChannelOptional: match UNITY_VERSION_2020_2_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_bool()?),
             false => None,
@@ -49,69 +57,69 @@ where
         },
         m_Height: reader.read_i32::<E>()?,
         m_CompleteImageSize: reader.read_i32::<E>()? as i64,
-        m_MipsStripped: match Version::from_str("2020.1.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_MipsStripped: match UNITY_VERSION_2020_1_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_i32::<E>()?),
             false => None,
         },
         m_TextureFormat: reader.read_i32::<E>()?,
-        m_MipMap: match Version::from_str("3.4.0f0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("5.1.5f1").unwrap()
+        m_MipMap: match UNITY_VERSION_3_4_0 <= unity_version
+            && unity_version <= UNITY_VERSION_5_1_5_F1
         {
             true => Some(reader.read_bool()?),
             false => None,
         },
-        m_MipCount: match Version::from_str("5.2.0f2").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_MipCount: match UNITY_VERSION_5_2_0_F2 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_i32::<E>()?),
             false => None,
         },
-        m_IsReadable: match unity_version >= Version::from_str("2.6.0f0").unwrap() {
+        m_IsReadable: match unity_version >= UNITY_VERSION_2_6_0 {
             true => reader.read_bool()?,
             false => false,
         },
-        m_IsPreProcessed: match Version::from_str("2019.4.9f1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_IsPreProcessed: match UNITY_VERSION_2019_4_9_F1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_bool()?),
             false => None,
         },
-        m_IgnoreMasterTextureLimit: match Version::from_str("2019.3.0f6").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.2.0a18").unwrap()
+        m_IgnoreMasterTextureLimit: match UNITY_VERSION_2019_3_0_F6 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_2_0_A18
         {
             true => Some(reader.read_bool()?),
             false => None,
         },
-        m_IgnoreMipmapLimit: match Version::from_str("2022.2.0f1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_IgnoreMipmapLimit: match UNITY_VERSION_2022_2_0_F1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_bool()?),
             false => None,
         },
-        m_MipmapLimitGroupName: match Version::from_str("2022.2.0f1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_MipmapLimitGroupName: match UNITY_VERSION_2022_2_0_F1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_string::<E>()?),
             false => None,
         },
-        m_ReadAllowed: match Version::from_str("3.4.0f0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("5.4.6f3").unwrap()
+        m_ReadAllowed: match UNITY_VERSION_3_4_0 <= unity_version
+            && unity_version <= UNITY_VERSION_5_4_6_F3
         {
             true => Some(reader.read_bool()?),
             false => None,
         },
-        m_StreamingMipmaps: match Version::from_str("2018.2.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_StreamingMipmaps: match UNITY_VERSION_2018_2_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_bool()?),
             false => None,
         },
         m_StreamingMipmapsPriority: {
             reader.align4()?;
-            match Version::from_str("2018.2.0b1").unwrap() <= unity_version
-                && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+            match UNITY_VERSION_2018_2_0_B1 <= unity_version
+                && unity_version <= UNITY_VERSION_2022_3_2_F1
             {
                 true => Some(reader.read_i32::<E>()?),
                 false => None,
@@ -123,44 +131,44 @@ where
             m_FilterMode: reader.read_i32::<E>()?,
             m_Aniso: reader.read_i32::<E>()?,
             m_MipBias: reader.read_f32::<E>()?,
-            m_WrapMode: match Version::from_str("3.4.0f0").unwrap() <= unity_version
-                && unity_version <= Version::from_str("5.6.7f1").unwrap()
+            m_WrapMode: match UNITY_VERSION_3_4_0 <= unity_version
+                && unity_version <= UNITY_VERSION_5_6_7_F1
             {
                 true => Some(reader.read_i32::<E>()?),
                 false => None,
             },
-            m_WrapU: match Version::from_str("2017.1.0b1").unwrap() <= unity_version
-                && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+            m_WrapU: match UNITY_VERSION_2017_1_0_B1 <= unity_version
+                && unity_version <= UNITY_VERSION_2022_3_2_F1
             {
                 true => Some(reader.read_i32::<E>()?),
                 false => None,
             },
-            m_WrapV: match Version::from_str("2017.1.0b1").unwrap() <= unity_version
-                && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+            m_WrapV: match UNITY_VERSION_2017_1_0_B1 <= unity_version
+                && unity_version <= UNITY_VERSION_2022_3_2_F1
             {
                 true => Some(reader.read_i32::<E>()?),
                 false => None,
             },
-            m_WrapW: match Version::from_str("2017.1.0b1").unwrap() <= unity_version
-                && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+            m_WrapW: match UNITY_VERSION_2017_1_0_B1 <= unity_version
+                && unity_version <= UNITY_VERSION_2022_3_2_F1
             {
                 true => Some(reader.read_i32::<E>()?),
                 false => None,
             },
         },
-        m_LightmapFormat: match unity_version >= Version::from_str("3.0.0f0").unwrap() {
+        m_LightmapFormat: match unity_version >= UNITY_VERSION_3_0_0 {
             true => reader.read_i32::<E>()?,
             false => i32::default(),
         },
-        m_ColorSpace: match Version::from_str("3.5.0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_ColorSpace: match UNITY_VERSION_3_5_0 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_i32::<E>()?),
             false => None,
         },
         m_PlatformBlob: {
-            let blob = match Version::from_str("2020.2.0b1").unwrap() <= unity_version
-                && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+            let blob = match UNITY_VERSION_2020_2_0_B1 <= unity_version
+                && unity_version <= UNITY_VERSION_2022_3_2_F1
             {
                 true => Some(reader.read_bytes::<E>()?),
                 false => None,
@@ -169,17 +177,17 @@ where
 
             blob
         },
-        image_data: match Version::from_str("3.4.0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        image_data: match UNITY_VERSION_3_4_0 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_bytes::<E>()?),
             false => None,
         },
-        m_StreamData: match Version::from_str("5.3.0f1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_StreamData: match UNITY_VERSION_5_3_0_F1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(StreamingInfo {
-                offset: match unity_version >= Version::from_str("2020.1.0f1").unwrap() {
+                offset: match UNITY_VERSION_2020_1_0_F1 <= unity_version {
                     true => reader.read_u64::<E>()?,
                     false => reader.read_u32::<E>()? as u64,
                 },
@@ -697,4 +705,86 @@ pub fn decode_texture(
             image::Rgba(rgba.to_be_bytes())
         },
     )))
+}
+
+pub fn extract_texture_2d<P, E>(
+    data: &[u8],
+    output_dir: &P,
+    serialized_file: &SerializedFile,
+    env: &Environment,
+) -> Result<(), Box<dyn Error>>
+where
+    P: AsRef<Path>,
+    E: ByteOrder,
+{
+    let texture = construct_texture_2d::<E>(data, serialized_file)?;
+
+    log::trace!("{:#?}", texture);
+
+    if texture.m_StreamData.is_none() {
+        return Err("Texture2D does not have a stream data".into());
+    }
+
+    let resource_name = Path::new(&texture.m_StreamData.as_ref().unwrap().path)
+        .file_name()
+        .ok_or("invalid stream data path")?
+        .to_string_lossy();
+
+    let resource = env.get_cab(resource_name.as_ref());
+    if resource.is_none() {
+        return Err("Texture2D stream data not found in resources".into());
+    }
+    let resource = resource.unwrap();
+    let img = decode_texture(
+        resource,
+        TextureFormat::from_i32(texture.m_TextureFormat).ok_or("invalid texture format")?,
+        texture.m_Width as usize,
+        texture.m_Height as usize,
+    )?;
+
+    let rects = serialized_file
+        .m_Objects
+        .iter()
+        .filter(|&o| o.m_ClassID == map::Sprite)
+        .map(|s| {
+            let sprite_data = env.get_object(s.m_PathID).unwrap();
+            construct_sprite::<E>(sprite_data, serialized_file)
+        })
+        .collect::<Result<Vec<_>, Box<dyn Error>>>()?
+        .into_iter()
+        .map(|s| (s.m_Name, s.m_Rect))
+        .collect::<HashMap<_, _>>();
+
+    let imgs = match solve_puzzle(&texture.m_Name, &img, &rects) {
+        Ok(imgs) => imgs,
+        Err(e) => {
+            log::warn!("failed to solve puzzle: {}, using the raw image", e);
+            vec![img]
+        }
+    };
+
+    if imgs.len() == 1 {
+        let img = imgs.first().unwrap();
+        let output_path = output_dir.as_ref().join(format!("{}.webp", texture.m_Name));
+
+        // XXX: Don't hardcode output image format
+        let encoder =
+            WebPEncoder::new_with_quality(File::create(&output_path)?, WebPQuality::lossless());
+
+        log::info!("writing image to {}", output_path.display());
+        encoder.encode(img.as_bytes(), img.width(), img.height(), ColorType::Rgba8)?;
+        return Ok(());
+    }
+
+    for (i, img) in imgs.iter().enumerate() {
+        let output_path = output_dir.as_ref().join(format!("{}_{}.webp", texture.m_Name, i));
+
+        // XXX: Don't hardcode output image format
+        let encoder =
+            WebPEncoder::new_with_quality(File::create(&output_path)?, WebPQuality::lossless());
+
+        log::info!("writing image to {}", output_path.display());
+        encoder.encode(img.as_bytes(), img.width(), img.height(), ColorType::Rgba8)?;
+    }
+    Ok(())
 }

@@ -11,7 +11,7 @@ use rabex::objects::PPtr;
 use rabex::read_ext::ReadUrexExt;
 
 use crate::utils::ReadAlignedExt;
-use crate::version::Version;
+use crate::version::*;
 
 pub fn construct_p_ptr<R, E>(
     reader: &mut R,
@@ -69,8 +69,8 @@ where
 
     Ok(AssetBundle {
         m_Name: reader.read_aligned_string::<E>()?,
-        m_PreloadTable: match Version::from_str("3.4.0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_PreloadTable: match UNITY_VERSION_3_4_0 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => {
                 let preload_table_len = reader.read_array_len::<E>()?;
@@ -98,8 +98,8 @@ where
             container
         },
         m_MainAsset: construct_asset_info::<_, E>(&mut reader, serialized_file)?,
-        m_ScriptCompatibility: match Version::from_str("3.4.0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("4.7.2").unwrap()
+        m_ScriptCompatibility: match UNITY_VERSION_3_4_0 <= unity_version
+            && unity_version <= UNITY_VERSION_4_7_2
         {
             true => {
                 let script_compatibility_len = reader.read_array_len::<E>()?;
@@ -118,8 +118,8 @@ where
             }
             false => None,
         },
-        m_ClassCompatibility: match Version::from_str("3.5.0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("4.7.2").unwrap()
+        m_ClassCompatibility: match UNITY_VERSION_3_5_0 <= unity_version
+            && unity_version <= UNITY_VERSION_4_7_2
         {
             true => {
                 let class_compatibility_len = reader.read_array_len::<E>()?;
@@ -133,8 +133,8 @@ where
             }
             false => None,
         },
-        m_ClassVersionMap: match Version::from_str("5.4.0f3").unwrap() <= unity_version
-            && unity_version <= Version::from_str("5.4.6f3").unwrap()
+        m_ClassVersionMap: match UNITY_VERSION_5_4_0_F3 <= unity_version
+            && unity_version <= UNITY_VERSION_5_4_6_F3
         {
             true => {
                 let version_map_len = reader.read_array_len::<E>()?;
@@ -148,20 +148,20 @@ where
             }
             false => None,
         },
-        m_RuntimeCompatibility: match Version::from_str("4.2.0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_RuntimeCompatibility: match UNITY_VERSION_4_2_0 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_u32::<E>()?),
             false => None,
         },
-        m_AssetBundleName: match Version::from_str("5.0.0f4").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_AssetBundleName: match UNITY_VERSION_5_0_0_F4 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_aligned_string::<E>()?),
             false => None,
         },
-        m_Dependencies: match Version::from_str("5.0.0f4").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_Dependencies: match UNITY_VERSION_5_0_0_F4 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => {
                 let dependencies_len = reader.read_array_len::<E>()?;
@@ -175,26 +175,26 @@ where
             }
             false => None,
         },
-        m_IsStreamedSceneAssetBundle: match Version::from_str("5.0.0f4").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_IsStreamedSceneAssetBundle: match UNITY_VERSION_5_0_0_F4 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_bool()?),
             false => None,
         },
-        m_ExplicitDataLayout: match Version::from_str("2017.3.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_ExplicitDataLayout: match UNITY_VERSION_2017_3_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_i32::<E>()?),
             false => None,
         },
-        m_PathFlags: match Version::from_str("2017.1.0b2").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_PathFlags: match UNITY_VERSION_2017_1_0_B2 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_i32::<E>()?),
             false => None,
         },
-        m_SceneHashes: match Version::from_str("2017.3.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_SceneHashes: match UNITY_VERSION_2017_3_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => {
                 let scene_hashes_len = reader.read_array_len::<E>()?;

@@ -11,7 +11,7 @@ use rabex::objects::PPtr;
 use rabex::read_ext::{ReadSeekUrexExt, ReadUrexExt};
 
 use crate::utils::{ReadAlignedExt, ReadUnityTypeExt};
-use crate::version::Version;
+use crate::version::*;
 
 use super::asset_bundle::construct_p_ptr;
 use super::mesh::{construct_sub_mesh, construct_vertex_data};
@@ -30,22 +30,22 @@ where
         m_Name: reader.read_aligned_string::<E>()?,
         m_Rect: reader.read_rectf::<E>()?,
         m_Offset: reader.read_vector_2f::<E>()?,
-        m_Border: match Version::from_str("4.5.0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_Border: match UNITY_VERSION_4_5_0 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_vector_4f::<E>()?),
             false => None,
         },
         m_PixelsToUnits: reader.read_f32::<E>()?,
-        m_Pivot: match Version::from_str("5.4.2f2").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_Pivot: match UNITY_VERSION_5_4_2_F2 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_vector_2f::<E>()?),
             false => None,
         },
         m_Extrude: reader.read_u32::<E>()?,
-        m_IsPolygon: match Version::from_str("5.3.0f1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_IsPolygon: match UNITY_VERSION_5_3_0_F1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some({
                 let is_polygon = reader.read_bool()?;
@@ -55,14 +55,14 @@ where
             }),
             false => None,
         },
-        m_RenderDataKey: match Version::from_str("2017.1.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_RenderDataKey: match UNITY_VERSION_2017_1_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some((reader.read_guid::<E>()?, reader.read_i64::<E>()?)),
             false => None,
         },
-        m_AtlasTags: match Version::from_str("2017.1.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_AtlasTags: match UNITY_VERSION_2017_1_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => {
                 let atlas_tags_len = reader.read_array_len::<E>()?;
@@ -76,15 +76,15 @@ where
             }
             false => None,
         },
-        m_SpriteAtlas: match Version::from_str("2017.1.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_SpriteAtlas: match UNITY_VERSION_2017_1_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(construct_p_ptr::<_, E>(&mut reader, serialized_file)?),
             false => None,
         },
         m_RD: construct_sprite_render_data::<_, E>(&mut reader, serialized_file)?,
-        m_PhysicsShape: match Version::from_str("2017.1.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_PhysicsShape: match UNITY_VERSION_2017_1_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => {
                 let physics_shape_len = reader.read_array_len::<E>()?;
@@ -105,8 +105,8 @@ where
             }
             false => None,
         },
-        m_Bones: match Version::from_str("2017.1.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_Bones: match UNITY_VERSION_2017_1_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => {
                 let bones_len = reader.read_array_len::<E>()?;
@@ -115,7 +115,7 @@ where
                 for _ in 0..bones_len {
                     bones.push(SpriteBone {
                         name: reader.read_aligned_string::<E>()?,
-                        guid: match unity_version <= Version::from_str("2021.1.0b1").unwrap() {
+                        guid: match unity_version <= UNITY_VERSION_2021_1_0_B1 {
                             true => Some(reader.read_aligned_string::<E>()?),
                             false => None,
                         },
@@ -123,8 +123,8 @@ where
                         rotation: reader.read_quaternionf::<E>()?,
                         length: reader.read_f32::<E>()?,
                         parentId: reader.read_i32::<E>()?,
-                        color: match Version::from_str("2021.1.0b1").unwrap() <= unity_version
-                            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+                        color: match UNITY_VERSION_2021_1_0_B1 <= unity_version
+                            && unity_version <= UNITY_VERSION_2022_3_2_F1
                         {
                             true => Some(reader.read_color_rgba_uint()?),
                             false => None,
@@ -150,20 +150,20 @@ where
     let unity_version = Version::from_str(serialized_file.m_UnityVersion.as_ref().unwrap())?;
 
     Ok(SpriteRenderData {
-        texture: match Version::from_str("4.3.0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        texture: match UNITY_VERSION_4_3_0 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => construct_p_ptr::<_, E>(reader, serialized_file)?,
             false => PPtr { m_FileID: i64::default(), m_PathID: i64::default() },
         },
-        alphaTexture: match Version::from_str("5.2.0f2").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        alphaTexture: match UNITY_VERSION_5_2_0_F2 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(construct_p_ptr::<_, E>(reader, serialized_file)?),
             false => None,
         },
-        secondaryTextures: match Version::from_str("2019.1.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        secondaryTextures: match UNITY_VERSION_2019_1_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => {
                 let secondary_textures_len = reader.read_array_len::<E>()?;
@@ -180,8 +180,8 @@ where
             }
             false => None,
         },
-        vertices: match Version::from_str("4.3.0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("5.5.6f1").unwrap()
+        vertices: match UNITY_VERSION_4_3_0 <= unity_version
+            && unity_version <= UNITY_VERSION_5_5_6_F1
         {
             true => {
                 let vertices_len = reader.read_array_len::<E>()?;
@@ -190,8 +190,8 @@ where
                 for _ in 0..vertices_len {
                     vertices.push(SpriteVertex {
                         pos: reader.read_vector_3f::<E>()?,
-                        uv: match Version::from_str("4.3.0").unwrap() <= unity_version
-                            && unity_version <= Version::from_str("5.5.6f1").unwrap()
+                        uv: match UNITY_VERSION_4_3_0 <= unity_version
+                            && unity_version <= UNITY_VERSION_5_5_6_F1
                         {
                             true => Some(reader.read_vector_2f::<E>()?),
                             false => None,
@@ -203,8 +203,8 @@ where
             }
             false => None,
         },
-        indices: match Version::from_str("4.3.0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("5.5.6f1").unwrap()
+        indices: match UNITY_VERSION_4_3_0 <= unity_version
+            && unity_version <= UNITY_VERSION_5_5_6_F1
         {
             true => {
                 let indices_len = reader.read_array_len::<E>()?;
@@ -219,8 +219,8 @@ where
             }
             false => None,
         },
-        m_SubMeshes: match Version::from_str("5.6.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_SubMeshes: match UNITY_VERSION_5_6_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => {
                 let sub_meshes_len = reader.read_array_len::<E>()?;
@@ -234,8 +234,8 @@ where
             }
             false => None,
         },
-        m_IndexBuffer: match Version::from_str("5.6.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_IndexBuffer: match UNITY_VERSION_5_6_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => {
                 let index_buffer = reader.read_bytes::<E>()?;
@@ -245,14 +245,14 @@ where
             }
             false => None,
         },
-        m_VertexData: match Version::from_str("5.6.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_VertexData: match UNITY_VERSION_5_6_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(construct_vertex_data::<_, E>(reader, serialized_file)?),
             false => None,
         },
-        m_Bindpose: match Version::from_str("2018.1.0b2").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_Bindpose: match UNITY_VERSION_2018_1_0_B2 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => {
                 let bindpose_len = reader.read_array_len::<E>()?;
@@ -266,8 +266,8 @@ where
             }
             false => None,
         },
-        m_SourceSkin: match Version::from_str("2018.1.0b2").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2018.1.9b2").unwrap()
+        m_SourceSkin: match UNITY_VERSION_2018_1_0_B2 <= unity_version
+            && unity_version <= UNITY_VERSION_2018_1_9_F2
         {
             true => {
                 let source_skin_len = reader.read_array_len::<E>()?;
@@ -283,21 +283,21 @@ where
         },
         textureRect: reader.read_rectf::<E>()?,
         textureRectOffset: reader.read_vector_2f::<E>()?,
-        atlasRectOffset: match Version::from_str("5.4.6f1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        atlasRectOffset: match UNITY_VERSION_5_4_6_F1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_vector_2f::<E>()?),
             false => None,
         },
         settingsRaw: reader.read_u32::<E>()?,
-        uvTransform: match Version::from_str("4.5.0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        uvTransform: match UNITY_VERSION_4_5_0 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_vector_4f::<E>()?),
             false => None,
         },
-        downscaleMultiplier: match Version::from_str("2017.1.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        downscaleMultiplier: match UNITY_VERSION_2017_1_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_f32::<E>()?),
             false => None,
