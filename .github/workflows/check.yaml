@@ -14,7 +14,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
 
     steps:
       - name: Check out
@@ -48,22 +48,11 @@ jobs:
         run: cargo install cargo-deny cargo-outdated cargo-udeps cargo-audit cargo-pants || true
 
       - name: Check
-        if: ${{ !contains('Windows', runner.os) }}
         run: |
           cargo deny check
           cargo outdated --exit-code 1
           cargo udeps
           rm -rf ~/.cargo/advisory-db
-          cargo audit
-          cargo pants
-
-      - name: Check
-        if: ${{ contains('Windows', runner.os) }}
-        run: |
-          cargo deny check
-          cargo outdated --exit-code 1
-          cargo udeps
-          rm -Recurse -Force ~/.cargo/advisory-db
           cargo audit
           cargo pants
 
