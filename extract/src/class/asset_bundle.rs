@@ -103,8 +103,7 @@ where
         {
             true => {
                 let script_compatibility_len = reader.read_array_len::<E>()?;
-                let mut script_compatibility =
-                    Vec::with_capacity(script_compatibility_len);
+                let mut script_compatibility = Vec::with_capacity(script_compatibility_len);
 
                 for _ in 0..script_compatibility_len {
                     script_compatibility.push(AssetBundleScriptInfo {

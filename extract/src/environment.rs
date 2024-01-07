@@ -31,7 +31,7 @@ impl Environment {
         self.objects.insert(path_id, buf);
     }
 
-    pub fn get_object<'a>(&'a self, path_id: i64) -> Option<&'a [u8]> {
+    pub fn get_object(&self, path_id: i64) -> Option<&[u8]> {
         self.objects.get(&path_id).map(|x| x.as_slice())
     }
 }
