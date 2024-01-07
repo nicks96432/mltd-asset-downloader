@@ -7,6 +7,7 @@ use rabex::files::SerializedFile;
 use rabex::objects::classes::{
     SecondarySpriteTexture, Sprite, SpriteBone, SpriteRenderData, SpriteVertex,
 };
+use rabex::objects::PPtr;
 use rabex::read_ext::{ReadSeekUrexExt, ReadUrexExt};
 
 use crate::utils::{ReadAlignedExt, ReadUnityTypeExt};
@@ -149,7 +150,12 @@ where
     let unity_version = Version::from_str(serialized_file.m_UnityVersion.as_ref().unwrap())?;
 
     Ok(SpriteRenderData {
-        texture: construct_p_ptr::<_, E>(reader, serialized_file)?,
+        texture: match Version::from_str("4.3.0").unwrap() <= unity_version
+            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        {
+            true => construct_p_ptr::<_, E>(reader, serialized_file)?,
+            false => PPtr { m_FileID: i64::default(), m_PathID: i64::default() },
+        },
         alphaTexture: match Version::from_str("5.2.0f2").unwrap() <= unity_version
             && unity_version <= Version::from_str("2022.3.2f1").unwrap()
         {
@@ -278,20 +284,20 @@ where
         textureRect: reader.read_rectf::<E>()?,
         textureRectOffset: reader.read_vector_2f::<E>()?,
         atlasRectOffset: match Version::from_str("5.4.6f1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2018.1.9b2").unwrap()
+            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
         {
             true => Some(reader.read_vector_2f::<E>()?),
             false => None,
         },
         settingsRaw: reader.read_u32::<E>()?,
         uvTransform: match Version::from_str("4.5.0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2018.1.9b2").unwrap()
+            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
         {
             true => Some(reader.read_vector_4f::<E>()?),
             false => None,
         },
         downscaleMultiplier: match Version::from_str("2017.1.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2018.1.9b2").unwrap()
+            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
         {
             true => Some(reader.read_f32::<E>()?),
             false => None,

@@ -685,12 +685,16 @@ pub fn decode_texture(
         _ => return Err(format!("unsupported texture format: {:?}", format).into()),
     };
 
-    Ok(DynamicImage::ImageRgba8(RgbaImage::from_fn(1024, 1024, |x, y| {
-        let i = (y * 1024 + x) as usize;
+    Ok(DynamicImage::ImageRgba8(RgbaImage::from_fn(
+        width as u32,
+        height as u32,
+        |x, y| {
+            let i = (y * width as u32 + x) as usize;
 
-        // decoded image is in ARGB format, so we need to convert it to RGBA
-        let rgba = output[i].rotate_left(8);
+            // decoded image is in ARGB format, so we need to convert it to RGBA
+            let rgba = output[i].rotate_left(8);
 
-        image::Rgba(rgba.to_be_bytes())
-    })))
+            image::Rgba(rgba.to_be_bytes())
+        },
+    )))
 }

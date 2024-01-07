@@ -3,6 +3,7 @@ mod environment;
 mod utils;
 mod version;
 
+use std::collections::HashMap;
 use std::error::Error;
 use std::fs::{create_dir_all, read_dir, File};
 use std::io::{Cursor, Seek, SeekFrom, Write};
@@ -193,7 +194,9 @@ where
 
     // TODO: Add option to specify output format
     let path = output_dir.as_ref().join(Path::new(&track.name).with_extension("wav"));
-    let mut file = File::create(path)?;
+    let mut file = File::create(&path)?;
+
+    log::info!("writing audio to {}", path.display());
     file.write_all(&track.data)?;
 
     Ok(())
@@ -244,19 +247,39 @@ where
         })
         .collect::<Result<Vec<_>, Box<dyn Error>>>()?
         .into_iter()
-        .map(|s| s.m_Rect)
-        .collect::<Vec<_>>();
+        .map(|s| (s.m_Name, s.m_Rect))
+        .collect::<HashMap<_, _>>();
 
-    solve_puzzle(&texture.m_Name, &img, &rects);
+    let imgs = match solve_puzzle(&texture.m_Name, &img, &rects) {
+        Ok(imgs) => imgs,
+        Err(e) => {
+            log::warn!("failed to solve puzzle: {}, using the raw image", e);
+            vec![img]
+        }
+    };
 
-    let output_path = output_dir.as_ref().join(texture.m_Name + ".webp");
+    if imgs.len() == 1 {
+        let img = imgs.first().unwrap();
+        let output_path = output_dir.as_ref().join(format!("{}.webp", texture.m_Name));
 
-    // XXX: Don't hardcode output image format
-    let encoder =
-        WebPEncoder::new_with_quality(File::create(&output_path)?, WebPQuality::lossless());
+        // XXX: Don't hardcode output image format
+        let encoder =
+            WebPEncoder::new_with_quality(File::create(&output_path)?, WebPQuality::lossless());
 
-    log::debug!("writing image to {}", output_path.display());
-    encoder.encode(img.as_bytes(), img.width(), img.height(), ColorType::Rgba8)?;
+        log::info!("writing image to {}", output_path.display());
+        encoder.encode(img.as_bytes(), img.width(), img.height(), ColorType::Rgba8)?;
+        return Ok(());
+    }
 
+    for (i, img) in imgs.iter().enumerate() {
+        let output_path = output_dir.as_ref().join(format!("{}_{}.webp", texture.m_Name, i));
+
+        // XXX: Don't hardcode output image format
+        let encoder =
+            WebPEncoder::new_with_quality(File::create(&output_path)?, WebPQuality::lossless());
+
+        log::info!("writing image to {}", output_path.display());
+        encoder.encode(img.as_bytes(), img.width(), img.height(), ColorType::Rgba8)?;
+    }
     Ok(())
 }
