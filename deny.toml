@@ -19,7 +19,15 @@ vulnerability = "deny"
 yanked = "warn"
 
 [licenses]
-allow = ["Apache-2.0", "ISC", "MIT", "MPL-2.0", "Zlib", "BSD-3-Clause"]
+allow = [
+    "Apache-2.0",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "Zlib",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+]
 allow-osi-fsf-free = "neither"
 confidence-threshold = 0.83
 copyleft = "deny"

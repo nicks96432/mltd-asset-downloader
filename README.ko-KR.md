@@ -35,7 +35,7 @@ Options:
 
 The following is required:
 
-* nightly version of rust toolchain.
+* A rust toolchain.
 * cmake >= 3.2 (for libcgss)
 * MSVC v142 or newer version. (Windows)
 * ... or any compiler that supports C++14. (gnu environment)
@@ -44,8 +44,14 @@ The following is required:
 cargo build --release
 ```
 
+## Disclaimer
+
+None of the repo, the tool, nor the repo owner is affiliated with, or sponsored or authorized by
+Bandai Namco Entertainment and Unity Technologies, nor their affiliates or subsidiaries.
+
 ## 라이센스
 
 Licensed under [MIT](LICENSE).
 
-The copyright of anything that downloaded from this program belongs to Bandai Namco Entertainment.
+The copyright of anything that downloaded or extracted from this program belongs to
+Bandai Namco Entertainment.

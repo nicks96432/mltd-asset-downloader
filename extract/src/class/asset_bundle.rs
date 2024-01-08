@@ -4,16 +4,16 @@ use std::mem::size_of_val;
 use std::slice::from_raw_parts;
 use std::str::FromStr;
 
-use byteorder::{ByteOrder, ReadBytesExt};
+use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
 use rabex::files::SerializedFile;
 use rabex::objects::classes::{AssetBundle, AssetBundleScriptInfo, AssetInfo};
 use rabex::objects::PPtr;
 use rabex::read_ext::ReadUrexExt;
 
 use crate::utils::ReadAlignedExt;
-use crate::version::Version;
+use crate::version::*;
 
-pub fn construct_p_ptr<R, E>(
+pub fn _construct_p_ptr<R, E>(
     reader: &mut R,
     serialized_file: &SerializedFile,
 ) -> Result<PPtr, Box<dyn Error>>
@@ -42,22 +42,59 @@ where
     })
 }
 
-pub fn construct_asset_info<R, E>(
+pub fn construct_p_ptr<R>(
+    reader: &mut R,
+    serialized_file: &SerializedFile,
+) -> Result<PPtr, Box<dyn Error>>
+where
+    R: Read + Seek,
+{
+    let big_endian = unsafe {
+        from_raw_parts(
+            (&serialized_file.m_Header as *const _) as *const u8,
+            size_of_val(&serialized_file.m_Header),
+        )
+    }[0x20]
+        > 0;
+
+    match big_endian {
+        true => _construct_p_ptr::<_, BigEndian>(reader, serialized_file),
+        false => _construct_p_ptr::<_, LittleEndian>(reader, serialized_file),
+    }
+}
+
+pub fn construct_asset_info<R>(
     reader: &mut R,
     serialized_file: &SerializedFile,
 ) -> Result<AssetInfo, Box<dyn Error>>
 where
     R: Read + Seek,
-    E: ByteOrder,
 {
-    Ok(AssetInfo {
-        preloadIndex: reader.read_i32::<E>()?,
-        preloadSize: reader.read_i32::<E>()?,
-        asset: construct_p_ptr::<_, E>(reader, serialized_file)?,
-    })
+    let big_endian = unsafe {
+        from_raw_parts(
+            (&serialized_file.m_Header as *const _) as *const u8,
+            size_of_val(&serialized_file.m_Header),
+        )
+    }[0x20]
+        > 0;
+
+    let asset_info = match big_endian {
+        true => AssetInfo {
+            preloadIndex: reader.read_i32::<BigEndian>()?,
+            preloadSize: reader.read_i32::<BigEndian>()?,
+            asset: construct_p_ptr(reader, serialized_file)?,
+        },
+        false => AssetInfo {
+            preloadIndex: reader.read_i32::<LittleEndian>()?,
+            preloadSize: reader.read_i32::<LittleEndian>()?,
+            asset: construct_p_ptr(reader, serialized_file)?,
+        },
+    };
+
+    Ok(asset_info)
 }
 
-pub fn construct_asset_bundle<E>(
+pub fn _construct_asset_bundle<E>(
     data: &[u8],
     serialized_file: &SerializedFile,
 ) -> Result<AssetBundle, Box<dyn Error>>
@@ -69,15 +106,15 @@ where
 
     Ok(AssetBundle {
         m_Name: reader.read_aligned_string::<E>()?,
-        m_PreloadTable: match Version::from_str("3.4.0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_PreloadTable: match UNITY_VERSION_3_4_0 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => {
                 let preload_table_len = reader.read_array_len::<E>()?;
                 let mut preload_table = Vec::with_capacity(preload_table_len);
 
                 for _ in 0..preload_table_len {
-                    preload_table.push(construct_p_ptr::<_, E>(&mut reader, serialized_file)?);
+                    preload_table.push(_construct_p_ptr::<_, E>(&mut reader, serialized_file)?);
                 }
 
                 preload_table
@@ -91,15 +128,15 @@ where
             for _ in 0..container_len {
                 let key = reader.read_aligned_string::<E>()?;
 
-                let value = construct_asset_info::<_, E>(&mut reader, serialized_file)?;
+                let value = construct_asset_info(&mut reader, serialized_file)?;
                 container.push((key, value));
             }
 
             container
         },
-        m_MainAsset: construct_asset_info::<_, E>(&mut reader, serialized_file)?,
-        m_ScriptCompatibility: match Version::from_str("3.4.0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("4.7.2").unwrap()
+        m_MainAsset: construct_asset_info(&mut reader, serialized_file)?,
+        m_ScriptCompatibility: match UNITY_VERSION_3_4_0 <= unity_version
+            && unity_version <= UNITY_VERSION_4_7_2
         {
             true => {
                 let script_compatibility_len = reader.read_array_len::<E>()?;
@@ -118,8 +155,8 @@ where
             }
             false => None,
         },
-        m_ClassCompatibility: match Version::from_str("3.5.0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("4.7.2").unwrap()
+        m_ClassCompatibility: match UNITY_VERSION_3_5_0 <= unity_version
+            && unity_version <= UNITY_VERSION_4_7_2
         {
             true => {
                 let class_compatibility_len = reader.read_array_len::<E>()?;
@@ -133,8 +170,8 @@ where
             }
             false => None,
         },
-        m_ClassVersionMap: match Version::from_str("5.4.0f3").unwrap() <= unity_version
-            && unity_version <= Version::from_str("5.4.6f3").unwrap()
+        m_ClassVersionMap: match UNITY_VERSION_5_4_0_F3 <= unity_version
+            && unity_version <= UNITY_VERSION_5_4_6_F3
         {
             true => {
                 let version_map_len = reader.read_array_len::<E>()?;
@@ -148,20 +185,20 @@ where
             }
             false => None,
         },
-        m_RuntimeCompatibility: match Version::from_str("4.2.0").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_RuntimeCompatibility: match UNITY_VERSION_4_2_0 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_u32::<E>()?),
             false => None,
         },
-        m_AssetBundleName: match Version::from_str("5.0.0f4").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_AssetBundleName: match UNITY_VERSION_5_0_0_F4 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_aligned_string::<E>()?),
             false => None,
         },
-        m_Dependencies: match Version::from_str("5.0.0f4").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_Dependencies: match UNITY_VERSION_5_0_0_F4 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => {
                 let dependencies_len = reader.read_array_len::<E>()?;
@@ -175,26 +212,26 @@ where
             }
             false => None,
         },
-        m_IsStreamedSceneAssetBundle: match Version::from_str("5.0.0f4").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_IsStreamedSceneAssetBundle: match UNITY_VERSION_5_0_0_F4 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_bool()?),
             false => None,
         },
-        m_ExplicitDataLayout: match Version::from_str("2017.3.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_ExplicitDataLayout: match UNITY_VERSION_2017_3_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_i32::<E>()?),
             false => None,
         },
-        m_PathFlags: match Version::from_str("2017.1.0b2").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_PathFlags: match UNITY_VERSION_2017_1_0_B2 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => Some(reader.read_i32::<E>()?),
             false => None,
         },
-        m_SceneHashes: match Version::from_str("2017.3.0b1").unwrap() <= unity_version
-            && unity_version <= Version::from_str("2022.3.2f1").unwrap()
+        m_SceneHashes: match UNITY_VERSION_2017_3_0_B1 <= unity_version
+            && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
             true => {
                 let scene_hashes_len = reader.read_array_len::<E>()?;
@@ -212,4 +249,22 @@ where
             false => None,
         },
     })
+}
+
+pub fn construct_asset_bundle(
+    data: &[u8],
+    serialized_file: &SerializedFile,
+) -> Result<AssetBundle, Box<dyn Error>> {
+    let big_endian = unsafe {
+        from_raw_parts(
+            (&serialized_file.m_Header as *const _) as *const u8,
+            size_of_val(&serialized_file.m_Header),
+        )
+    }[0x20]
+        > 0;
+
+    match big_endian {
+        true => _construct_asset_bundle::<BigEndian>(data, serialized_file),
+        false => _construct_asset_bundle::<LittleEndian>(data, serialized_file),
+    }
 }
