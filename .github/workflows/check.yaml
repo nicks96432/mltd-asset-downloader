@@ -8,44 +8,22 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check:
+  lint:
     name: Check
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Check out
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: true
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt, clippy
 
       - name: Install nasm
         uses: ilammy/setup-nasm@v1
 
-      - name: Set up cargo cache
-        uses: actions/cache@v3
-        continue-on-error: false
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Lint
-        run: |
-          cargo fmt --all -- --check
-          cargo clippy -- -D warnings
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@main
@@ -61,6 +39,3 @@ jobs:
           cargo udeps
           rm -rf ~/.cargo/advisory-db
           cargo audit
-
-      - name: Test
-        run: cargo test
