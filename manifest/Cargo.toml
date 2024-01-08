@@ -14,7 +14,7 @@ serde = { workspace = true }
 ureq = { workspace = true }
 
 [dependencies.clap]
-features = ["derive"]
+features = ["deprecated", "derive"]
 workspace = true
 
 [dependencies.linked-hash-map]

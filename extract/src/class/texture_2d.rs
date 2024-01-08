@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use std::error::Error;
-use std::fs::File;
 use std::io::Cursor;
+use std::mem::size_of_val;
 use std::path::Path;
+use std::slice::from_raw_parts;
 use std::str::FromStr;
 
-use byteorder::{ByteOrder, ReadBytesExt};
-use image::codecs::webp::{WebPEncoder, WebPQuality};
-use image::{ColorType, DynamicImage, GrayImage, RgbaImage};
+use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
+use image::{DynamicImage, GrayImage, RgbaImage};
 use num_traits::FromPrimitive;
 use rabex::files::SerializedFile;
 use rabex::objects::classes::{GLTextureSettings, StreamingInfo, Texture2D};
@@ -16,10 +16,10 @@ use rabex::read_ext::{ReadSeekUrexExt, ReadUrexExt};
 
 use crate::class::sprite::construct_sprite;
 use crate::environment::Environment;
-use crate::utils::{solve_puzzle, ReadAlignedExt};
-use crate::version::*;
+use crate::utils::{solve_puzzle, write_buffer_with_format, ReadAlignedExt};
+use crate::{version::*, ExtractorArgs};
 
-pub fn construct_texture_2d<E>(
+fn _construct_texture_2d<E>(
     data: &[u8],
     serialized_file: &SerializedFile,
 ) -> Result<Texture2D, Box<dyn Error>>
@@ -197,6 +197,24 @@ where
             false => None,
         },
     })
+}
+
+pub fn construct_texture_2d(
+    data: &[u8],
+    serialized_file: &SerializedFile,
+) -> Result<Texture2D, Box<dyn Error>> {
+    let big_endian = unsafe {
+        from_raw_parts(
+            (&serialized_file.m_Header as *const _) as *const u8,
+            size_of_val(&serialized_file.m_Header),
+        )
+    }[0x20]
+        > 0;
+
+    match big_endian {
+        true => _construct_texture_2d::<BigEndian>(data, serialized_file),
+        false => _construct_texture_2d::<LittleEndian>(data, serialized_file),
+    }
 }
 
 /// Format used when creating textures from scripts.
@@ -707,17 +725,17 @@ pub fn decode_texture(
     )))
 }
 
-pub fn extract_texture_2d<P, E>(
+pub fn extract_texture_2d<P>(
     data: &[u8],
-    output_dir: &P,
+    output_dir: P,
+    args: &ExtractorArgs,
     serialized_file: &SerializedFile,
     env: &Environment,
 ) -> Result<(), Box<dyn Error>>
 where
     P: AsRef<Path>,
-    E: ByteOrder,
 {
-    let texture = construct_texture_2d::<E>(data, serialized_file)?;
+    let texture = construct_texture_2d(data, serialized_file)?;
 
     log::trace!("{:#?}", texture);
 
@@ -748,7 +766,7 @@ where
         .filter(|&o| o.m_ClassID == map::Sprite)
         .map(|s| {
             let sprite_data = env.get_object(s.m_PathID).unwrap();
-            construct_sprite::<E>(sprite_data, serialized_file)
+            construct_sprite(sprite_data, serialized_file)
         })
         .collect::<Result<Vec<_>, Box<dyn Error>>>()?
         .into_iter()
@@ -763,28 +781,13 @@ where
         }
     };
 
-    if imgs.len() == 1 {
-        let img = imgs.first().unwrap();
-        let output_path = output_dir.as_ref().join(format!("{}.webp", texture.m_Name));
-
-        // XXX: Don't hardcode output image format
-        let encoder =
-            WebPEncoder::new_with_quality(File::create(&output_path)?, WebPQuality::lossless());
-
-        log::info!("writing image to {}", output_path.display());
-        encoder.encode(img.as_bytes(), img.width(), img.height(), ColorType::Rgba8)?;
-        return Ok(());
-    }
-
     for (i, img) in imgs.iter().enumerate() {
-        let output_path = output_dir.as_ref().join(format!("{}_{}.webp", texture.m_Name, i));
+        let output_path = output_dir.as_ref().join(match imgs.len() == 1 {
+            true => format!("{}", texture.m_Name),
+            false => format!("{}_{}", texture.m_Name, i),
+        }).with_extension(args.image_format.extensions_str()[0]);
 
-        // XXX: Don't hardcode output image format
-        let encoder =
-            WebPEncoder::new_with_quality(File::create(&output_path)?, WebPQuality::lossless());
-
-        log::info!("writing image to {}", output_path.display());
-        encoder.encode(img.as_bytes(), img.width(), img.height(), ColorType::Rgba8)?;
+        write_buffer_with_format(&img, &output_path, &args.image_format, args.image_quality)?;
     }
     Ok(())
 }

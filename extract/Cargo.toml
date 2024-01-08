@@ -26,12 +26,22 @@ rabex = "0.0.3"
 texture2ddecoder = "0.0.5"
 
 [dependencies.clap]
-features = ["derive"]
+features = ["deprecated", "derive"]
 workspace = true
 
 # For image encoding
 [dependencies.image]
-features = ["webp-encoder"]
+features = [
+    "avif-encoder",
+    "bmp",
+    "jpeg",
+    "jpeg_rayon",
+    "png",
+    "tiff",
+    "webp",
+    "webp-encoder",
+]
+default-features = false
 version = "0.24.7"
 
 # For regex matching in texture name

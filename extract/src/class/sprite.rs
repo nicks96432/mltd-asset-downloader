@@ -1,8 +1,10 @@
 use std::error::Error;
 use std::io::Cursor;
+use std::mem::size_of_val;
+use std::slice::from_raw_parts;
 use std::str::FromStr;
 
-use byteorder::{ByteOrder, ReadBytesExt};
+use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
 use rabex::files::SerializedFile;
 use rabex::objects::classes::{
     SecondarySpriteTexture, Sprite, SpriteBone, SpriteRenderData, SpriteVertex,
@@ -13,10 +15,10 @@ use rabex::read_ext::{ReadSeekUrexExt, ReadUrexExt};
 use crate::utils::{ReadAlignedExt, ReadUnityTypeExt};
 use crate::version::*;
 
-use super::asset_bundle::construct_p_ptr;
+use super::asset_bundle::_construct_p_ptr;
 use super::mesh::{construct_sub_mesh, construct_vertex_data};
 
-pub fn construct_sprite<E>(
+pub fn _construct_sprite<E>(
     data: &[u8],
     serialized_file: &SerializedFile,
 ) -> Result<Sprite, Box<dyn Error>>
@@ -79,7 +81,7 @@ where
         m_SpriteAtlas: match UNITY_VERSION_2017_1_0_B1 <= unity_version
             && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
-            true => Some(construct_p_ptr::<_, E>(&mut reader, serialized_file)?),
+            true => Some(_construct_p_ptr::<_, E>(&mut reader, serialized_file)?),
             false => None,
         },
         m_RD: construct_sprite_render_data::<_, E>(&mut reader, serialized_file)?,
@@ -139,6 +141,24 @@ where
     })
 }
 
+pub fn construct_sprite(
+    data: &[u8],
+    serialized_file: &SerializedFile,
+) -> Result<Sprite, Box<dyn Error>> {
+    let big_endian = unsafe {
+        from_raw_parts(
+            (&serialized_file.m_Header as *const _) as *const u8,
+            size_of_val(&serialized_file.m_Header),
+        )
+    }[0x20]
+        > 0;
+
+    match big_endian {
+        true => _construct_sprite::<BigEndian>(data, serialized_file),
+        false => _construct_sprite::<LittleEndian>(data, serialized_file),
+    }
+}
+
 pub fn construct_sprite_render_data<R, E>(
     reader: &mut R,
     serialized_file: &SerializedFile,
@@ -153,13 +173,13 @@ where
         texture: match UNITY_VERSION_4_3_0 <= unity_version
             && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
-            true => construct_p_ptr::<_, E>(reader, serialized_file)?,
+            true => _construct_p_ptr::<_, E>(reader, serialized_file)?,
             false => PPtr { m_FileID: i64::default(), m_PathID: i64::default() },
         },
         alphaTexture: match UNITY_VERSION_5_2_0_F2 <= unity_version
             && unity_version <= UNITY_VERSION_2022_3_2_F1
         {
-            true => Some(construct_p_ptr::<_, E>(reader, serialized_file)?),
+            true => Some(_construct_p_ptr::<_, E>(reader, serialized_file)?),
             false => None,
         },
         secondaryTextures: match UNITY_VERSION_2019_1_0_B1 <= unity_version
@@ -171,7 +191,7 @@ where
 
                 for _ in 0..secondary_textures_len {
                     secondary_textures.push(SecondarySpriteTexture {
-                        texture: construct_p_ptr::<_, E>(reader, serialized_file)?,
+                        texture: _construct_p_ptr::<_, E>(reader, serialized_file)?,
                         name: reader.read_aligned_string::<E>()?,
                     });
                 }
