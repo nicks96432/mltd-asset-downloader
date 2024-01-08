@@ -49,7 +49,9 @@ jobs:
 
       - name: Rename artifact
         if: ${{ !contains('Windows', runner.os) }}
-        run: mv target/release/mltd mltd-git-${{ steps.hash.outputs.hash }}-${{ runner.os }}
+        run: |
+          chmod +x target/release/mltd
+          mv target/release/mltd mltd-git-${{ steps.hash.outputs.hash }}-${{ runner.os }}
 
       - name: Publish artifact (Windows)
         if: ${{ contains('Windows', runner.os) }}
