@@ -1,5 +1,8 @@
 workflows:
   aarch64-darwin-build:
+    triggering:
+      events:
+        - tag
     scripts:
       - name: Update submodule
         script: git submodule update --init --recursive
