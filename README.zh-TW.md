@@ -35,7 +35,7 @@ Commands:
 
 你需要這些東西:
 
-* nightly版的rust
+* rust toolchain
 * cmake >= 3.2 (libcgss要用到)
 * MSVC v142或者更新 (Windows)
 * ...或是其他支援C++14的編譯器 (gnu環境)
@@ -46,8 +46,13 @@ cargo build --release
 
 執行檔會出現在`target/release`資料夾裡。
 
+## 免責聲明
+
+本軟體、工具、以及本軟體的作者與本軟體的repo與萬代南夢宮娛樂、Unity Technologies、以及他們的子公司
+沒有任何關係，也沒有任何贊助或授權關係。
+
 ## 授權條款
 
 本軟體遵守[MIT](LICENSE)授權條款。
 
-所有從本軟體下載的資料版權由萬代南夢宮娛樂所有。
+所有從本軟體下載和拆出的資料，其版權由萬代南夢宮娛樂所有。

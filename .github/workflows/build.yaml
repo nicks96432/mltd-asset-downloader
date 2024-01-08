@@ -23,9 +23,7 @@ jobs:
           submodules: true
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt, clippy
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Set up cargo cache
         uses: actions/cache@v3
