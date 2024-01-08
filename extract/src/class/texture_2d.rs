@@ -782,12 +782,15 @@ where
     };
 
     for (i, img) in imgs.iter().enumerate() {
-        let output_path = output_dir.as_ref().join(match imgs.len() == 1 {
-            true => format!("{}", texture.m_Name),
-            false => format!("{}_{}", texture.m_Name, i),
-        }).with_extension(args.image_format.extensions_str()[0]);
+        let output_path = output_dir
+            .as_ref()
+            .join(match imgs.len() == 1 {
+                true => texture.m_Name.to_owned(),
+                false => format!("{}_{}", texture.m_Name, i),
+            })
+            .with_extension(args.image_format.extensions_str()[0]);
 
-        write_buffer_with_format(&img, &output_path, &args.image_format, args.image_quality)?;
+        write_buffer_with_format(img, &output_path, &args.image_format, args.image_quality)?;
     }
     Ok(())
 }

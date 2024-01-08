@@ -54,7 +54,8 @@ where
             (&serialized_file.m_Header as *const _) as *const u8,
             size_of_val(&serialized_file.m_Header),
         )
-    }[0x20] > 0;
+    }[0x20]
+        > 0;
 
     match big_endian {
         true => _construct_p_ptr::<_, BigEndian>(reader, serialized_file),
@@ -259,7 +260,8 @@ pub fn construct_asset_bundle(
             (&serialized_file.m_Header as *const _) as *const u8,
             size_of_val(&serialized_file.m_Header),
         )
-    }[0x20] > 0;
+    }[0x20]
+        > 0;
 
     match big_endian {
         true => _construct_asset_bundle::<BigEndian>(data, serialized_file),

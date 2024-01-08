@@ -48,7 +48,7 @@ pub struct ExtractorArgs {
 
 fn number_range(s: &str) -> Result<u8, String> {
     let n = s.parse::<i32>().map_err(|e| e.to_string())?;
-    if n < 0 || n > 100 {
+    if !(0..=100).contains(&n) {
         return Err(format!("{} is out of range [0, 100]", n));
     }
 
@@ -61,7 +61,7 @@ pub fn extract_media(args: &ExtractorArgs) -> Result<(), Box<dyn Error>> {
     let input_realpath = args.input.canonicalize()?;
 
     if input_realpath.is_file() {
-        return extract_file(&input_realpath, &args);
+        return extract_file(&input_realpath, args);
     }
 
     if !input_realpath.is_dir() {
@@ -70,7 +70,7 @@ pub fn extract_media(args: &ExtractorArgs) -> Result<(), Box<dyn Error>> {
     }
 
     for entry in read_dir(&args.input)? {
-        extract_file(&entry?.path(), &args)?;
+        extract_file(&entry?.path(), args)?;
     }
 
     Ok(())
