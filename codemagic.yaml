@@ -5,10 +5,14 @@ workflows:
         script: git submodule update --init --recursive
       - name: Install rust non-interactively
         script: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-      - name: Use nightly rust
-        script: $HOME/.cargo/bin/rustup default nightly
+      - name: Init rust
+        script: $HOME/.cargo/bin/rustup default stable
       - name: Build
         script: $HOME/.cargo/bin/cargo build --release
+      - name: Move artifact
+        script: |
+          chmod +x target/release/mltd
+          mv target/release/mltd mltd-$(git describe --tags --always)-aarch64-apple-darwin
 
     artifacts:
-      - target/release/mltd
+      - mltd-*
