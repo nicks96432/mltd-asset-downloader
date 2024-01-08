@@ -27,6 +27,9 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Install nasm
+        uses: ilammy/setup-nasm@v1
+
       - name: Set up cargo cache
         uses: actions/cache@v3
         continue-on-error: false

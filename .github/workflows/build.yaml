@@ -25,6 +25,9 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install nasm
+        uses: ilammy/setup-nasm@v1
+
       - name: Set up cargo cache
         uses: actions/cache@v3
         continue-on-error: false
