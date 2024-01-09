@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::error::Error;
+use std::fs::File;
 use std::io::Cursor;
 use std::mem::size_of_val;
 use std::path::Path;
@@ -7,7 +8,9 @@ use std::slice::from_raw_parts;
 use std::str::FromStr;
 
 use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
+use image::codecs::png::PngEncoder;
 use image::{DynamicImage, GrayImage, RgbaImage};
+use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use rabex::files::SerializedFile;
 use rabex::objects::classes::{GLTextureSettings, StreamingInfo, Texture2D};
@@ -16,7 +19,7 @@ use rabex::read_ext::{ReadSeekUrexExt, ReadUrexExt};
 
 use crate::class::sprite::construct_sprite;
 use crate::environment::Environment;
-use crate::utils::{solve_puzzle, write_buffer_with_format, ReadAlignedExt};
+use crate::utils::{ffmpeg, solve_puzzle, ReadAlignedExt};
 use crate::{version::*, ExtractorArgs};
 
 fn _construct_texture_2d<E>(
@@ -218,7 +221,7 @@ pub fn construct_texture_2d(
 }
 
 /// Format used when creating textures from scripts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, num_derive::FromPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 pub enum TextureFormat {
     /// Alpha-only texture format, 8 bit integer.
     ///
@@ -752,6 +755,7 @@ where
     if resource.is_none() {
         return Err("Texture2D stream data not found in resources".into());
     }
+
     let resource = resource.unwrap();
     let img = decode_texture(
         resource,
@@ -788,9 +792,19 @@ where
                 true => texture.m_Name.to_owned(),
                 false => format!("{}_{}", texture.m_Name, i),
             })
-            .with_extension(args.image_format.extensions_str()[0]);
+            .with_extension(&args.image_ext);
 
-        write_buffer_with_format(img, &output_path, &args.image_format, args.image_quality)?;
+        log::info!("writing image to {}", output_path.display());
+
+        if args.image_ext == "png" && args.image_args.is_empty() {
+            img.write_with_encoder(PngEncoder::new(File::create(output_path)?))?;
+            return Ok(());
+        }
+
+        let mut buf = Vec::new();
+        img.write_with_encoder(PngEncoder::new(Cursor::new(&mut buf)))?;
+
+        ffmpeg(&buf, num_cpus::get() / args.parallel, &args.image_args, output_path)?;
     }
     Ok(())
 }

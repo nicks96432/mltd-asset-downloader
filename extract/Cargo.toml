@@ -31,16 +31,7 @@ workspace = true
 
 # For image encoding
 [dependencies.image]
-features = [
-    "avif-encoder",
-    "bmp",
-    "jpeg",
-    "jpeg_rayon",
-    "png",
-    "tiff",
-    "webp",
-    "webp-encoder",
-]
+features = ["png"]
 default-features = false
 version = "0.24.7"
 

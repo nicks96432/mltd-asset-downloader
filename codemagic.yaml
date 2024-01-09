@@ -26,4 +26,4 @@ workflows:
         - $HOME/.cargo/registry/index/
         - $HOME/.cargo/registry/cache/
         - $HOME/.cargo/git/db/
-        - target/ 
+        - target/

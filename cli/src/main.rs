@@ -1,4 +1,6 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
+use clap_verbosity_flag::{InfoLevel, Verbosity};
+
 use mltd_utils::log_formatter;
 
 #[cfg(feature = "download")]
@@ -18,10 +20,10 @@ struct Cli {
     command: Command,
 
     #[command(flatten)]
-    verbose: clap_verbosity_flag::Verbosity<clap_verbosity_flag::InfoLevel>,
+    verbose: Verbosity<InfoLevel>,
 }
 
-#[derive(clap::Subcommand)]
+#[derive(Subcommand)]
 enum Command {
     #[cfg(feature = "download")]
     /// Download assets from MLTD asset server
