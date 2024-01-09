@@ -20,7 +20,7 @@ use crate::class::texture_2d::extract_texture_2d;
 use crate::environment::{check_file_type, FileType};
 
 #[derive(Debug, clap::Args)]
-#[command(author, version, about, arg_required_else_help(true), next_display_order = 0)]
+#[command(author, version, about, arg_required_else_help(true))]
 pub struct ExtractorArgs {
     /// The input directory or file
     #[arg(value_name = "PATH")]
