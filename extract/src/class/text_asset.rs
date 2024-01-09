@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::fs::write;
 use std::io::Cursor;
 use std::mem::size_of_val;
 use std::path::Path;
@@ -69,6 +70,13 @@ where
     let text_asset = construct_text_asset(data, serialized_file)?;
     let wav = acb::to_tracks(text_asset.m_Script.as_bytes())?.swap_remove(0);
     let output_path = output_dir.as_ref().join(text_asset.m_Name).with_extension(&args.audio_ext);
+
+    log::info!("writing audio to: {}", output_path.display());
+
+    if args.audio_ext == "wav" && args.audio_args.is_empty() {
+        write(&output_path, wav.data)?;
+        return Ok(());
+    }
 
     ffmpeg(&wav.data, num_cpus::get() / args.parallel, &args.audio_args, output_path)
 }

@@ -9,6 +9,7 @@ use std::io::{Cursor, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::process::exit;
 
+use clap::Args;
 use environment::Environment;
 use rabex::config::ExtractionConfig;
 use rabex::files::{BundleFile, SerializedFile};
@@ -19,7 +20,7 @@ use crate::class::text_asset::extract_acb;
 use crate::class::texture_2d::extract_texture_2d;
 use crate::environment::{check_file_type, FileType};
 
-#[derive(Debug, clap::Args)]
+#[derive(Debug, Args)]
 #[command(author, version, about, arg_required_else_help(true))]
 pub struct ExtractorArgs {
     /// The input directory or file
@@ -31,24 +32,24 @@ pub struct ExtractorArgs {
     #[arg(default_value_os_t = [".", "output"].iter().collect())]
     output: PathBuf,
 
-    /// audio output extension
+    /// Extension for audio output
     #[arg(long, value_name = "EXT", display_order = 2)]
-    #[arg(default_value_t = String::from("flac"))]
+    #[arg(default_value_t = String::from("wav"))]
     audio_ext: String,
 
-    /// arguments to pass to ffmpeg for audio output
+    /// Arguments to pass to ffmpeg for audio output
     #[arg(long, value_name = "ARGS", display_order = 2, hide_default_value = true)]
-    #[arg(default_value_t = String::from("-acodec flac -compression_level 12"))]
+    #[arg(default_value_t = String::from(""))]
     audio_args: String,
 
-    /// image output extension
+    /// Extension for image output
     #[arg(long, value_name = "EXT", display_order = 2)]
-    #[arg(default_value_t = String::from("webp"))]
+    #[arg(default_value_t = String::from("png"))]
     image_ext: String,
 
-    /// arguments to pass to ffmpeg for image output
+    /// Arguments to pass to ffmpeg for image output
     #[arg(long, value_name = "ARGS", display_order = 2, hide_default_value = true)]
-    #[arg(default_value_t = String::from("-vcodec libwebp -lossless 1"))]
+    #[arg(default_value_t = String::from(""))]
     image_args: String,
 
     /// The number of threads to use

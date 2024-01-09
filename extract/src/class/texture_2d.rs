@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::error::Error;
+use std::fs::File;
 use std::io::Cursor;
 use std::mem::size_of_val;
 use std::path::Path;
@@ -792,6 +793,13 @@ where
                 false => format!("{}_{}", texture.m_Name, i),
             })
             .with_extension(&args.image_ext);
+
+        log::info!("writing image to {}", output_path.display());
+
+        if args.image_ext == "png" && args.image_args.is_empty() {
+            img.write_with_encoder(PngEncoder::new(File::create(output_path)?))?;
+            return Ok(());
+        }
 
         let mut buf = Vec::new();
         img.write_with_encoder(PngEncoder::new(Cursor::new(&mut buf)))?;
