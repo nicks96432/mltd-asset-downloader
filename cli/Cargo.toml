@@ -9,7 +9,7 @@ license.workspace = true
 name = "mltd"
 readme = "README.md"
 repository.workspace = true
-version = "2.0.0-beta.4"
+version = "2.0.0"
 
 [dependencies]
 clap = { workspace = true }
