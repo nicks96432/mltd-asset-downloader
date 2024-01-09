@@ -1,4 +1,4 @@
-name: Lint
+name: Fmt
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ env:
 
 jobs:
   lint:
-    name: Lint
+    name: Fmt
     runs-on: ubuntu-latest
 
     steps:
@@ -18,9 +18,9 @@ jobs:
           submodules: true
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@nightly
         with:
-          components: clippy
+          components: rustfmt
 
       - name: Install nasm
         uses: ilammy/setup-nasm@v1
@@ -28,4 +28,4 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Lint
-        run: cargo clippy -- -D warnings
+        run: cargo fmt --all -- --check

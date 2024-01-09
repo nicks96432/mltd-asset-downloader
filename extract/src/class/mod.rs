@@ -1,4 +1,4 @@
-//! This module contains methods for extracting Unity objects, because
+//! This module contains methods for extracting Unity objects, which
 //! rabex doesn't provide any yet.
 
 pub mod asset_bundle;
