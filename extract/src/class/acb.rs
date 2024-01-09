@@ -9,15 +9,16 @@ use std::slice::from_raw_parts;
 use byteorder::BigEndian;
 use byteorder::ByteOrder;
 use byteorder::LittleEndian;
-use rabex::{files::SerializedFile, read_ext::ReadUrexExt};
+use rabex::files::SerializedFile;
+use rabex::read_ext::ReadUrexExt;
 
-use crate::utils::ReadAlignedExt;
+use crate::utils::{wav_to_flac, AudioFormat, ReadAlignedExt};
 use crate::ExtractorArgs;
 
 pub fn _extract_acb<P, E>(
     data: &[u8],
     output_dir: P,
-    _args: &ExtractorArgs,
+    args: &ExtractorArgs,
 ) -> Result<(), Box<dyn Error>>
 where
     P: AsRef<Path>,
@@ -32,11 +33,17 @@ where
     let track = acb::to_tracks(&data)?.swap_remove(0);
 
     // TODO: Add option to specify output format
-    let path = output_dir.as_ref().join(Path::new(&track.name).with_extension("wav"));
+    let path = output_dir
+        .as_ref()
+        .join(Path::new(&track.name).with_extension(args.audio_format.to_string()));
     let mut file = File::create(&path)?;
 
+    match args.audio_format {
+        AudioFormat::Wav => file.write_all(&track.data)?,
+        AudioFormat::Flac => file.write_all(&wav_to_flac(&track.data)?)?,
+    };
+
     log::info!("writing audio to {}", path.display());
-    file.write_all(&track.data)?;
 
     Ok(())
 }

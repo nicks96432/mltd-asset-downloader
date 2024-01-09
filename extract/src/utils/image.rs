@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::fs::File;
 use std::ops::Deref;
 use std::path::Path;
@@ -36,13 +37,6 @@ impl Deref for MyImageFormat {
 }
 
 impl ValueEnum for MyImageFormat {
-    fn from_str(input: &str, ignore_case: bool) -> Result<Self, <MyImageFormat as FromStr>::Err> {
-        match ignore_case {
-            true => FromStr::from_str(input.to_ascii_lowercase().as_str()),
-            false => FromStr::from_str(input),
-        }
-    }
-
     fn value_variants<'a>() -> &'a [Self] {
         &[
             Self(ImageFormat::Avif),
@@ -63,6 +57,20 @@ impl ValueEnum for MyImageFormat {
             ImageFormat::Tiff => Some(PossibleValue::new("tiff")),
             ImageFormat::WebP => Some(PossibleValue::new("webp")),
             _ => None,
+        }
+    }
+}
+
+impl Display for MyImageFormat {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self.0 {
+            ImageFormat::Avif => write!(f, "avif"),
+            ImageFormat::Bmp => write!(f, "bmp"),
+            ImageFormat::Jpeg => write!(f, "jpeg"),
+            ImageFormat::Png => write!(f, "png"),
+            ImageFormat::Tiff => write!(f, "tiff"),
+            ImageFormat::WebP => write!(f, "webp"),
+            _ => write!(f, "unknown"),
         }
     }
 }

@@ -8,6 +8,7 @@ use std::str::FromStr;
 
 use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
 use image::{DynamicImage, GrayImage, RgbaImage};
+use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use rabex::files::SerializedFile;
 use rabex::objects::classes::{GLTextureSettings, StreamingInfo, Texture2D};
@@ -218,7 +219,7 @@ pub fn construct_texture_2d(
 }
 
 /// Format used when creating textures from scripts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, num_derive::FromPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 pub enum TextureFormat {
     /// Alpha-only texture format, 8 bit integer.
     ///
@@ -788,7 +789,7 @@ where
                 true => texture.m_Name.to_owned(),
                 false => format!("{}_{}", texture.m_Name, i),
             })
-            .with_extension(args.image_format.extensions_str()[0]);
+            .with_extension(args.image_format.to_string());
 
         write_buffer_with_format(img, &output_path, &args.image_format, args.image_quality)?;
     }

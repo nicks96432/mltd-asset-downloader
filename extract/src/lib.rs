@@ -14,7 +14,7 @@ use image::ImageFormat;
 use rabex::config::ExtractionConfig;
 use rabex::files::{BundleFile, SerializedFile};
 use rabex::objects::map;
-use utils::MyImageFormat;
+use utils::{AudioFormat, MyImageFormat};
 
 use crate::class::acb::extract_acb;
 use crate::class::asset_bundle::construct_asset_bundle;
@@ -43,6 +43,10 @@ pub struct ExtractorArgs {
     /// image output quality
     #[arg(long, value_name = "QUALITY", default_value_t = 100, value_parser = number_range)]
     image_quality: u8,
+
+    /// audio output format
+    #[arg(long, value_name = "FORMAT", value_enum, default_value_t = AudioFormat::Flac)]
+    audio_format: AudioFormat,
     // TODO: Add option to extract only specific files
 }
 
@@ -104,7 +108,7 @@ where
 
         let data = env.get_cab(&dir_info.path).unwrap();
         let file_type = check_file_type(&mut Cursor::new(data))?;
-        log::debug!("file type: {:?},  size: {}", file_type, data.len());
+        log::debug!("file type: {:?}, size: {}", file_type, data.len());
 
         if file_type != FileType::AssetsFile {
             continue;
