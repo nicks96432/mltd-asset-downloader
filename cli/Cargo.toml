@@ -33,7 +33,7 @@ path = "../manifest"
 
 [features]
 default = ["download", "extract", "manifest"]
-download = ["mltd-asset-download"]
-debug = ["download", "mltd-asset-download/debug"]
+debug = ["mltd-asset-download/debug", "mltd-asset-extract/debug"]
+download = ["dep:mltd-asset-download"]
 extract = ["dep:mltd-asset-extract"]
 manifest = ["dep:mltd-asset-manifest"]

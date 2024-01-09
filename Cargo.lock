@@ -718,6 +718,7 @@ dependencies = [
  "ctor",
  "env_logger",
  "image",
+ "indicatif",
  "lazy-regex",
  "log",
  "mltd-utils",
@@ -725,6 +726,7 @@ dependencies = [
  "num-traits",
  "num_cpus",
  "rabex",
+ "rayon",
  "texture2ddecoder",
 ]
 

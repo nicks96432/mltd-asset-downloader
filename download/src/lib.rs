@@ -11,7 +11,10 @@ use rayon::prelude::{ParallelBridge, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 use ureq::AgentBuilder;
 
-use std::fs::{create_dir_all, File};
+#[cfg(not(feature = "debug"))]
+use std::fs::File;
+
+use std::fs::create_dir_all;
 use std::io::copy;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -123,7 +126,7 @@ pub fn download_assets(args: &DownloaderArgs) -> Result<(), DownloadError> {
         let asset_path = output_path.join(filename);
 
         #[cfg(feature = "debug")]
-        let asset_file = Vec::new();
+        let mut asset_file = Vec::new();
 
         #[cfg(not(feature = "debug"))]
         let mut asset_file = match File::create(&asset_path) {

@@ -4,19 +4,26 @@ mod utils;
 mod version;
 
 use std::error::Error;
-use std::fs::{create_dir_all, read_dir, File};
+use std::fs::{read_dir, File};
 use std::io::{Cursor, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::process::exit;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use clap::Args;
+#[cfg(not(feature = "debug"))]
+use std::fs::{create_dir_all, write};
+
+use clap::{value_parser, Args};
 use environment::Environment;
+use indicatif::{ProgressBar, ProgressStyle};
 use rabex::config::ExtractionConfig;
 use rabex::files::{BundleFile, SerializedFile};
 use rabex::objects::map;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::ThreadPoolBuilder;
 
 use crate::class::asset_bundle::construct_asset_bundle;
-use crate::class::text_asset::extract_acb;
+use crate::class::text_asset::{construct_text_asset, extract_acb};
 use crate::class::texture_2d::extract_texture_2d;
 use crate::environment::{check_file_type, FileType};
 
@@ -54,12 +61,14 @@ pub struct ExtractorArgs {
 
     /// The number of threads to use
     #[arg(short = 'P', long, value_name = "CPUS", display_order = 2)]
-    #[arg(default_value_t = num_cpus::get())]
-    parallel: usize,
+    #[arg(value_parser = value_parser!(u32).range(1..=(num_cpus::get() as i64)))]
+    #[arg(default_value_t = num_cpus::get() as u32)]
+    parallel: u32,
     // TODO: Add option to extract only specific files
 }
 
 pub fn extract_media(args: &ExtractorArgs) -> Result<(), Box<dyn Error>> {
+    #[cfg(not(feature = "debug"))]
     create_dir_all(&args.output)?;
 
     let input_realpath = args.input.canonicalize()?;
@@ -73,9 +82,46 @@ pub fn extract_media(args: &ExtractorArgs) -> Result<(), Box<dyn Error>> {
         exit(1);
     }
 
-    for entry in read_dir(&args.input)? {
-        extract_file(&entry?.path(), args)?;
+    log::debug!("setting progress bar");
+
+    let template = "{msg:60} {eta:4} [{wide_bar:.cyan/blue}] {percent:3}%";
+    let progress_bar_style = match ProgressStyle::with_template(template) {
+        Ok(style) => style,
+        Err(_) => {
+            log::debug!("invalid progress bar template, using default style");
+
+            ProgressStyle::default_bar()
+        }
     }
+    .progress_chars("##-");
+
+    let entries: Vec<_> = read_dir(&args.input)?.collect();
+    let progress_bar = ProgressBar::new(entries.len() as u64).with_style(progress_bar_style);
+
+    let finished_count = AtomicU64::new(0);
+
+    log::debug!("setting thread pool");
+
+    let thread_pool_builder = ThreadPoolBuilder::new().num_threads(args.parallel as usize);
+    thread_pool_builder.build_global()?;
+
+    entries.par_iter().for_each(|entry| {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(e) => {
+                progress_bar.suspend(|| log::warn!("failed to read directory entry: {}", e));
+                return;
+            }
+        };
+
+        if let Err(e) = extract_file(&entry.path(), args) {
+            log::warn!("failed to extract file: {}", e);
+        };
+
+        let cur_finished_count = finished_count.fetch_add(1, Ordering::AcqRel);
+        progress_bar.inc(1);
+        progress_bar.set_message(format!("{}/{}", cur_finished_count, entries.len()));
+    });
 
     Ok(())
 }
@@ -151,6 +197,7 @@ fn extract_object(
 
     let output_dir = args.output.join(asset_path);
 
+    #[cfg(not(feature = "debug"))]
     create_dir_all(&output_dir)?;
 
     for object_info in serialized_file.m_Objects.iter() {
@@ -166,7 +213,19 @@ fn extract_object(
         let data = env.get_object(object_info.m_PathID).unwrap();
 
         match object_info.m_ClassID {
-            map::TextAsset => extract_acb(data, &output_dir, args, serialized_file)?,
+            map::TextAsset => {
+                let text_asset = construct_text_asset(data, serialized_file)?;
+                match text_asset.m_Name.contains("acb") {
+                    true => extract_acb(data, &output_dir, args, serialized_file)?,
+                    false => {
+                        #[cfg(not(feature = "debug"))]
+                        write(
+                            output_dir.join(text_asset.m_Name).with_extension(&args.audio_ext),
+                            text_asset.m_Script.as_bytes(),
+                        )?;
+                    }
+                }
+            }
             map::Texture2D => extract_texture_2d(data, &output_dir, args, serialized_file, env)?,
             map::AssetBundle => {
                 // this class contains some information about the bundle
