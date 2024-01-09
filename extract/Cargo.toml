@@ -14,6 +14,7 @@ acb = { path = "../acb" }
 # For reading numbers from binary data
 byteorder = "1.5.0"
 
+indicatif = { workspace = true }
 log = { workspace = true }
 num-derive = "0.4.1"
 num-traits = "0.2.17"
@@ -21,6 +22,8 @@ num_cpus = { workspace = true }
 
 # For unpacking unity assets
 rabex = "0.0.3"
+
+rayon = { workspace = true }
 
 # For decoding Texture2D
 texture2ddecoder = "0.0.5"
@@ -48,3 +51,6 @@ env_logger = { workspace = true }
 [dev-dependencies.mltd-utils]
 features = ["log", "rand"]
 path = "../utils"
+
+[features]
+debug = []

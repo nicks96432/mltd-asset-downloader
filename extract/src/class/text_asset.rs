@@ -78,5 +78,10 @@ where
         return Ok(());
     }
 
-    ffmpeg(&wav.data, num_cpus::get() / args.parallel, &args.audio_args, output_path)
+    ffmpeg(
+        &wav.data,
+        num_cpus::get() / args.parallel as usize,
+        &args.audio_args,
+        output_path,
+    )
 }

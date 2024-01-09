@@ -804,7 +804,7 @@ where
         let mut buf = Vec::new();
         img.write_with_encoder(PngEncoder::new(Cursor::new(&mut buf)))?;
 
-        ffmpeg(&buf, num_cpus::get() / args.parallel, &args.image_args, output_path)?;
+        ffmpeg(&buf, num_cpus::get() / args.parallel as usize, &args.image_args, output_path)?;
     }
     Ok(())
 }
