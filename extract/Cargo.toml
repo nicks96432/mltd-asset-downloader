@@ -14,9 +14,6 @@ acb = { path = "../acb" }
 # For reading numbers from binary data
 byteorder = "1.5.0"
 
-# For wav decoding and encoding
-hound = "3.5.1"
-
 log = { workspace = true }
 num-derive = "0.4.1"
 num-traits = "0.2.17"
@@ -32,23 +29,9 @@ texture2ddecoder = "0.0.5"
 features = ["deprecated", "derive"]
 workspace = true
 
-# For flac encoding
-[dependencies.flacenc]
-default-features = false
-version = "0.3.1"
-
 # For image encoding
 [dependencies.image]
-features = [
-    "avif-encoder",
-    "bmp",
-    "jpeg",
-    "jpeg_rayon",
-    "png",
-    "tiff",
-    "webp",
-    "webp-encoder",
-]
+features = ["png"]
 default-features = false
 version = "0.24.7"
 

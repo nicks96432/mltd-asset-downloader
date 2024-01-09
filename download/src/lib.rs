@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Debug, clap::Args)]
-#[command(author, version, about, arg_required_else_help(true))]
+#[command(author, version, about, arg_required_else_help(true), next_display_order = 0)]
 pub struct DownloaderArgs {
     /// The os variant to download
     #[arg(value_enum, value_name = "VARIANT")]

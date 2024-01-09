@@ -10,53 +10,52 @@ use std::path::{Path, PathBuf};
 use std::process::exit;
 
 use environment::Environment;
-use image::ImageFormat;
 use rabex::config::ExtractionConfig;
 use rabex::files::{BundleFile, SerializedFile};
 use rabex::objects::map;
-use utils::{AudioFormat, MyImageFormat};
 
-use crate::class::acb::extract_acb;
 use crate::class::asset_bundle::construct_asset_bundle;
+use crate::class::text_asset::extract_acb;
 use crate::class::texture_2d::extract_texture_2d;
 use crate::environment::{check_file_type, FileType};
 
 #[derive(Debug, clap::Args)]
-#[command(author, version, about, arg_required_else_help(true))]
+#[command(author, version, about, arg_required_else_help(true), next_display_order = 0)]
 pub struct ExtractorArgs {
     /// The input directory or file
     #[arg(value_name = "PATH")]
     input: PathBuf,
 
     /// The output directory
-    #[arg(short, long, value_name = "DIR", default_value_os_t = [".", "output"].iter().collect())]
+    #[arg(short, long, value_name = "DIR", display_order = 1)]
+    #[arg(default_value_os_t = [".", "output"].iter().collect())]
     output: PathBuf,
 
+    /// audio output extension
+    #[arg(long, value_name = "EXT", display_order = 2)]
+    #[arg(default_value_t = String::from("flac"))]
+    audio_ext: String,
+
+    /// arguments to pass to ffmpeg for audio output
+    #[arg(long, value_name = "ARGS", display_order = 2, hide_default_value = true)]
+    #[arg(default_value_t = String::from("-acodec flac -compression_level 12"))]
+    audio_args: String,
+
+    /// image output extension
+    #[arg(long, value_name = "EXT", display_order = 2)]
+    #[arg(default_value_t = String::from("webp"))]
+    image_ext: String,
+
+    /// arguments to pass to ffmpeg for image output
+    #[arg(long, value_name = "ARGS", display_order = 2, hide_default_value = true)]
+    #[arg(default_value_t = String::from("-vcodec libwebp -lossless 1"))]
+    image_args: String,
+
     /// The number of threads to use
-    #[arg(short = 'P', long, value_name = "CPUS", default_value_t = num_cpus::get())]
+    #[arg(short = 'P', long, value_name = "CPUS", display_order = 2)]
+    #[arg(default_value_t = num_cpus::get())]
     parallel: usize,
-
-    /// image output format
-    #[arg(long, value_name = "FORMAT", value_enum, default_value_t = MyImageFormat(ImageFormat::WebP))]
-    image_format: MyImageFormat,
-
-    /// image output quality
-    #[arg(long, value_name = "QUALITY", default_value_t = 100, value_parser = number_range)]
-    image_quality: u8,
-
-    /// audio output format
-    #[arg(long, value_name = "FORMAT", value_enum, default_value_t = AudioFormat::Flac)]
-    audio_format: AudioFormat,
     // TODO: Add option to extract only specific files
-}
-
-fn number_range(s: &str) -> Result<u8, String> {
-    let n = s.parse::<i32>().map_err(|e| e.to_string())?;
-    if !(0..=100).contains(&n) {
-        return Err(format!("{} is out of range [0, 100]", n));
-    }
-
-    Ok(n as u8)
 }
 
 pub fn extract_media(args: &ExtractorArgs) -> Result<(), Box<dyn Error>> {
@@ -163,20 +162,11 @@ fn extract_object(
     for (i, object_info) in serialized_file.m_Objects.iter().enumerate() {
         log::debug!("extracting object: {} ({})", i, map::CLASS_ID_NAME[&object_info.m_ClassID]);
 
+        let data = env.get_object(object_info.m_PathID).unwrap();
+
         match object_info.m_ClassID {
-            map::TextAsset => extract_acb(
-                env.get_object(object_info.m_PathID).unwrap(),
-                &output_dir,
-                args,
-                serialized_file,
-            )?,
-            map::Texture2D => extract_texture_2d(
-                env.get_object(object_info.m_PathID).unwrap(),
-                &output_dir,
-                args,
-                serialized_file,
-                env,
-            )?,
+            map::TextAsset => extract_acb(data, &output_dir, args, serialized_file)?,
+            map::Texture2D => extract_texture_2d(data, &output_dir, args, serialized_file, env)?,
             map::AssetBundle => {
                 // this class contains some information about the bundle
             }

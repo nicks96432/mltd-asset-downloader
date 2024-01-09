@@ -13,7 +13,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, clap::Args)]
-#[command(author, version, about, arg_required_else_help(true))]
+#[command(author, version, about, arg_required_else_help(true), next_display_order = 0)]
 pub struct ManifestArgs {
     /// Output format of the manifest
     #[arg(short, long, value_enum, default_value_t = ManifestFormat::Msgpack)]
