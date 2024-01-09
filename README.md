@@ -6,11 +6,14 @@
 ![GitHub top language](https://img.shields.io/github/languages/top/nicks96432/mltd-asset-downloader)
 [![License](https://img.shields.io/github/license/nicks96432/mltd-asset-downloader)](LICENSE)
 
-English | [繁體中文](README.zh-TW.md) | [한국어](README.ko-KR.md)
+English | [繁體中文](README.zh-TW.md)
 
 Game asset downloader for THE iDOLM@STER® MILLION LIVE! THEATER DAYS (MLTD), written in Rust.
 
 ## Usage
+
+> [!NOTE]
+> ffmpeg executable is required to be in `$PATH` for asset conversion.
 
 ```console
 $ ./mltd --help
