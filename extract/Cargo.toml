@@ -14,8 +14,6 @@ acb = { path = "../acb" }
 # For text asset decryption
 aes = "0.8.3"
 cbc = "0.1.2"
-pbkdf2 = "0.12.2"
-sha1 = "0.10.6"
 
 # For reading numbers from binary data
 byteorder = "1.5.0"
