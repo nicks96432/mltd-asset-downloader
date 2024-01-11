@@ -5,7 +5,7 @@ use std::io::{Read, Seek, SeekFrom};
 use byteorder::{BigEndian, ReadBytesExt};
 use rabex::read_ext::ReadUrexExt;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Environment {
     /// resource data that loaded from bundles
     resources: HashMap<String, Vec<u8>>,
@@ -16,7 +16,7 @@ pub struct Environment {
 
 impl Environment {
     pub fn new() -> Self {
-        Self { resources: HashMap::new(), objects: HashMap::new() }
+        Self::default()
     }
 
     pub fn register_cab(&mut self, path: &str, buf: Vec<u8>) {
