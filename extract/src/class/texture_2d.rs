@@ -22,7 +22,7 @@ use crate::environment::Environment;
 use crate::utils::{ffmpeg, solve_puzzle, ReadAlignedExt};
 use crate::{version::*, ExtractorArgs};
 
-fn _construct_texture_2d<E>(
+pub(super) fn _construct_texture_2d<E>(
     data: &[u8],
     serialized_file: &SerializedFile,
 ) -> Result<Texture2D, Box<dyn Error>>

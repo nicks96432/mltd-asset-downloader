@@ -13,7 +13,7 @@ use rabex::read_ext::ReadUrexExt;
 use crate::utils::ReadAlignedExt;
 use crate::version::*;
 
-pub fn _construct_p_ptr<R, E>(
+pub(super) fn _construct_p_ptr<R, E>(
     reader: &mut R,
     serialized_file: &SerializedFile,
 ) -> Result<PPtr, Box<dyn Error>>
@@ -94,7 +94,7 @@ where
     Ok(asset_info)
 }
 
-pub fn _construct_asset_bundle<E>(
+pub(super) fn _construct_asset_bundle<E>(
     data: &[u8],
     serialized_file: &SerializedFile,
 ) -> Result<AssetBundle, Box<dyn Error>>
