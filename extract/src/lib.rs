@@ -1,13 +1,12 @@
-mod class;
-mod environment;
-mod utils;
-mod version;
+pub mod class;
+pub mod environment;
+pub mod utils;
+pub mod version;
 
 use std::error::Error;
 use std::fs::{read_dir, File};
 use std::io::{Cursor, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::process::exit;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 #[cfg(not(feature = "debug"))]
@@ -23,7 +22,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 
 use crate::class::asset_bundle::construct_asset_bundle;
-use crate::class::text_asset::{construct_text_asset, extract_acb};
+use crate::class::text_asset::{construct_text_asset, decrypt_text, extract_acb};
 use crate::class::texture_2d::extract_texture_2d;
 use crate::environment::{check_file_type, FileType};
 
@@ -31,8 +30,8 @@ use crate::environment::{check_file_type, FileType};
 #[command(author, version, about, arg_required_else_help(true))]
 pub struct ExtractorArgs {
     /// The input directory or file
-    #[arg(value_name = "PATH")]
-    input: PathBuf,
+    #[arg(value_name = "PATH", num_args = 1..)]
+    input_paths: Vec<PathBuf>,
 
     /// The output directory
     #[arg(short, long, value_name = "DIR", display_order = 1)]
@@ -71,17 +70,36 @@ pub fn extract_media(args: &ExtractorArgs) -> Result<(), Box<dyn Error>> {
     #[cfg(not(feature = "debug"))]
     create_dir_all(&args.output)?;
 
-    let input_realpath = args.input.canonicalize()?;
+    let mut entries = Vec::new();
 
-    if input_realpath.is_file() {
-        return extract_file(&input_realpath, args);
+    for p in &args.input_paths {
+        let input_realpath = p.canonicalize()?;
+
+        if input_realpath.is_file() {
+            entries.push(input_realpath);
+        } else if !input_realpath.is_dir() {
+            log::warn!("Input path is not a file or directory");
+        } else {
+            let input_paths: Vec<_> = read_dir(input_realpath)?.collect();
+            let mut input_paths = input_paths
+                .into_iter()
+                .filter(|r| {
+                    if let Err(e) = r {
+                        log::warn!("failed to read directory entry: {}", e);
+                    }
+                    r.is_ok()
+                })
+                .map(|e| e.unwrap().path())
+                .collect();
+
+            entries.append(&mut input_paths);
+        }
     }
 
-    if !input_realpath.is_dir() {
-        log::error!("Input path is not a file or directory");
-        exit(1);
-    }
+    extract_files(&entries, args)
+}
 
+fn extract_files(input_paths: &[PathBuf], args: &ExtractorArgs) -> Result<(), Box<dyn Error>> {
     log::debug!("setting progress bar");
 
     let template = "{msg:60} {eta:4} [{wide_bar:.cyan/blue}] {percent:3}%";
@@ -95,9 +113,7 @@ pub fn extract_media(args: &ExtractorArgs) -> Result<(), Box<dyn Error>> {
     }
     .progress_chars("##-");
 
-    let entries: Vec<_> = read_dir(&args.input)?.collect();
-    let progress_bar = ProgressBar::new(entries.len() as u64).with_style(progress_bar_style);
-
+    let progress_bar = ProgressBar::new(input_paths.len() as u64).with_style(progress_bar_style);
     let finished_count = AtomicU64::new(0);
 
     log::debug!("setting thread pool");
@@ -105,22 +121,14 @@ pub fn extract_media(args: &ExtractorArgs) -> Result<(), Box<dyn Error>> {
     let thread_pool_builder = ThreadPoolBuilder::new().num_threads(args.parallel as usize);
     thread_pool_builder.build_global()?;
 
-    entries.par_iter().for_each(|entry| {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(e) => {
-                progress_bar.suspend(|| log::warn!("failed to read directory entry: {}", e));
-                return;
-            }
-        };
-
-        if let Err(e) = extract_file(&entry.path(), args) {
+    input_paths.par_iter().for_each(|entry| {
+        if let Err(e) = extract_file(entry, args) {
             log::warn!("failed to extract file: {}", e);
         };
 
         let cur_finished_count = finished_count.fetch_add(1, Ordering::AcqRel);
         progress_bar.inc(1);
-        progress_bar.set_message(format!("{}/{}", cur_finished_count, entries.len()));
+        progress_bar.set_message(format!("{}/{}", cur_finished_count, input_paths.len()));
     });
 
     Ok(())
@@ -218,11 +226,11 @@ fn extract_object(
                 match text_asset.m_Name.contains("acb") {
                     true => extract_acb(data, &output_dir, args, serialized_file)?,
                     false => {
+                        let output_path = output_dir.join(text_asset.m_Name).with_extension("txt");
+                        log::info!("writing text to {}", output_path.display());
+
                         #[cfg(not(feature = "debug"))]
-                        write(
-                            output_dir.join(text_asset.m_Name).with_extension(&args.audio_ext),
-                            text_asset.m_Script.as_bytes(),
-                        )?;
+                        write(output_path, decrypt_text(text_asset.m_Script.as_bytes())?)?;
                     }
                 }
             }

@@ -11,6 +11,10 @@ version = "0.1.0"
 # For decoding ACB audio
 acb = { path = "../acb" }
 
+# For text asset decryption
+aes = "0.8.3"
+cbc = "0.1.2"
+
 # For reading numbers from binary data
 byteorder = "1.5.0"
 

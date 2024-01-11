@@ -18,7 +18,7 @@ use crate::version::*;
 use super::asset_bundle::_construct_p_ptr;
 use super::mesh::{construct_sub_mesh, construct_vertex_data};
 
-pub fn _construct_sprite<E>(
+pub(super) fn _construct_sprite<E>(
     data: &[u8],
     serialized_file: &SerializedFile,
 ) -> Result<Sprite, Box<dyn Error>>
