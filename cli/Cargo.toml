@@ -1,14 +1,14 @@
 [package]
-authors.workspace = true
+authors = { workspace = true }
 categories = ["command-line-utilities"]
 description = "A CLI made for assets in THE iDOLM@STER® MILLION LIVE! THEATER DAYS (MLTD)"
-edition.workspace = true
+edition = { workspace = true }
 homepage = "https://github.com/nicks96432/mltd-asset-downloader"
 keywords = ["downloader", "MLTD", "mirishita", "theaterdays", "unpack"]
-license.workspace = true
+license = { workspace = true }
 name = "mltd"
 readme = "README.md"
-repository.workspace = true
+repository = { workspace = true }
 version = "2.0.0"
 
 [dependencies]

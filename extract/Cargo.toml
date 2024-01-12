@@ -1,10 +1,10 @@
 [package]
-authors.workspace = true
+authors = { workspace = true }
 description = "Extract media from MLTD assets"
-edition.workspace = true
-license.workspace = true
+edition = { workspace = true }
+license = { workspace = true }
 name = "mltd-asset-extract"
-repository.workspace = true
+repository = { workspace = true }
 version = "0.1.0"
 
 [dependencies]
