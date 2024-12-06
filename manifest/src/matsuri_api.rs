@@ -119,7 +119,7 @@ pub fn get_all_asset_versions() -> Result<Vec<AssetVersion>, ManifestError> {
 /// [`ManifestError::Request`]: if it cannot send request to `api.matsurihi.me`.
 ///
 /// [`ManifestError::ResponseDeserialize`]: if it cannot deserialize response.
-/// 
+///
 /// # Examples
 ///
 /// ```no_run
