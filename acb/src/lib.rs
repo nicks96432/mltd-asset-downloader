@@ -35,7 +35,7 @@ mod tests {
         f.read_to_end(&mut buf).unwrap();
 
         let tracks = to_tracks(&buf).unwrap();
-        let track = tracks.get(0).unwrap();
+        let track = tracks.first().unwrap();
 
         let mut expected_file = File::open("tests/test.wav").unwrap();
         let mut expected = Vec::new();

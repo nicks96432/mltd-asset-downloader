@@ -46,3 +46,6 @@ codegen-units = 20
 lto = "thin"
 panic = "abort"
 strip = true
+
+[profile.dev]
+split-debuginfo = "unpacked"

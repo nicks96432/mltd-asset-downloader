@@ -171,8 +171,8 @@ mod tests {
     fn test_latest_asset_version() {
         let version = latest_asset_version().unwrap();
 
-        assert_eq!(version.version > 0, true);
-        assert_eq!(version.filename.is_empty(), false);
+        assert!(version.version > 0);
+        assert!(!version.filename.is_empty());
     }
 
     #[test]

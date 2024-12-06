@@ -275,9 +275,9 @@ mod tests {
         let manifest = Manifest::from_version(&Platform::Android, None).unwrap();
 
         assert_eq!(manifest.platform, Platform::Android);
-        assert_eq!(manifest.asset_version.version > 0, true);
-        assert_eq!(manifest.asset_version.filename.is_empty(), false);
-        assert_eq!(manifest.asset_size() > 0, true);
+        assert!(manifest.asset_version.version > 0);
+        assert!(!manifest.asset_version.filename.is_empty());
+        assert!(manifest.asset_size() > 0);
 
         assert_eq!(
             rmp_serde::to_vec(&manifest).unwrap(),

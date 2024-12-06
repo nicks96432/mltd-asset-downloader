@@ -14,7 +14,7 @@ thiserror = "2.0.4"
 ureq = { workspace = true }
 
 [dependencies.clap]
-features = ["derive"]
+features = ["std", "derive"]
 workspace = true
 
 [dependencies.human_bytes]
