@@ -12,6 +12,7 @@ repository = { workspace = true }
 version = "2.0.0"
 
 [dependencies]
+anyhow = "1.0.94"
 clap-verbosity-flag = "3.0.1"
 env_logger = { workspace = true }
 log = { workspace = true }

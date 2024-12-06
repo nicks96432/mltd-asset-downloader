@@ -1,5 +1,6 @@
 //! Manifest file handling.
 
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{Cursor, Write};
@@ -28,7 +29,7 @@ pub struct ManifestEntry(pub String, pub String, pub usize);
 ///
 /// It contains a dictionary of the manifest entries, where the key is the actual
 /// file name.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(transparent)]
 pub struct RawManifest([LinkedHashMap<String, ManifestEntry>; 1]);
 
@@ -48,6 +49,59 @@ impl RawManifest {
     #[inline]
     pub fn from_slice(value: &[u8]) -> Result<Self, ManifestError> {
         Ok(rmp_serde::from_slice(value)?)
+    }
+
+    /// Computes the difference between two manifests.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - The other manifest.
+    ///
+    /// # Returns
+    ///
+    /// The updated and removed entries in the new manifest.
+    pub fn diff<'a>(&'a self, other: &'a RawManifest) -> ManifestDiff<'a> {
+        let mut diff = ManifestDiff::new();
+
+        for (key, value) in other.iter() {
+            if !self.contains_key(key) {
+                diff.added.insert(key, value);
+            } else if self[key].0 != value.0 || self[key].2 != value.2 {
+                // although the hash and file size are the same, the hashed
+                // file name may be different across different versions
+                // for some unknown reason (maybe they hashed full path?)
+                diff.updated.insert(key, value);
+            }
+        }
+
+        for (key, value) in self.iter() {
+            if !other.contains_key(key) {
+                diff.removed.insert(key, value);
+            }
+        }
+
+        diff
+    }
+}
+
+impl Deref for RawManifest {
+    type Target = LinkedHashMap<String, ManifestEntry>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0[0]
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct ManifestDiff<'a> {
+    pub added: HashMap<&'a String, &'a ManifestEntry>,
+    pub updated: HashMap<&'a String, &'a ManifestEntry>,
+    pub removed: HashMap<&'a String, &'a ManifestEntry>,
+}
+
+impl ManifestDiff<'_> {
+    fn new() -> Self {
+        Self { added: HashMap::new(), updated: HashMap::new(), removed: HashMap::new() }
     }
 }
 
@@ -106,17 +160,17 @@ impl Manifest {
     /// assert_eq!(manifest.platform, Platform::Android);
     /// assert_eq!(manifest.asset_version.version, 1);
     /// ```
-    pub fn from_version(variant: &Platform, version: Option<u64>) -> Result<Self, ManifestError> {
+    pub fn from_version(platform: &Platform, version: Option<u64>) -> Result<Self, ManifestError> {
         log::debug!("getting latest version from matsurihi.me");
         let asset_version = match version {
             None => latest_asset_version(),
             Some(v) => get_asset_version(v),
         }?;
 
-        let agent_builder = AgentBuilder::new().https_only(true).user_agent(variant.user_agent());
+        let agent_builder = AgentBuilder::new().https_only(true).user_agent(platform.user_agent());
         let agent = agent_builder.build();
 
-        let asset_url_base = format!("/{}/production/2018/{}", asset_version.version, variant);
+        let asset_url_base = format!("/{}/production/2018/{}", asset_version.version, platform);
 
         log::debug!("reading manifest from MLTD asset server");
         let manifest_url = format!("{}/{}", asset_url_base, asset_version.filename);
@@ -138,11 +192,11 @@ impl Manifest {
         let manifest = Manifest {
             data: rmp_serde::from_read::<_, RawManifest>(&mut reader)?,
             asset_version,
-            platform: *variant,
+            platform: *platform,
         };
 
         log::info!(
-            "the latest version is {} (updated at {}), manifest file {}, total asset size {}",
+            "downloaded manifest version {} (updated at {}), manifest file {}, total asset size {}",
             manifest.asset_version.version,
             manifest.asset_version.updated_at,
             manifest.asset_version.filename,
@@ -185,10 +239,10 @@ impl Manifest {
 }
 
 impl Deref for Manifest {
-    type Target = LinkedHashMap<String, ManifestEntry>;
+    type Target = RawManifest;
 
     fn deref(&self) -> &Self::Target {
-        &self.data.0[0]
+        &self.data
     }
 }
 
@@ -252,22 +306,24 @@ fn init() {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
-    use std::io::Read;
-    use std::path::Path;
-
     use super::{Manifest, Platform, RawManifest};
 
     #[test]
-    fn test_raw_manifest() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("test.msgpack");
-
-        let mut file = File::open(path).unwrap();
-        let mut buf = Vec::new();
-        file.read_to_end(&mut buf).unwrap();
-
-        let manifest = RawManifest::from_slice(buf.as_slice()).unwrap();
+    fn test_raw_manifest_from_slice() {
+        let buf = include_bytes!("../tests/test1.msgpack");
+        let manifest = RawManifest::from_slice(buf).unwrap();
         assert_eq!(rmp_serde::to_vec(&manifest).unwrap(), buf);
+    }
+
+    #[test]
+    fn test_raw_manifest_diff() {
+        let manifest1 = RawManifest::from_slice(include_bytes!("../tests/test1.msgpack")).unwrap();
+        let manifest2 = RawManifest::from_slice(include_bytes!("../tests/test2.msgpack")).unwrap();
+
+        let diff = manifest1.diff(&manifest2);
+        assert_eq!(diff.added.len(), 8);
+        assert_eq!(diff.updated.len(), 6);
+        assert_eq!(diff.removed.len(), 0);
     }
 
     #[test]
