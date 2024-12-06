@@ -125,7 +125,7 @@ pub fn get_all_asset_versions() -> Result<Vec<AssetVersion>, ManifestError> {
 /// ```no_run
 /// use mltd_asset_manifest::get_asset_version;
 ///
-/// let asset_version = get_asset_version(1).unwrap().version;
+/// let asset_version = get_asset_version(1).unwrap();
 /// assert_eq!(asset_version.version, 1);
 /// ```
 pub fn get_asset_version(version: u64) -> Result<AssetVersion, ManifestError> {
