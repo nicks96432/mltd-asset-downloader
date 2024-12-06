@@ -20,7 +20,8 @@ use rabex::read_ext::{ReadSeekUrexExt, ReadUrexExt};
 use crate::class::sprite::construct_sprite;
 use crate::environment::Environment;
 use crate::utils::{ffmpeg, solve_puzzle, ReadAlignedExt};
-use crate::{version::*, ExtractorArgs};
+use crate::version::*;
+use crate::ExtractorArgs;
 
 pub(super) fn _construct_texture_2d<E>(
     data: &[u8],

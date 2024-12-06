@@ -1,8 +1,7 @@
 #![cfg(feature = "request")]
 
-use ureq::Error as UreqError;
 use ureq::Error::Status;
-use ureq::{Agent, Request, Response};
+use ureq::{Agent, Error as UreqError, Request, Response};
 
 const ASSET_URL_BASE: &str = "https://td-assets.bn765.com";
 const UNITY_VERSION: &str = "2020.3.32f1";

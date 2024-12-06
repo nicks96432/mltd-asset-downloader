@@ -9,7 +9,7 @@ fn main() {
         .build();
 
     let mut build = cxx_build::bridge("src/lib.rs");
-    build.file("src/acb.cc").include(&dst.join("include"));
+    build.file("src/acb.cc").include(dst.join("include"));
 
     build.flag("-Wall").flag("-std=c++14");
 

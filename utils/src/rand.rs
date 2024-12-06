@@ -1,9 +1,12 @@
+//! Utilities for generating random data in tests.
+
 #![cfg(feature = "rand")]
+
+use std::io::Cursor;
 
 use rand::distributions::uniform::{SampleRange, SampleUniform};
 use rand::{thread_rng, Rng, RngCore, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus as MyRng;
-use std::io::Cursor;
 
 pub fn rand_ascii_string(len: usize) -> Cursor<Vec<u8>> {
     let mut rng = MyRng::from_rng(thread_rng()).unwrap();

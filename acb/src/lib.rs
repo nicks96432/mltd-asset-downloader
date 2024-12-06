@@ -20,11 +20,11 @@ pub fn to_tracks(buf: &[u8]) -> Result<Vec<Track>, cxx::Exception> {
 
 #[cfg(test)]
 mod tests {
-    use crate::to_tracks;
-
     use std::fs::File;
     use std::io::Read;
     use std::path::Path;
+
+    use crate::to_tracks;
 
     #[test]
     fn test_to_wav() {

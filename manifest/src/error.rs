@@ -1,30 +1,29 @@
-use std::error::Error;
-use std::fmt::{Display, Formatter, Result};
-use std::io::Error as IOError;
+//! Error types.
 
-#[derive(Debug)]
+use std::io;
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
 pub enum ManifestError {
-    DeserializeFailed,
-    FileCreateFailed(IOError),
-    FileWriteFailed(IOError),
-    RequestFailed,
-    SerializeFailed,
-    StructFieldNotFound,
-    UnknownVariant,
-}
+    #[error("manifest deserialization failed: {0}")]
+    ManifestDeserialize(#[from] rmp_serde::decode::Error),
 
-impl Error for ManifestError {}
+    #[error("manifest serialization failed: {0}")]
+    ManifestSerialize(#[from] rmp_serde::encode::Error),
 
-impl Display for ManifestError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        match self {
-            Self::DeserializeFailed => write!(f, "deserialize manifest failed"),
-            Self::FileCreateFailed(e) => write!(f, "cannot create output file: {}", e),
-            Self::FileWriteFailed(e) => write!(f, "cannot write to output file: {}", e),
-            Self::RequestFailed => write!(f, "fail to send request"),
-            Self::SerializeFailed => write!(f, "serialize manifest failed"),
-            Self::StructFieldNotFound => write!(f, "struct field not found"),
-            Self::UnknownVariant => write!(f, "unknown os variant"),
-        }
-    }
+    #[error("response deserialization failed: {0}")]
+    ResponseDeserialize(io::Error),
+
+    #[error("cannot create output file: {0}")]
+    FileCreate(io::Error),
+
+    #[error("cannot write output file: {0}")]
+    FileWrite(io::Error),
+
+    #[error("fail to send request: {0}")]
+    Request(#[from] Box<ureq::Error>),
+
+    #[error("unknown os variant: {0}")]
+    UnknownVariant(String),
 }

@@ -1,30 +1,29 @@
 mod error;
 
-pub use self::error::*;
-
-use indicatif::{MultiProgress, MultiProgressAlignment};
-use indicatif::{ProgressBar, ProgressFinish, ProgressStyle};
-use mltd_asset_manifest::{Manifest, OsVariant};
-use mltd_utils::fetch_asset;
-use rayon::current_thread_index;
-use rayon::prelude::{ParallelBridge, ParallelIterator};
-use rayon::ThreadPoolBuilder;
-use ureq::AgentBuilder;
-
+use std::fs::create_dir_all;
 #[cfg(not(feature = "debug"))]
 use std::fs::File;
-
-use std::fs::create_dir_all;
 use std::io::copy;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+
+use indicatif::{
+    MultiProgress, MultiProgressAlignment, ProgressBar, ProgressFinish, ProgressStyle,
+};
+use mltd_asset_manifest::{Manifest, Platform};
+use mltd_utils::fetch_asset;
+use rayon::prelude::{ParallelBridge, ParallelIterator};
+use rayon::{current_thread_index, ThreadPoolBuilder};
+use ureq::AgentBuilder;
+
+pub use self::error::*;
 
 #[derive(Debug, clap::Args)]
 #[command(author, version, about, arg_required_else_help(true))]
 pub struct DownloaderArgs {
     /// The os variant to download
     #[arg(value_enum, value_name = "VARIANT")]
-    os_variant: OsVariant,
+    os_variant: Platform,
 
     /// The output path
     #[arg(short, long, value_name = "DIR", default_value_os_t = Path::new("assets").to_path_buf())]
@@ -36,13 +35,13 @@ pub struct DownloaderArgs {
 }
 
 pub fn download_assets(args: &DownloaderArgs) -> Result<(), DownloadError> {
-    log::debug!("getting manifest");
-    let manifest = match Manifest::download(&args.os_variant) {
+    log::debug!("getting latest manifest");
+    let manifest = match Manifest::from_version(&args.os_variant, None) {
         Ok(m) => m,
         Err(e) => return Err(DownloadError::ManifestError(e)),
     };
 
-    let output_path = args.output.join(manifest.version.to_string());
+    let output_path = args.output.join(manifest.asset_version.version.to_string());
 
     log::debug!("creating output directory");
     if let Err(e) = create_dir_all(&args.output) {
@@ -102,14 +101,15 @@ pub fn download_assets(args: &DownloaderArgs) -> Result<(), DownloadError> {
     let agent = agent_builder.build();
 
     log::debug!("start downloading assets");
-    let asset_url_base = format!("/{}/production/2018/{}", manifest.version, args.os_variant);
-    let iter = manifest.data[0].iter().par_bridge();
+    let asset_url_base =
+        format!("/{}/production/2018/{}", manifest.asset_version.version, args.os_variant);
+    let iter = manifest.iter().par_bridge();
 
     iter.for_each(|(filename, entry)| {
         let tid = current_thread_index().unwrap_or_default();
         let progress_bar = &progress_bars[tid];
         progress_bar.reset();
-        progress_bar.set_length(entry.2);
+        progress_bar.set_length(entry.2 as u64);
         progress_bar.set_position(0);
         progress_bar.set_style(progress_bar_style.clone());
         progress_bar.set_message(filename.clone());
@@ -146,7 +146,7 @@ pub fn download_assets(args: &DownloaderArgs) -> Result<(), DownloadError> {
         }
 
         let cur_dounloaded_count = downloaded_count.fetch_add(1, Ordering::AcqRel);
-        total_progress_bar.inc(entry.2);
+        total_progress_bar.inc(entry.2 as u64);
         total_progress_bar.set_message(format!(
             "Total ({}/{})",
             cur_dounloaded_count,

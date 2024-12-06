@@ -12,7 +12,7 @@ version = "0.1.0"
 acb = { path = "../acb" }
 
 # For text asset decryption
-aes = "0.8.3"
+aes = "0.8.4"
 cbc = "0.1.2"
 
 # For reading numbers from binary data
@@ -20,8 +20,8 @@ byteorder = "1.5.0"
 
 indicatif = { workspace = true }
 log = { workspace = true }
-num-derive = "0.4.1"
-num-traits = "0.2.17"
+num-derive = "0.4.2"
+num-traits = "0.2.19"
 num_cpus = { workspace = true }
 
 # For unpacking unity assets
@@ -30,7 +30,7 @@ rabex = "0.0.3"
 rayon = { workspace = true }
 
 # For decoding Texture2D
-texture2ddecoder = "0.0.5"
+texture2ddecoder = "0.1.1"
 
 [dependencies.clap]
 features = ["deprecated", "derive"]
@@ -40,13 +40,13 @@ workspace = true
 [dependencies.image]
 features = ["png"]
 default-features = false
-version = "0.24.7"
+version = "0.25.5"
 
 # For regex matching in texture name
 [dependencies.lazy-regex]
 default-features = false
 features = ["std", "perf"]
-version = "3.1.0"
+version = "3.3.0"
 
 [dev-dependencies]
 ctor = { workspace = true }

@@ -1,8 +1,8 @@
-use mltd_asset_manifest::ManifestError;
-
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result};
 use std::io::Error as IOError;
+
+use mltd_asset_manifest::ManifestError;
 
 #[derive(Debug)]
 pub enum DownloadError {

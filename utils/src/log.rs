@@ -1,9 +1,11 @@
+//! Logging utilities.
+
 #![cfg(feature = "log")]
+
+use std::io::{Result, Write};
 
 use env_logger::fmt::Formatter;
 use log::Record;
-use std::io::Result;
-use std::io::Write;
 
 pub fn log_formatter(buf: &mut Formatter, record: &Record) -> Result<()> {
     let color_code = match record.level() {
