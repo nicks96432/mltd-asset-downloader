@@ -20,11 +20,11 @@ pub fn to_tracks(buf: &[u8]) -> Result<Vec<Track>, cxx::Exception> {
 
 #[cfg(test)]
 mod tests {
-    use crate::to_tracks;
-
     use std::fs::File;
     use std::io::Read;
     use std::path::Path;
+
+    use crate::to_tracks;
 
     #[test]
     fn test_to_wav() {
@@ -35,7 +35,7 @@ mod tests {
         f.read_to_end(&mut buf).unwrap();
 
         let tracks = to_tracks(&buf).unwrap();
-        let track = tracks.get(0).unwrap();
+        let track = tracks.first().unwrap();
 
         let mut expected_file = File::open("tests/test.wav").unwrap();
         let mut expected = Vec::new();

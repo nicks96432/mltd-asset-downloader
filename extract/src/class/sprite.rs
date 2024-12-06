@@ -12,11 +12,10 @@ use rabex::objects::classes::{
 use rabex::objects::PPtr;
 use rabex::read_ext::{ReadSeekUrexExt, ReadUrexExt};
 
-use crate::utils::{ReadAlignedExt, ReadUnityTypeExt};
-use crate::version::*;
-
 use super::asset_bundle::_construct_p_ptr;
 use super::mesh::{construct_sub_mesh, construct_vertex_data};
+use crate::utils::{ReadAlignedExt, ReadUnityTypeExt};
+use crate::version::*;
 
 pub(super) fn _construct_sprite<E>(
     data: &[u8],

@@ -12,12 +12,16 @@ repository = { workspace = true }
 version = "2.0.0"
 
 [dependencies]
-clap = { workspace = true }
-clap-verbosity-flag = "2.1.1"
+anyhow = "1.0.94"
+clap-verbosity-flag = "3.0.1"
 env_logger = { workspace = true }
 log = { workspace = true }
 mltd-utils = { path = "../utils" }
 rayon = { workspace = true }
+
+[dependencies.clap]
+features = ["std", "help", "usage", "derive"]
+workspace = true
 
 [dependencies.mltd-asset-download]
 optional = true

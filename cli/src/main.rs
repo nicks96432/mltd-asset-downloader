@@ -1,26 +1,25 @@
+mod manifest;
+
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
-
-use mltd_utils::log_formatter;
-
 #[cfg(feature = "download")]
 use mltd_asset_download::*;
-
 #[cfg(feature = "extract")]
 use mltd_asset_extract::*;
+use mltd_utils::log_formatter;
 
 #[cfg(feature = "manifest")]
-use mltd_asset_manifest::*;
+use crate::manifest::*;
 
 #[derive(Parser)]
 #[command(author, version, about, arg_required_else_help(true))]
-#[command(propagate_version = true)]
 struct Cli {
     #[command(subcommand)]
-    command: Command,
+    pub command: Command,
 
     #[command(flatten)]
-    verbose: Verbosity<InfoLevel>,
+    pub verbose: Verbosity<InfoLevel>,
 }
 
 #[derive(Subcommand)]
@@ -38,7 +37,7 @@ enum Command {
     Manifest(ManifestArgs),
 }
 
-fn main() {
+fn main() -> Result<()> {
     let args = Cli::parse();
 
     env_logger::Builder::new()
@@ -62,10 +61,8 @@ fn main() {
         }
 
         #[cfg(feature = "manifest")]
-        Command::Manifest(m) => {
-            if let Err(e) = download_manifest(&m) {
-                log::error!("manifest download failed: {}", e)
-            }
-        }
+        Command::Manifest(m) => manifest_main(&m)?,
     }
+
+    Ok(())
 }

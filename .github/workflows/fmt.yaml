@@ -27,5 +27,5 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Lint
+      - name: Fmt
         run: cargo fmt --all -- --check

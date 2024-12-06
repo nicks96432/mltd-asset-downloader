@@ -4,8 +4,7 @@ mod read_ext;
 use std::error::Error;
 use std::io::Write;
 use std::path::Path;
-use std::process::Command;
-use std::process::Stdio;
+use std::process::{Command, Stdio};
 
 pub use self::puzzle::*;
 pub use self::read_ext::*;

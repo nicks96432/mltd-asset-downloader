@@ -4,13 +4,12 @@ pub mod utils;
 pub mod version;
 
 use std::error::Error;
+#[cfg(not(feature = "debug"))]
+use std::fs::{create_dir_all, write};
 use std::fs::{read_dir, File};
 use std::io::{Cursor, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-
-#[cfg(not(feature = "debug"))]
-use std::fs::{create_dir_all, write};
 
 use clap::{value_parser, Args};
 use environment::Environment;
