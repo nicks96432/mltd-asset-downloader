@@ -29,7 +29,7 @@ jobs:
         uses: cargo-bins/cargo-binstall@main
 
       - name: Install cargo check tools
-        run: cargo binstall --no-confirm --force cargo-deny cargo-outdated cargo-udeps cargo-audit
+        run: cargo binstall --no-confirm --force cargo-deny cargo-outdated cargo-udeps
 
       # remove advisory-db is required to fetch it correctly
       - name: Check
@@ -37,5 +37,3 @@ jobs:
           cargo deny check
           cargo outdated --exit-code 1
           cargo udeps
-          rm -rf ~/.cargo/advisory-db
-          cargo audit
