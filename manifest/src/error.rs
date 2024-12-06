@@ -1,9 +1,10 @@
-//! Error types.
+//! Error type definitions.
 
 use std::io;
 
 use thiserror::Error;
 
+/// Error type for manifest operations.
 #[derive(Error, Debug)]
 pub enum ManifestError {
     #[error("manifest deserialization failed: {0}")]

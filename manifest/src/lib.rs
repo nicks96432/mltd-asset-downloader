@@ -2,7 +2,8 @@
 #![warn(clippy::print_stderr)]
 #![warn(clippy::print_stdout)]
 
-//! `mltd manifest` subcommand
+//! This crate provides functions for downloading and parsing
+//! MLTD asset manifests.
 
 mod error;
 mod manifest;

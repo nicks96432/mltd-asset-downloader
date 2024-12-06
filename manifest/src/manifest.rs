@@ -100,8 +100,6 @@ impl Manifest {
     /// Download the manifest version 1 for Android:
     ///
     /// ```no_run
-    /// use std::path::PathBuf;
-    /// 
     /// use mltd_asset_manifest::{Manifest, Platform};
     ///
     /// let manifest = Manifest::from_version(&Platform::Android, Some(1)).unwrap();

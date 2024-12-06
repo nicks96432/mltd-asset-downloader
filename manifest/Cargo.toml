@@ -1,6 +1,6 @@
 [package]
 authors = { workspace = true }
-description = "Download asset manifest from MLTD asset server"
+description = "MLTD asset manifest related tools"
 edition = { workspace = true }
 license = { workspace = true }
 name = "mltd-asset-manifest"
