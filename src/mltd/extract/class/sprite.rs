@@ -14,8 +14,8 @@ use rabex::read_ext::{ReadSeekUrexExt, ReadUrexExt};
 
 use super::asset_bundle::_construct_p_ptr;
 use super::mesh::{construct_sub_mesh, construct_vertex_data};
-use crate::utils::{ReadAlignedExt, ReadUnityTypeExt};
-use crate::version::*;
+use crate::extract::utils::{ReadAlignedExt, ReadUnityTypeExt};
+use crate::extract::version::*;
 
 pub(super) fn _construct_sprite<E>(
     data: &[u8],

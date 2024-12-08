@@ -5,7 +5,11 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Args, Subcommand};
-use mltd_asset_manifest::{get_all_asset_versions, Manifest, Platform, RawManifest};
+use mltd::asset::{Asset, AssetInfo, Platform};
+use mltd::manifest::Manifest;
+use mltd::net::{get_all_asset_versions, get_asset_version, latest_asset_version};
+
+use crate::util::create_progress_bar;
 
 #[derive(Args)]
 #[command(author, version, about, arg_required_else_help(true))]
@@ -52,21 +56,28 @@ pub struct ManifestDownloadArgs {
     pub output: Option<PathBuf>,
 }
 
-pub fn download_manifest(args: &ManifestDownloadArgs) -> Result<()> {
-    let manifest = Manifest::from_version(&args.platform, args.asset_version)?;
+pub async fn download_manifest(args: &ManifestDownloadArgs) -> Result<()> {
+    let asset_version = match args.asset_version {
+        None => latest_asset_version().await,
+        Some(v) => get_asset_version(v).await,
+    }?;
 
-    let output = match &args.output {
-        Some(output) => output,
-        None => &PathBuf::from(&manifest.asset_version.filename),
+    let asset_info = AssetInfo {
+        filename: asset_version.manifest_filename.clone(),
+        platform: args.platform,
+        version: asset_version,
     };
-    manifest.save(output)?;
+
+    let mut progress_bar = create_progress_bar().with_message(asset_info.filename.clone());
+
+    Asset::download_to_file(&asset_info, args.output.as_deref(), Some(&mut progress_bar)).await?;
 
     Ok(())
 }
 
 pub fn diff_manifest(args: &ManifestDiffArgs) -> Result<()> {
-    let first_manifest = RawManifest::from_slice(&read(&args.first)?)?;
-    let second_manifest = RawManifest::from_slice(&read(&args.second)?)?;
+    let first_manifest = Manifest::from_slice(&read(&args.first)?)?;
+    let second_manifest = Manifest::from_slice(&read(&args.second)?)?;
 
     let diff = first_manifest.diff(&second_manifest);
 
@@ -85,23 +96,23 @@ pub fn diff_manifest(args: &ManifestDiffArgs) -> Result<()> {
     Ok(())
 }
 
-pub fn list_manifests() -> Result<()> {
-    let versions = get_all_asset_versions()?;
+pub async fn list_manifests() -> Result<()> {
+    let versions = get_all_asset_versions().await?;
 
     for version in versions {
         println!(
             "version {:>7}: filename {}, updated at {}",
-            version.version, version.filename, version.updated_at
+            version.version, version.manifest_filename, version.updated_at
         );
     }
 
     Ok(())
 }
 
-pub fn manifest_main(args: &ManifestArgs) -> Result<()> {
+pub async fn manifest_main(args: &ManifestArgs) -> Result<()> {
     match &args.command {
         ManifestCommand::Diff(args) => diff_manifest(args),
-        ManifestCommand::Download(args) => download_manifest(args),
-        ManifestCommand::List => list_manifests(),
+        ManifestCommand::Download(args) => download_manifest(args).await,
+        ManifestCommand::List => list_manifests().await,
     }
 }

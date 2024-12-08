@@ -6,8 +6,8 @@ use rabex::files::SerializedFile;
 use rabex::objects::classes::{ChannelInfo, StreamInfo, SubMesh, Vector3f, VertexData, AABB};
 use rabex::read_ext::ReadSeekUrexExt;
 
-use crate::utils::ReadUnityTypeExt;
-use crate::version::*;
+use crate::extract::utils::ReadUnityTypeExt;
+use crate::extract::version::*;
 
 pub fn construct_sub_mesh<R, E>(
     reader: &mut R,

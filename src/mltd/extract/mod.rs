@@ -20,10 +20,10 @@ use rabex::objects::map;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 
-use crate::class::asset_bundle::construct_asset_bundle;
-use crate::class::text_asset::{construct_text_asset, decrypt_text, extract_acb};
-use crate::class::texture_2d::extract_texture_2d;
-use crate::environment::{check_file_type, FileType};
+use self::class::asset_bundle::construct_asset_bundle;
+use self::class::text_asset::{construct_text_asset, decrypt_text, extract_acb};
+use self::class::texture_2d::extract_texture_2d;
+use self::environment::{check_file_type, FileType};
 
 #[derive(Debug, Args)]
 #[command(author, version, about, arg_required_else_help(true))]

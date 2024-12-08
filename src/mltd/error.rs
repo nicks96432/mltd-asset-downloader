@@ -2,11 +2,9 @@
 
 use std::io;
 
-use thiserror::Error;
-
-/// Error type for manifest operations.
-#[derive(Error, Debug)]
-pub enum ManifestError {
+/// Error type for this crate.
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
     #[error("manifest deserialization failed: {0}")]
     ManifestDeserialize(#[from] rmp_serde::decode::Error),
 
@@ -14,7 +12,7 @@ pub enum ManifestError {
     ManifestSerialize(#[from] rmp_serde::encode::Error),
 
     #[error("response deserialization failed: {0}")]
-    ResponseDeserialize(io::Error),
+    ResponseDeserialize(reqwest::Error),
 
     #[error("cannot create output file: {0}")]
     FileCreate(io::Error),
@@ -23,7 +21,7 @@ pub enum ManifestError {
     FileWrite(io::Error),
 
     #[error("fail to send request: {0}")]
-    Request(#[from] Box<ureq::Error>),
+    Request(reqwest::Error),
 
     #[error("unknown os variant: {0}")]
     UnknownVariant(String),

@@ -16,9 +16,9 @@ use rabex::files::SerializedFile;
 use rabex::objects::classes::TextAsset;
 use rabex::read_ext::ReadUrexExt;
 
-use crate::utils::{ffmpeg, ReadAlignedExt};
-use crate::version::*;
-use crate::ExtractorArgs;
+use crate::extract::utils::{ffmpeg, ReadAlignedExt};
+use crate::extract::version::*;
+use crate::extract::ExtractorArgs;
 
 pub(super) fn _construct_text_asset<E>(
     data: &[u8],

@@ -1,16 +1,11 @@
+mod download;
 mod manifest;
+mod util;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
-#[cfg(feature = "download")]
-use mltd_asset_download::*;
-#[cfg(feature = "extract")]
-use mltd_asset_extract::*;
-use mltd_utils::log_formatter;
-
-#[cfg(feature = "manifest")]
-use crate::manifest::*;
+use mltd::util::log_formatter;
 
 #[derive(Parser)]
 #[command(author, version, about, arg_required_else_help(true))]
@@ -26,18 +21,19 @@ struct Cli {
 enum Command {
     #[cfg(feature = "download")]
     /// Download assets from MLTD asset server
-    Download(DownloaderArgs),
+    Download(self::download::DownloaderArgs),
 
     #[cfg(feature = "extract")]
     /// Extract media from MLTD assets
-    Extract(ExtractorArgs),
+    Extract(mltd::extract::ExtractorArgs),
 
     #[cfg(feature = "manifest")]
     /// Download manifest from MLTD asset server
-    Manifest(ManifestArgs),
+    Manifest(self::manifest::ManifestArgs),
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = Cli::parse();
 
     env_logger::Builder::new()
@@ -47,21 +43,17 @@ fn main() -> Result<()> {
 
     match args.command {
         #[cfg(feature = "download")]
-        Command::Download(d) => {
-            if let Err(e) = download_assets(&d) {
-                log::error!("asset download failed: {}", e);
-            }
-        }
+        Command::Download(d) => self::download::download_assets(&d).await?,
 
         #[cfg(feature = "extract")]
         Command::Extract(e) => {
-            if let Err(e) = extract_media(&e) {
+            if let Err(e) = mltd::extract::extract_media(&e) {
                 log::error!("asset extract failed: {}", e);
             }
         }
 
         #[cfg(feature = "manifest")]
-        Command::Manifest(m) => manifest_main(&m)?,
+        Command::Manifest(m) => self::manifest::manifest_main(&m).await?,
     }
 
     Ok(())

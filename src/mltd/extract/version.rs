@@ -127,16 +127,15 @@ gen_version!(UNITY_VERSION_2022_3_2_F1, 2022, 3, 2, f1);
 #[cfg(test)]
 #[ctor::ctor]
 fn init() {
-    mltd_utils::init_test_logger!();
+    crate::util::init_test_logger!();
 }
 
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
 
-    use mltd_utils::{rand_ascii_string, rand_range};
-
     use super::Version;
+    use crate::util::test_util::{rand_ascii_string, rand_range};
 
     #[test]
     fn test_from_str() {

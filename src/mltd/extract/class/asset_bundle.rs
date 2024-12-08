@@ -10,8 +10,8 @@ use rabex::objects::classes::{AssetBundle, AssetBundleScriptInfo, AssetInfo};
 use rabex::objects::PPtr;
 use rabex::read_ext::ReadUrexExt;
 
-use crate::utils::ReadAlignedExt;
-use crate::version::*;
+use crate::extract::utils::ReadAlignedExt;
+use crate::extract::version::*;
 
 pub(super) fn _construct_p_ptr<R, E>(
     reader: &mut R,

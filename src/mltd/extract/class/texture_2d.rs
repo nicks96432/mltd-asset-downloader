@@ -17,11 +17,11 @@ use rabex::objects::classes::{GLTextureSettings, StreamingInfo, Texture2D};
 use rabex::objects::map;
 use rabex::read_ext::{ReadSeekUrexExt, ReadUrexExt};
 
-use crate::class::sprite::construct_sprite;
-use crate::environment::Environment;
-use crate::utils::{ffmpeg, solve_puzzle, ReadAlignedExt};
-use crate::version::*;
-use crate::ExtractorArgs;
+use super::sprite::construct_sprite;
+use crate::extract::environment::Environment;
+use crate::extract::utils::{ffmpeg, solve_puzzle, ReadAlignedExt};
+use crate::extract::version::*;
+use crate::extract::ExtractorArgs;
 
 pub(super) fn _construct_texture_2d<E>(
     data: &[u8],
