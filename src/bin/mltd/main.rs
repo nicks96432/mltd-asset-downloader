@@ -1,4 +1,6 @@
+#[cfg(feature = "download")]
 mod download;
+
 mod manifest;
 mod util;
 
@@ -27,7 +29,6 @@ enum Command {
     /// Extract media from MLTD assets
     Extract(mltd::extract::ExtractorArgs),
 
-    #[cfg(feature = "manifest")]
     /// Download manifest from MLTD asset server
     Manifest(self::manifest::ManifestArgs),
 }
@@ -52,7 +53,6 @@ async fn main() -> Result<()> {
             }
         }
 
-        #[cfg(feature = "manifest")]
         Command::Manifest(m) => self::manifest::manifest_main(&m).await?,
     }
 

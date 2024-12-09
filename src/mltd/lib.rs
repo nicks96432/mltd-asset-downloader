@@ -6,7 +6,10 @@
 
 pub mod asset;
 mod error;
+
+#[cfg(feature = "extract")]
 pub mod extract;
+
 pub mod manifest;
 pub mod net;
 pub mod util;
