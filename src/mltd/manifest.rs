@@ -21,9 +21,8 @@ pub struct ManifestEntry(pub String, pub String, pub usize);
 /// It contains a dictionary of the manifest entries, where the key is the actual
 /// file name.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[repr(transparent)]
+#[serde(transparent)]
 pub struct Manifest {
-    #[serde(flatten)]
     pub data: [LinkedHashMap<String, ManifestEntry>; 1],
 }
 
@@ -42,7 +41,7 @@ impl Manifest {
     /// it cannot deserialize the message pack bytes.
     #[inline]
     pub fn from_slice(value: &[u8]) -> Result<Self, Error> {
-        Ok(rmp_serde::from_slice(value)?)
+        Ok(Self { data: rmp_serde::from_slice(value)? })
     }
 
     /// Computes the difference between two manifests.
@@ -137,9 +136,10 @@ mod tests {
 
     #[test]
     fn test_raw_manifest_from_slice() {
-        let buf = include_bytes!("../../tests/test1.msgpack");
-        let manifest = Manifest::from_slice(buf).unwrap();
-        assert_eq!(rmp_serde::to_vec(&manifest).unwrap(), buf);
+        let expected = include_bytes!("../../tests/test1.msgpack");
+        let manifest: Manifest = Manifest::from_slice(expected).unwrap();
+
+        assert_eq!(*expected, *rmp_serde::to_vec(&[&*manifest]).unwrap());
     }
 
     #[test]
