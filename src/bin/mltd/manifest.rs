@@ -10,7 +10,7 @@ use mltd::net::{get_all_asset_versions, get_asset_version, latest_asset_version}
 use crate::util::create_progress_bar;
 
 #[derive(Args)]
-#[command(author, version, about, arg_required_else_help(true))]
+#[command(about, arg_required_else_help(true))]
 pub struct ManifestArgs {
     #[command(subcommand)]
     pub command: ManifestCommand,

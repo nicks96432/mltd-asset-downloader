@@ -10,7 +10,7 @@ use clap_verbosity_flag::{InfoLevel, Verbosity};
 use mltd::util::log_formatter;
 
 #[derive(Parser)]
-#[command(author, version, about, arg_required_else_help(true))]
+#[command(author, version, about, arg_required_else_help = true)]
 struct Cli {
     #[command(subcommand)]
     pub command: Command,
@@ -21,12 +21,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    #[cfg(feature = "download")]
     /// Download assets from MLTD asset server
+    #[cfg(feature = "download")]
     Download(self::download::DownloaderArgs),
 
-    #[cfg(feature = "extract")]
     /// Extract media from MLTD assets
+    #[cfg(feature = "extract")]
     Extract(mltd::extract::ExtractorArgs),
 
     /// Download manifest from MLTD asset server

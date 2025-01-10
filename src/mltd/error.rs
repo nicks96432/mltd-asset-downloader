@@ -19,12 +19,16 @@ pub enum Error {
     #[error("response deserialization failed: {0}")]
     ResponseDeserialize(reqwest::Error),
 
-    /// Output file creation failed.
-    #[error("cannot create output file: {0}")]
+    /// File creation failed.
+    #[error("cannot create file: {0}")]
     FileCreate(io::Error),
 
-    /// Output file writing failed.
-    #[error("cannot write output file: {0}")]
+    /// File reading failed.
+    #[error("cannot read file: {0}")]
+    FileRead(io::Error),
+
+    /// File writing failed.
+    #[error("cannot write file: {0}")]
     FileWrite(io::Error),
 
     /// Reqwest request failed.
