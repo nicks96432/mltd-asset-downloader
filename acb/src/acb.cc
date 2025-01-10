@@ -4,7 +4,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include "acb.h"
 #include "ichinose/CAcbFile.h"
 #include "ichinose/CAcbHelper.h"
 #include "ichinose/CAfs2Archive.h"
@@ -15,6 +14,8 @@
 #include "kawashima/hca/CHcaFormatReader.h"
 #include "takamori/exceptions/CException.h"
 #include "takamori/streams/CMemoryStream.h"
+
+#include "./acb.h"
 
 static auto decode_stream(acb::CMemoryStream *stream, const acb::CHcaDecoderConfig &config)
     -> rust::Vec<std::uint8_t> {
