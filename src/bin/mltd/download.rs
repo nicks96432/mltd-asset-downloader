@@ -98,8 +98,11 @@ pub async fn download_assets(args: &DownloaderArgs) -> Result<(), Error> {
             let output_path = args.output_dir.join(name);
 
             async move {
-                let _ = tokio::task::spawn(download_task(asset_info, output_path, multi_progress))
-                    .await;
+                if let Err(e) =
+                    tokio::task::spawn(download_task(asset_info, output_path, multi_progress)).await
+                {
+                    log::warn!("failed to download {}: {}", entry.1, e);
+                }
                 main_progress_bar.inc(entry.2 as u64);
                 main_progress_bar.tick();
             }
