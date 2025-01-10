@@ -22,7 +22,10 @@ pub struct ManifestEntry(pub String, pub String, pub usize);
 /// file name.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(transparent)]
-pub struct Manifest([LinkedHashMap<String, ManifestEntry>; 1]);
+pub struct Manifest {
+    #[serde(flatten)]
+    pub data: [LinkedHashMap<String, ManifestEntry>; 1],
+}
 
 impl Manifest {
     /// Deserializes the specified bytes into a raw manifest.
@@ -77,7 +80,7 @@ impl Manifest {
     /// Returns the number of entries in the manifest.
     #[inline]
     pub fn len(&self) -> usize {
-        self.0[0].len()
+        self.data[0].len()
     }
 
     /// Returns `true` if the manifest is empty.
@@ -89,7 +92,7 @@ impl Manifest {
     /// Returns the total size of all assets in the manifest.
     #[inline]
     pub fn asset_size(&self) -> usize {
-        self.0[0].values().fold(0, |acc, v| acc + v.2)
+        self.data[0].values().fold(0, |acc, v| acc + v.2)
     }
 }
 
@@ -97,7 +100,7 @@ impl Deref for Manifest {
     type Target = LinkedHashMap<String, ManifestEntry>;
 
     fn deref(&self) -> &Self::Target {
-        &self.0[0]
+        &self.data[0]
     }
 }
 
