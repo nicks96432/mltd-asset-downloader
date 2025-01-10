@@ -2,6 +2,8 @@
 
 use std::io;
 
+use tokio::task::JoinError;
+
 /// Error type for this crate.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -32,4 +34,8 @@ pub enum Error {
     /// Unknown platform.
     #[error("unknown platform: {0}")]
     UnknownPlatform(String),
+
+    /// Thread join failed.
+    #[error("failed to join thread: {0}")]
+    ThreadJoin(#[from] JoinError),
 }
