@@ -2,8 +2,7 @@ use std::env::var;
 use std::path::Path;
 
 fn main() {
-    let crt_static =
-        var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default().contains("crt-static");
+    let crt_static = var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default().contains("crt-static");
 
     let libacb_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("libacb");
     let mut config = cmake::Config::new(libacb_path);
