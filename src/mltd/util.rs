@@ -1,3 +1,5 @@
+//! Utilities used in this crate.
+
 use std::io::{Result, Write};
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -8,6 +10,7 @@ use log::Record;
 use pin_project::pin_project;
 use tokio::io::{AsyncRead, ReadBuf};
 
+/// Custom log formatter used in this crate.
 pub fn log_formatter(buf: &mut Formatter, record: &Record) -> Result<()> {
     let color_code = match record.level() {
         log::Level::Error => 1, // red
@@ -45,6 +48,8 @@ pub struct ProgressReadAdapter<'bar, R: AsyncRead> {
 }
 
 impl<'bar, R: AsyncRead> ProgressReadAdapter<'bar, R> {
+    /// Create a new [`ProgressReadAdapter`] from a [`tokio::io::AsyncRead`]
+    /// reader and an optional [`indicatif::ProgressBar`].
     pub fn new(inner: R, progress_bar: Option<&'bar mut ProgressBar>) -> Self {
         Self { inner, progress_bar }
     }

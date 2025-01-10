@@ -1,8 +1,11 @@
+//! Functions for downloading and parsing MLTD assets.
+//!
+//! [![github]](https://github.com/nicks96432/mltd-asset-downloader)
+//!
+//! [github]: https://img.shields.io/badge/github-333333?style=for-the-badge&labelColor=555555&logo=github
+
 #![warn(clippy::print_stderr)]
 #![warn(clippy::print_stdout)]
-
-//! This module provides functions for downloading and parsing
-//! MLTD asset manifests.
 
 pub mod asset;
 mod error;

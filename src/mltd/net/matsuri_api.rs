@@ -7,30 +7,42 @@ use crate::Error;
 /// matshrihi.me MLTD v2 API `/version/assets/:app` response body structure.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppVersion {
+    /// App version.
     pub version: String,
 
+    /// Forced update date and time.
     #[serde(rename = "updatedAt")]
     pub updated_at: String,
-    pub revision: u64,
+
+    /// Revision number
+    ///
+    /// The value will be [`None`] if the version is not actually released.
+    pub revision: Option<u64>,
 }
 
 /// matshrihi.me MLTD v2 API `/version/assets/:version` response body structure.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AssetVersion {
+    /// Manifest filename on MLTD asset server.
     #[serde(rename = "indexName")]
     pub manifest_filename: String,
 
+    /// Delivery date and time.
     #[serde(rename = "updatedAt")]
     pub updated_at: String,
+
+    /// Asset version.
     pub version: u64,
 }
 
 /// matshrihi.me MLTD v2 API `/version/latest` response body structure.
 #[derive(Debug, Deserialize)]
 pub struct VersionInfo {
+    /// App version information
     #[serde(rename = "app")]
     pub app_version: AppVersion,
 
+    /// Asset version information
     #[serde(rename = "asset")]
     pub asset_version: AssetVersion,
 }

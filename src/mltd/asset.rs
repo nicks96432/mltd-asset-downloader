@@ -1,3 +1,5 @@
+//! MLTD asset handling.
+
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 use std::io;
@@ -16,13 +18,22 @@ use crate::net::AssetVersion;
 use crate::util::ProgressReadAdapter;
 use crate::Error;
 
+/// Base URL of MLTD asset server.
 pub const ASSET_URL_BASE: &str = "https://td-assets.bn765.com";
+
+/// Unity version of MLTD game client.
 pub const UNITY_VERSION: &str = "2020.3.32f1";
 
+/// Information of an MLTD asset.
 #[derive(Debug, Clone)]
 pub struct AssetInfo {
+    /// Asset filename
     pub filename: String,
+
+    /// Platform variant
     pub platform: Platform,
+
+    /// Asset version
     pub version: AssetVersion,
 }
 
@@ -180,7 +191,10 @@ impl Asset<'_> {
 /// their manifests are different.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum Platform {
+    /// Android platform
     Android,
+
+    /// iOS platform
     IOS,
 }
 
@@ -215,7 +229,7 @@ impl FromStr for Platform {
         match s.to_lowercase().as_str() {
             "android" => Ok(Self::Android),
             "ios" => Ok(Self::IOS),
-            s => Err(Error::UnknownVariant(s.to_string())),
+            s => Err(Error::UnknownPlatform(s.to_string())),
         }
     }
 }

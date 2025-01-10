@@ -23,6 +23,7 @@ pub struct ManifestEntry(pub String, pub String, pub usize);
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Manifest {
+    /// The underlying raw manifest data.
     pub data: [LinkedHashMap<String, ManifestEntry>; 1],
 }
 
@@ -30,10 +31,6 @@ impl Manifest {
     /// Deserializes the specified bytes into a raw manifest.
     ///
     /// The bytes must be in message pack format.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` - The message pack bytes to deserialize.
     ///
     /// # Errors
     ///
@@ -44,15 +41,7 @@ impl Manifest {
         Ok(Self { data: rmp_serde::from_slice(value)? })
     }
 
-    /// Computes the difference between two manifests.
-    ///
-    /// # Arguments
-    ///
-    /// * `other` - The other manifest.
-    ///
-    /// # Returns
-    ///
-    /// The added, updated and removed entries in the new manifest.
+    /// Computes the difference from `other` manifest.
     pub fn diff<'a>(&'a self, other: &'a Manifest) -> ManifestDiff<'a> {
         let mut diff = ManifestDiff::new();
 
@@ -111,10 +100,16 @@ impl TryFrom<Asset<'_>> for Manifest {
     }
 }
 
+/// A diff of two manifests.
 #[derive(Debug, Serialize)]
 pub struct ManifestDiff<'a> {
+    /// The added entries in the new manifest.
     pub added: HashMap<&'a String, &'a ManifestEntry>,
+
+    /// The updated entries in the new manifest.
     pub updated: HashMap<&'a String, &'a ManifestEntry>,
+
+    /// The removed entries in the new manifest.
     pub removed: HashMap<&'a String, &'a ManifestEntry>,
 }
 
