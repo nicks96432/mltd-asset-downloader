@@ -6,7 +6,7 @@ edition = { workspace = true }
 name = "acb"
 license = { workspace = true }
 repository = { workspace = true }
-version = "2.0.1"
+version = "2.0.1+0.4.0"
 
 [dependencies]
 cxx = { features = ["c++20"], version = "1.0.136" }

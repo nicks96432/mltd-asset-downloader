@@ -24,7 +24,7 @@ version = "2.0.0"
 
 [dependencies]
 acb = { optional = true, path = "./acb" }
-aes = { optional = true, version = "0.8.4"}
+aes = { optional = true, version = "0.8.4" }
 anyhow = "1.0.95"
 byteorder = { optional = true, version = "1.5.0" }
 cbc = { optional = true, version = "0.1.2" }
