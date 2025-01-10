@@ -113,7 +113,7 @@ impl Asset<'_> {
             pb.set_length(res.content_length().unwrap_or(0));
         }
 
-        log::debug!("reading response body to buf");
+        log::debug!("download {} to buf", asset_info.filename);
 
         let stream_reader = res
             .bytes_stream()
@@ -169,7 +169,7 @@ impl Asset<'_> {
             pb.set_length(res.content_length().unwrap_or(0));
         }
 
-        log::debug!("downloading response body to file");
+        log::debug!("save asset to {}", output.display());
 
         let stream_reader = res
             .bytes_stream()

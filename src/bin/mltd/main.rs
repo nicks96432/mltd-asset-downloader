@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
     let args = Cli::parse();
 
     env_logger::Builder::new()
-        .filter_level(args.verbose.log_level_filter())
+        .filter_module(env!("CARGO_PKG_NAME"), args.verbose.log_level_filter())
         .format(log_formatter)
         .init();
 

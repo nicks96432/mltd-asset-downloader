@@ -25,7 +25,7 @@ pub fn log_formatter(buf: &mut Formatter, record: &Record) -> Result<()> {
     };
     let level = record.level().as_str();
     let target = record.target();
-    let timestamp = buf.timestamp();
+    let timestamp = buf.timestamp_micros();
     let body = record.args();
 
     writeln!(
