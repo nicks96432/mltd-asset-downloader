@@ -1,12 +1,5 @@
 [workspace]
-members = [
-    "acb",
-    "cli",
-    "download",
-    "extract",
-    "manifest",
-    "utils",
-]
+members = ["acb"]
 resolver = "2"
 
 [workspace.package]
@@ -15,31 +8,63 @@ edition = "2021"
 license = "MIT"
 repository = "https://github.com/nicks96432/mltd-asset-downloader"
 
-[workspace.dependencies]
-ctor = "0.2.9"
-linked-hash-map = "0.5.6" 
+[package]
+authors = { workspace = true }
+categories = ["command-line-utilities"]
+description = "A CLI made for assets in THE iDOLM@STER® MILLION LIVE! THEATER DAYS (MLTD)"
+edition = { workspace = true }
+homepage = "https://github.com/nicks96432/mltd-asset-downloader"
+keywords = ["downloader", "MLTD", "mirishita", "theaterdays", "unpack"]
+license = { workspace = true }
+name = "mltd"
+readme = "README.md"
+repository = { workspace = true }
+version = "2.0.0"
+
+[dependencies]
+acb = { optional = true, path = "./acb" }
+aes = { optional = true, version = "0.8.4" }
+anyhow = "1.0.95"
+byteorder = { optional = true, version = "1.5.0" }
+cbc = { optional = true, version = "0.1.2" }
+clap = { features = ["color", "deprecated", "derive", "unicode", "wrap_help"], version = "4.5.26" }
+clap-verbosity-flag = "3.0.2"
+env_logger = { default-features = false, features = ["humantime"], version = "0.11.6" }
+futures = "0.3.31"
+human_bytes = { default-features = false, optional = true, version = "0.4.3" }
+image = { default-features = false, features = ["png"], optional = true, version = "0.25.5" }
+indicatif = { default-features = false, version = "0.17.9" }
+lazy-regex = { default-features = false, optional = true, features = ["std", "perf"], version = "3.4.1" }
+linked-hash-map = { features = ["serde_impl"], version = "0.5.6" }
 log = "0.4.22"
-num_cpus = "1.16.0"
-rayon = "1.10.0"
-serde = "1.0.215"
+num_cpus = { optional = true, version = "1.16.0" }
+num-derive = { optional = true, version = "0.4.2" }
+num-traits = { optional = true, version = "0.2.19" }
+pin-project = "1.1.8"
+rabex = { optional = true, version = "0.0.3" }
+rayon = { optional = true, version = "1.10.0" }
+reqwest = { features = ["deflate", "gzip", "json", "stream", "zstd"], version = "0.12.12" }
+rmp-serde = "1.3.0"
+serde = { features = ["derive"], version = "1.0.217" }
+texture2ddecoder = { optional = true, version = "0.1.1" }
+thiserror = "2.0.10"
+tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
+tokio-util = { version = "0.7.13", features=["compat"] }
 
-[workspace.dependencies.clap]
-default-features = false
-version = "4.5.23"
+[dev-dependencies]
+ctor = "0.2.9"
+rand = "0.8.5"
+rand_xoshiro = "0.6.0"
+tokio-test = "0.4.4"
 
-[workspace.dependencies.env_logger]
-default-features = false
-features = ["humantime"]
-version = "0.11.5"
+[lib]
+name = "mltd"
+path = "src/mltd/lib.rs"
 
-[workspace.dependencies.indicatif]
-default-features = false
-features = ["rayon"]
-version = "0.17.9"
-
-[workspace.dependencies.ureq]
-features = ["json", "native-certs"]
-version = "2.12.1"
+[[bin]]
+name = "mltd"
+test = false
+doc = false
 
 [profile.release]
 codegen-units = 20
@@ -49,3 +74,22 @@ strip = true
 
 [profile.dev]
 split-debuginfo = "unpacked"
+
+[features]
+default = ["download", "extract"]
+debug = []
+download = ["dep:human_bytes", "dep:num_cpus"]
+extract = [
+    "dep:acb",
+    "dep:aes",
+    "dep:byteorder",
+    "dep:cbc",
+    "dep:image",
+    "dep:lazy-regex",
+    "dep:num_cpus",
+    "dep:num-derive",
+    "dep:num-traits",
+    "dep:rabex",
+    "dep:rayon",
+    "dep:texture2ddecoder"
+]

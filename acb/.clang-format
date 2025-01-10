@@ -24,6 +24,14 @@ DerivePointerAlignment: false
 FixNamespaceComments: false
 IndentCaseLabels: false
 IndentWidth: 4
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: "^<[^.]+" # STL includes (no '.')
+    Priority: 0
+  - Regex: '^"[^.\/].*' # quoted includes
+    Priority: 1
+  - Regex: '^"\./.*' # relative includes
+    Priority: 2
 NamespaceIndentation: All
 PointerAlignment: Right
 ReflowComments: true

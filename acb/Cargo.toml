@@ -6,17 +6,17 @@ edition = { workspace = true }
 name = "acb"
 license = { workspace = true }
 repository = { workspace = true }
-version = "2.0.1"
+version = "2.0.1+0.4.0"
 
 [dependencies]
-cxx = "1.0.133"
+cxx = { features = ["c++20"], version = "1.0.136" }
 
 [build-dependencies]
 cmake = "0.1.52"
 
 [build-dependencies.cxx-build]
 features = ["parallel"]
-version = "1.0.133"
+version = "1.0.136"
 
 [features]
 default = []
