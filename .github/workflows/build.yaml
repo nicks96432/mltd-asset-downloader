@@ -32,7 +32,7 @@ jobs:
       - name: Build (Windows)
         if: ${{ contains('Windows', runner.os) }}
         run: |
-          cargo --config .\cargo\windows-config.toml build --release
+          cargo --config .\.cargo\windows-config.toml build --release
 
       - name: Build
         if: ${{ !contains('Windows', runner.os) }}
