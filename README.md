@@ -39,12 +39,18 @@ Options:
 The following is required:
 
 * A rust toolchain.
-* cmake >= 3.2 (for libcgss)
+* cmake >= 3.21 (for libacb)
 * MSVC v142 or newer version. (Windows)
 * ... or any compiler that supports C++14. (gnu environment)
 
 ```shell
 cargo build --release
+```
+
+On windows, you should build with the following command instead:
+
+```shell
+cargo --config .cargo/windows-config.toml build --release
 ```
 
 The executable will be in the `target/release` directory.

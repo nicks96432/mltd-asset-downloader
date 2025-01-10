@@ -9,7 +9,7 @@ repository = { workspace = true }
 version = "2.0.1"
 
 [dependencies]
-cxx = "1.0.136"
+cxx = { features = ["c++20"], version = "1.0.136" }
 
 [build-dependencies]
 cmake = "0.1.52"

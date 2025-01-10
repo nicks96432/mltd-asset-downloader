@@ -39,12 +39,18 @@ Commands:
 你需要這些東西:
 
 * rust toolchain
-* cmake >= 3.2 (libcgss要用到)
+* cmake >= 3.21 (libacb要用到)
 * MSVC v142或者更新 (Windows)
 * ...或是其他支援C++14的編譯器 (gnu環境)
 
 ```shell
 cargo build --release
+```
+
+Windows上要改用這個指令：
+
+```shell
+cargo --config .cargo/windows-config.toml build --release
 ```
 
 執行檔會出現在`target/release`資料夾裡。
