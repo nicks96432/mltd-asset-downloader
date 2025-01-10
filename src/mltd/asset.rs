@@ -46,6 +46,14 @@ pub struct Asset<'data> {
 }
 
 impl Asset<'_> {
+    /// Send download request to MLTD asset server and returns the response.
+    ///
+    /// This will send GET request to MLTD asset server according to `asset_info`,
+    /// with the headers set in the game client.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::Request`]: if it cannot send request to MLTD asset server.
     async fn send_request(asset_info: &AssetInfo) -> Result<reqwest::Response, Error> {
         let client = reqwest::Client::new();
 
@@ -58,6 +66,32 @@ impl Asset<'_> {
         req.send().await.map_err(Error::Request)
     }
 
+    /// Download the specified asset from MLTD asset server.
+    ///
+    /// This will send GET request to MLTD asset server according to `asset_info`.
+    /// An optional `progress_bar` can be specified to track the download progress.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::FileWrite`]: if it cannot write the downloaded data to file.
+    /// - [`Error::Request`]: if it cannot send request to MLTD asset server.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use mltd::asset::{Asset, AssetInfo};
+    /// use mltd::net;
+    ///
+    /// let asset_version = net::latest_asset_version().await.unwrap();
+    /// let asset_info = AssetInfo {
+    ///     filename: asset_version.asset_filename.clone(),
+    ///     platform: platform,
+    ///     version: asset_version,
+    /// };
+    ///
+    /// let asset = Asset::download(asset_info, None).await.unwrap();
+    /// println!("asset size: {}", asset.data.len());
+    /// ```
     pub async fn download(
         asset_info: AssetInfo,
         progress_bar: Option<&mut ProgressBar>,
@@ -84,6 +118,32 @@ impl Asset<'_> {
         Ok(Self { data: Cow::Owned(buf.into_inner()), info: asset_info })
     }
 
+    /// Download the specified asset from MLTD asset server and write it to disk.
+    ///
+    /// If `output` is not specified, it will be default to `asset_info.filename`.
+    /// An optional `progress_bar` can be specified to track the download progress.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::FileCreate`]: if it cannot create the output file.
+    /// - [`Error::FileWrite`]: if it cannot write the downloaded data to file.
+    /// - [`Error::Request`]: if it cannot send request to MLTD asset server.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use mltd::asset::{Asset, AssetInfo};
+    /// use mltd::net;
+    ///
+    /// let asset_version = net::latest_asset_version().await.unwrap();
+    /// let asset_info = AssetInfo {
+    ///     filename: asset_version.asset_filename.clone(),
+    ///     platform: platform,
+    ///     version: asset_version,
+    /// };
+    ///
+    /// Asset::download_to_file(asset_info, Some("asset.unity3d"), None).await.unwrap();
+    /// ```
     pub async fn download_to_file(
         asset_info: &AssetInfo,
         output: Option<&Path>,
