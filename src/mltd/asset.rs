@@ -90,18 +90,20 @@ impl Asset<'_> {
     /// # Example
     ///
     /// ```no_run
-    /// use mltd::asset::{Asset, AssetInfo};
+    /// use mltd::asset::{Asset, AssetInfo, Platform};
     /// use mltd::net;
     ///
-    /// let asset_version = net::latest_asset_version().await.unwrap();
-    /// let asset_info = AssetInfo {
-    ///     filename: asset_version.asset_filename.clone(),
-    ///     platform: platform,
-    ///     version: asset_version,
-    /// };
+    /// tokio_test::block_on(async {
+    ///     let asset_version = net::latest_asset_version().await.unwrap();
+    ///     let asset_info = AssetInfo {
+    ///         filename: asset_version.manifest_filename.clone(),
+    ///         platform: Platform::Android,
+    ///         version: asset_version,
+    ///     };
     ///
-    /// let asset = Asset::download(asset_info, None).await.unwrap();
-    /// println!("asset size: {}", asset.data.len());
+    ///     let asset = Asset::download(asset_info, None).await.unwrap();
+    ///     println!("asset size: {}", asset.data.len());
+    /// });
     /// ```
     pub async fn download(
         asset_info: AssetInfo,
@@ -143,17 +145,21 @@ impl Asset<'_> {
     /// # Example
     ///
     /// ```no_run
-    /// use mltd::asset::{Asset, AssetInfo};
+    /// use std::path::Path;
+    ///
+    /// use mltd::asset::{Asset, AssetInfo, Platform};
     /// use mltd::net;
     ///
-    /// let asset_version = net::latest_asset_version().await.unwrap();
-    /// let asset_info = AssetInfo {
-    ///     filename: asset_version.asset_filename.clone(),
-    ///     platform: platform,
-    ///     version: asset_version,
-    /// };
+    /// tokio_test::block_on(async {
+    ///     let asset_version = net::latest_asset_version().await.unwrap();
+    ///     let asset_info = AssetInfo {
+    ///         filename: asset_version.manifest_filename.clone(),
+    ///         platform: Platform::Android,
+    ///         version: asset_version,
+    ///     };
     ///
-    /// Asset::download_to_file(asset_info, Some("asset.unity3d"), None).await.unwrap();
+    ///     Asset::download_to_file(&asset_info, Some(Path::new("asset.unity3d")), None).await.unwrap();
+    /// });
     /// ```
     pub async fn download_to_file(
         asset_info: &AssetInfo,

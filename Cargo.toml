@@ -55,6 +55,7 @@ tokio-util = { version = "0.7.13", features=["compat"] }
 ctor = "0.2.9"
 rand = "0.8.5"
 rand_xoshiro = "0.6.0"
+tokio-test = "0.4.4"
 
 [lib]
 name = "mltd"

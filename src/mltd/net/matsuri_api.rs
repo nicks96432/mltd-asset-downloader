@@ -64,9 +64,11 @@ const MATSURI_API_ENDPOINT: &str = "https://api.matsurihi.me/api/mltd/v2";
 /// # Examples
 ///
 /// ```no_run
-/// use mltd_asset_manifest::latest_asset_version;
+/// use mltd::net::latest_asset_version;
 ///
-/// let asset_version = latest_asset_version().unwrap().version;
+/// tokio_test::block_on(async {
+///     let asset_version = latest_asset_version().await.unwrap().version;
+/// });
 /// ```
 pub async fn latest_asset_version() -> Result<AssetVersion, Error> {
     let client = reqwest::Client::new();
@@ -132,10 +134,12 @@ pub async fn get_all_asset_versions() -> Result<Vec<AssetVersion>, Error> {
 /// # Examples
 ///
 /// ```no_run
-/// use mltd_asset_manifest::get_asset_version;
+/// use mltd::net::get_asset_version;
 ///
-/// let asset_version = get_asset_version(1).unwrap();
-/// assert_eq!(asset_version.version, 1);
+/// tokio_test::block_on(async {
+///     let asset_version = get_asset_version(1).await.unwrap();
+///     assert_eq!(asset_version.version, 1);
+/// });
 /// ```
 pub async fn get_asset_version(version: u64) -> Result<AssetVersion, Error> {
     let client = reqwest::Client::new();
