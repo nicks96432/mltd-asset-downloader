@@ -1,5 +1,5 @@
 [workspace]
-members = ["acb"]
+members = ["crates/vgmstream", "crates/vgmstream-sys"]
 resolver = "2"
 
 [workspace.package]
@@ -22,7 +22,6 @@ repository = { workspace = true }
 version = "2.0.0"
 
 [dependencies]
-acb = { optional = true, path = "./acb" }
 aes = { optional = true, version = "0.8.4" }
 anyhow = "1.0.95"
 byteorder = { optional = true, version = "1.5.0" }
@@ -49,7 +48,8 @@ serde = { features = ["derive"], version = "1.0.217" }
 texture2ddecoder = { optional = true, version = "0.1.1" }
 thiserror = "2.0.10"
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
-tokio-util = { version = "0.7.13", features=["compat"] }
+tokio-util = { version = "0.7.13", features = ["compat"] }
+vgmstream = { optional = true, path = "crates/vgmstream" }
 
 [dev-dependencies]
 ctor = "0.2.9"
@@ -80,7 +80,7 @@ default = ["download", "extract"]
 debug = []
 download = ["dep:human_bytes", "dep:num_cpus"]
 extract = [
-    "dep:acb",
+    "dep:vgmstream",
     "dep:aes",
     "dep:byteorder",
     "dep:cbc",
