@@ -33,8 +33,17 @@ fn main() {
 
     let dst = config.build();
 
-    println!("cargo:rustc-link-search=native={}", dst.join("build").join("src").display());
-    println!("cargo:rustc-link-lib=vgmstream");
+    let mut search_path = dst.join("build").join("src");
+    if cfg!(target_os = "windows") {
+        search_path = search_path.join("Debug");
+    }
+    println!("cargo:rustc-link-search=native={}", search_path.display());
+
+    let lib_path = match cfg!(target_os = "windows") {
+        true => "libvgmstream",
+        false => "vgmstream",
+    };
+    println!("cargo:rustc-link-lib={}", lib_path);
 
     let bindings = bindgen::Builder::default()
         .header(concat!(env!("CARGO_MANIFEST_DIR"), "/vgmstream/src/libvgmstream.h"))

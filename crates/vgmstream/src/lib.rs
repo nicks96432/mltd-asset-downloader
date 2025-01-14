@@ -1,24 +1,23 @@
 mod error;
 mod sf;
 
-use std::ffi::CStr;
+use std::ffi::{c_int, CStr};
 
 pub use crate::error::Error;
 pub use crate::sf::StreamFile;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[repr(u32)]
 pub enum SampleType {
-    Pcm16 = vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_PCM16,
-    Pcm24 = vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_PCM24,
-    Pcm32 = vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_PCM32,
-    Float = vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_FLOAT,
+    Pcm16 = vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_PCM16 as isize,
+    Pcm24 = vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_PCM24 as isize,
+    Pcm32 = vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_PCM32 as isize,
+    Float = vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_FLOAT as isize,
 }
 
-impl TryFrom<u32> for SampleType {
+impl TryFrom<c_int> for SampleType {
     type Error = Error;
 
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
+    fn try_from(value: c_int) -> Result<Self, Self::Error> {
         match value {
             vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_PCM16 => Ok(SampleType::Pcm16),
             vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_PCM24 => Ok(SampleType::Pcm24),
@@ -367,7 +366,7 @@ mod tests {
 
             size += buf.len();
         }
-        
+
         assert_eq!(size, 3528000);
     }
 }
