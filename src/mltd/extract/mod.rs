@@ -223,7 +223,7 @@ fn extract_object(
             map::TextAsset => {
                 let text_asset = construct_text_asset(data, serialized_file)?;
                 match text_asset.m_Name.contains("acb") {
-                    true => extract_acb(data, &output_dir, args, serialized_file)?,
+                    true => extract_acb(data, &output_dir, serialized_file)?,
                     false => {
                         let output_path = output_dir.join(text_asset.m_Name).with_extension("txt");
                         log::info!("writing text to {}", output_path.display());

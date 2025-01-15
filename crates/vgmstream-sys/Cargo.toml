@@ -1,0 +1,24 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+links = "vgmstream"
+name = "vgmstream-sys"
+repository.workspace = true
+version = "0.1.0-vgmstream-r1980"
+
+[build-dependencies]
+bindgen = "0.71.1"
+cmake = "0.1.52"
+
+[features]
+default = []
+atrac9 = []
+celt = []
+ffmpeg = []
+g719 = []
+g7221 = []
+mpeg = []
+speex = []
+static = []
+vorbis = []

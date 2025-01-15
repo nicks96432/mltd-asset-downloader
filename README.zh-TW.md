@@ -38,10 +38,9 @@ Commands:
 
 你需要這些東西:
 
-* rust toolchain
-* cmake >= 3.21 (libacb要用到)
-* MSVC v142或者更新 (Windows)
-* ...或是其他支援C++14的編譯器 (gnu環境)
+* rust 編譯工具 ([安裝教學](https://www.rust-lang.org/tools/install))
+* cmake >= 3.6 (vgmstream要用到)
+* clang (bindgen要用到) ([安裝教學](https://rust-lang.github.io/rust-bindgen/requirements.html))
 
 ```shell
 cargo build --release

@@ -38,19 +38,12 @@ Options:
 
 The following is required:
 
-* A rust toolchain.
-* cmake >= 3.21 (for libacb)
-* MSVC v142 or newer version. (Windows)
-* ... or any compiler that supports C++14. (gnu environment)
+* A rust toolchain ([installation guide](https://www.rust-lang.org/tools/install))
+* cmake >= 3.6 (for vgmstream)
+* clang (for bindgen) ([installation guide](https://rust-lang.github.io/rust-bindgen/requirements.html))
 
 ```shell
 cargo build --release
-```
-
-On windows, you should build with the following command instead:
-
-```shell
-cargo --config .cargo/windows-config.toml build --release
 ```
 
 The executable will be in the `target/release` directory.
