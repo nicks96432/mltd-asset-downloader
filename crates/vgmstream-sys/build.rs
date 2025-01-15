@@ -35,7 +35,10 @@ fn main() {
 
     let mut search_path = dst.join("build").join("src");
     if cfg!(target_os = "windows") {
-        search_path = search_path.join("Debug");
+        match var("PROFILE") == Ok("release".to_string()) {
+            true => search_path = search_path.join("Release"),
+            false => search_path = search_path.join("Debug"),
+        }
     }
     println!("cargo:rustc-link-search=native={}", search_path.display());
 

@@ -1,12 +1,15 @@
 mod error;
 mod sf;
 
-use std::ffi::{c_int, CStr};
+use std::ffi::CStr;
+
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 
 pub use crate::error::Error;
 pub use crate::sf::StreamFile;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, FromPrimitive)]
 pub enum SampleType {
     Pcm16 = vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_PCM16 as isize,
     Pcm24 = vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_PCM24 as isize,
@@ -14,17 +17,9 @@ pub enum SampleType {
     Float = vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_FLOAT as isize,
 }
 
-impl TryFrom<c_int> for SampleType {
-    type Error = Error;
-
-    fn try_from(value: c_int) -> Result<Self, Self::Error> {
-        match value {
-            vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_PCM16 => Ok(SampleType::Pcm16),
-            vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_PCM24 => Ok(SampleType::Pcm24),
-            vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_PCM32 => Ok(SampleType::Pcm32),
-            vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_FLOAT => Ok(SampleType::Float),
-            _ => Err(Error::InvalidSampleType(value)),
-        }
+impl From<vgmstream_sys::libvgmstream_sample_t> for SampleType {
+    fn from(value: vgmstream_sys::libvgmstream_sample_t) -> Self {
+        SampleType::from_u32(value as u32).expect("Invalid sample type")
     }
 }
 
@@ -249,10 +244,7 @@ impl VgmStream {
             None => return Err(Error::Generic),
         };
 
-        let sample_type = match SampleType::try_from(format.sample_type) {
-            Ok(st) => st,
-            Err(e) => return Err(e),
-        };
+        let sample_type = SampleType::from(format.sample_type);
 
         let codec_name =
             unsafe { CStr::from_ptr(format.codec_name.as_ptr()) }.to_string_lossy().to_string();
