@@ -19,6 +19,7 @@ pub enum SampleType {
 
 impl From<vgmstream_sys::libvgmstream_sample_t> for SampleType {
     fn from(value: vgmstream_sys::libvgmstream_sample_t) -> Self {
+        #[allow(clippy::unnecessary_cast)] // libvgmstream_sample_t is i32 on windows
         SampleType::from_u32(value as u32).expect("Invalid sample type")
     }
 }
@@ -224,14 +225,14 @@ impl VgmStream {
         Ok(())
     }
 
-    pub(crate) fn as_ref<'a>(&'a self) -> Result<&'a vgmstream_sys::libvgmstream_t, Error> {
+    pub(crate) fn as_ref(&self) -> Result<&vgmstream_sys::libvgmstream_t, Error> {
         match unsafe { self.inner.as_ref() } {
             Some(i) => Ok(i),
             None => Err(Error::Generic),
         }
     }
 
-    pub(crate) fn as_mut<'a>(&'a mut self) -> Result<&'a mut vgmstream_sys::libvgmstream_t, Error> {
+    pub(crate) fn as_mut(&mut self) -> Result<&mut vgmstream_sys::libvgmstream_t, Error> {
         match unsafe { self.inner.as_mut() } {
             Some(i) => Ok(i),
             None => Err(Error::Generic),
