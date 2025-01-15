@@ -29,15 +29,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build (Windows)
-        if: ${{ contains('Windows', runner.os) }}
-        run: |
-          cargo --config .\.cargo\windows-config.toml build --release
-
       - name: Build
-        if: ${{ !contains('Windows', runner.os) }}
-        run: |
-          cargo build --release
+        run: cargo build --release
 
       - name: Get git commit hash (Windows)
         if: ${{ contains('Windows', runner.os) }}
