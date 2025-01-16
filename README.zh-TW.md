@@ -1,7 +1,6 @@
 # MLTD 遊戲資源下載器
 
-![GitHub Check Status](https://img.shields.io/github/actions/workflow/status/nicks96432/mltd-asset-downloader/check.yaml?label=Check)
-![GitHub Build Status](https://img.shields.io/github/actions/workflow/status/nicks96432/mltd-asset-downloader/build.yaml)
+[![GitHub Build Status](https://img.shields.io/github/actions/workflow/status/nicks96432/mltd-asset-downloader/build.yaml)][build status]
 ![GitHub Repo stars](https://img.shields.io/github/stars/nicks96432/mltd-asset-downloader)
 ![GitHub top language](https://img.shields.io/github/languages/top/nicks96432/mltd-asset-downloader)
 [![License](https://img.shields.io/github/license/nicks96432/mltd-asset-downloader)](LICENSE)
@@ -34,9 +33,14 @@ Commands:
   -V, --version     顯示版本
 ```
 
+## 下載
+
+* [Github最新版本](https://github.com/nicks96432/mltd-asset-downloader/releases/latest)
+* [main自動編譯版](https://nightly.link/nicks96432/mltd-asset-downloader/workflows/build.yaml/main)
+
 ## 編譯
 
-你需要這些東西:
+你需要這些工具:
 
 * rust 編譯工具 ([安裝教學](https://www.rust-lang.org/tools/install))
 * cmake >= 3.6 (vgmstream要用到)
@@ -44,12 +48,6 @@ Commands:
 
 ```shell
 cargo build --release
-```
-
-Windows上要改用這個指令：
-
-```shell
-cargo --config .cargo/windows-config.toml build --release
 ```
 
 執行檔會出現在`target/release`資料夾裡。
@@ -67,3 +65,5 @@ cargo --config .cargo/windows-config.toml build --release
 使用或散布本程式的輸出內容，須遵循使用者所在地的相關法律規範。
 
 使用本程式即表示您同意自行承擔因使用本程式而可能產生的任何法律責任。
+
+[build status]: https://github.com/nicks96432/mltd-asset-downloader/actions/workflows/build.yaml
