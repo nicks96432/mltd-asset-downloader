@@ -53,7 +53,8 @@ tokio-util = { features = ["compat"], version = "0.7.13" }
 vgmstream = { optional = true, path = "crates/vgmstream" }
 
 [build-dependencies]
-vergen-gitcl = { features = ["build"], version = "1.0.5" }
+vergen = { features = ["build", "cargo", "emit_and_set", "rustc"], version = "9.0.4" }
+vergen-gitcl = { version = "1.0.5" }
 
 [dev-dependencies]
 ctor = "0.2.9"

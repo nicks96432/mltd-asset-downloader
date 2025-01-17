@@ -5,7 +5,7 @@ license.workspace = true
 links = "vgmstream"
 name = "vgmstream-sys"
 repository.workspace = true
-version = "0.1.0-vgmstream-r1980"
+version = "0.1.0-vgmstream-r1980-16-g1f3a6b36"
 
 [build-dependencies]
 bindgen = "0.71.1"
