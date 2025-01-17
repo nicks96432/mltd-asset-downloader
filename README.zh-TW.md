@@ -42,6 +42,7 @@ Commands:
 
 你需要這些工具:
 
+* git
 * rust 編譯工具 ([安裝教學](https://www.rust-lang.org/tools/install))
 * cmake >= 3.6 (vgmstream要用到)
 * clang (bindgen要用到) ([安裝教學](https://rust-lang.github.io/rust-bindgen/requirements.html))
