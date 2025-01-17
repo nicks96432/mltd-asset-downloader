@@ -3,6 +3,7 @@ name: Build
 on:
   push:
     branches: ["main"]
+    tags: ["*"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -32,36 +33,26 @@ jobs:
       - name: Build
         run: cargo build --release
 
-      - name: Get git commit hash (Windows)
+      - name: Get version (Windows)
         if: ${{ contains('Windows', runner.os) }}
-        id: hash_windows
-        run: echo "hash=$("${{ github.sha }}".SubString(0, 10))" >> $env:GITHUB_OUTPUT
+        id: version_windows
+        run: echo "version=$(git describe --tags --dirty)" >> $env:GITHUB_OUTPUT
 
-      - name: Get git commit hash
+      - name: Get version
         if: ${{ !contains('Windows', runner.os) }}
-        id: hash
-        run: echo "hash=${GITHUB_SHA:0:10}" >> $GITHUB_OUTPUT
-
-      - name: Rename artifact (Windows)
-        if: ${{ contains('Windows', runner.os) }}
-        run: mv target/release/mltd.exe mltd-git-${{ steps.hash_windows.outputs.hash }}-Windows.exe
-
-      - name: Rename artifact
-        if: ${{ !contains('Windows', runner.os) }}
-        run: |
-          chmod +x target/release/mltd
-          mv target/release/mltd mltd-git-${{ steps.hash.outputs.hash }}-${{ runner.os }}
+        id: version
+        run: echo "version=$(git describe --tags --dirty)" >> $GITHUB_OUTPUT
 
       - name: Publish artifact (Windows)
         if: ${{ contains('Windows', runner.os) }}
         uses: actions/upload-artifact@v4
         with:
-          name: mltd-git-${{ steps.hash_windows.outputs.hash }}-Windows.exe
-          path: mltd-git-${{ steps.hash_windows.outputs.hash }}-Windows.exe
+          name: mltd-git-${{ steps.version_windows.outputs.version }}-Windows.exe
+          path: target/release/mltd.exe
 
       - name: Publish artifact
         if: ${{ !contains('Windows', runner.os) }}
         uses: actions/upload-artifact@v4
         with:
-          name: mltd-git-${{ steps.hash.outputs.hash }}-${{ runner.os }}
-          path: mltd-git-${{ steps.hash.outputs.hash }}-${{ runner.os }}
+          name: mltd-git-${{ steps.version.outputs.version }}-${{ runner.os }}
+          path: target/release/mltd

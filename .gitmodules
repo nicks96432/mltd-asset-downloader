@@ -1,3 +1,4 @@
 [submodule "crates/vgmstream-sys/vgmstream"]
 	path = crates/vgmstream-sys/vgmstream
 	url = https://github.com/vgmstream/vgmstream.git
+	ignore = dirty
