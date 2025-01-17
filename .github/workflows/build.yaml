@@ -54,14 +54,14 @@ jobs:
 
       - name: Publish artifact (Windows)
         if: ${{ contains('Windows', runner.os) }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: mltd-git-${{ steps.hash_windows.outputs.hash }}-Windows.exe
           path: mltd-git-${{ steps.hash_windows.outputs.hash }}-Windows.exe
 
       - name: Publish artifact
         if: ${{ !contains('Windows', runner.os) }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: mltd-git-${{ steps.hash.outputs.hash }}-${{ runner.os }}
           path: mltd-git-${{ steps.hash.outputs.hash }}-${{ runner.os }}
