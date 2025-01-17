@@ -2582,7 +2582,6 @@ dependencies = [
  "regex",
  "rustc_version",
  "rustversion",
- "time",
  "vergen-lib",
 ]
 
