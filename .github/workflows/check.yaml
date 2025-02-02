@@ -17,6 +17,13 @@ jobs:
         with:
           submodules: true
 
+      - name: Install FFmpeg
+        id: setup-ffmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          ffmpeg-version: "7.1"
+          linking-type: shared
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@nightly
 
@@ -33,5 +40,6 @@ jobs:
 
       - name: Check
         run: |
+          export FFMPEG_DIR='${{ steps.setup-ffmpeg.outputs.ffmpeg-path }}'
           cargo deny check
           cargo udeps
