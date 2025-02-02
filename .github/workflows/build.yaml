@@ -43,6 +43,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Build
+        id: build
         run: |
           export name=mltd-git-$(git describe --tags --dirty)-${{ runner.os }}
 
@@ -64,5 +65,7 @@ jobs:
       - name: Publish artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.version.outputs.name }}
+          name: ${{ steps.build.outputs.name }}
           path: target/release/mltd
+          if-no-files-found: error
+
