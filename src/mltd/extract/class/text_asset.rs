@@ -10,15 +10,17 @@ use aes::cipher::block_padding::Pkcs7;
 use aes::cipher::inout::InOutBufReserved;
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use aes::Aes192;
+use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use cbc::{Decryptor, Encryptor};
 use rabex::files::SerializedFile;
 use rabex::objects::classes::TextAsset;
 use rabex::read_ext::ReadUrexExt;
-use vgmstream::{Options, StreamFile, VgmStream};
+use tempfile::tempdir;
 
+use crate::extract::utils::audio::Encoder;
 use crate::extract::utils::ReadAlignedExt;
-use crate::extract::version::*;
+use crate::extract::{version::*, ExtractorArgs};
 
 pub(super) fn _construct_text_asset<E>(
     data: &[u8],
@@ -63,35 +65,32 @@ pub fn construct_text_asset(
 pub fn extract_acb<P>(
     data: &[u8],
     output_dir: P,
+    args: &ExtractorArgs,
     serialized_file: &SerializedFile,
 ) -> Result<(), Box<dyn Error>>
 where
     P: AsRef<Path>,
 {
     let text_asset = construct_text_asset(data, serialized_file)?;
-    let output_path = output_dir.as_ref().join(&text_asset.m_Name).with_extension("acb");
-    let mut output_file = File::create(&output_path)?;
-    output_file.write_all(text_asset.m_Script.as_bytes())?;
+    let temp_dir = tempdir()?;
+    let acb_path = temp_dir.path().join(&text_asset.m_Name).with_extension("acb");
+    let mut acb_file = File::create(&acb_path)?;
+    acb_file.write_all(text_asset.m_Script.as_bytes())?;
 
-    let mut vgmstream = VgmStream::new()?;
-    let sf = StreamFile::open(&vgmstream, &output_path)?;
-    vgmstream.open_song(&mut Options {
-        libsf: &sf,
-        format_id: 0,
-        stereo_track: 0,
-        subsong_index: 0,
-    })?;
+    let output_path =
+        output_dir.as_ref().join(&text_asset.m_Name).with_extension(&args.audio_format);
 
-    let output_path = output_dir.as_ref().join(&text_asset.m_Name).with_extension("pcm");
-    let mut output_file = File::create(&output_path)?;
-    log::info!("writing audio to: {}", output_path.display());
-    while let Ok(buf) = vgmstream.render() {
-        if buf.is_empty() {
-            break;
-        }
-
-        output_file.write_all(buf.as_slice())?;
+    let mut options = ffmpeg_next::Dictionary::new();
+    for (key, value) in &args.audio_args {
+        options.set(key, value);
     }
+    if !args.image_args.is_empty() {
+        log::debug!("audio options: {:#?}", options);
+    }
+
+    let mut encoder = Encoder::open(&acb_path, &output_path, &args.audio_codec, Some(options))?;
+
+    encoder.encode()?;
 
     Ok(())
 }

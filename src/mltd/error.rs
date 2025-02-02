@@ -15,6 +15,14 @@ pub enum Error {
     #[error("manifest serialization failed: {0}")]
     ManifestSerialize(#[from] rmp_serde::encode::Error),
 
+    /// VGMStream error.
+    #[error("vgmstream error: {0}")]
+    VGMStream(#[from] vgmstream::Error),
+
+    /// FFmpeg Error.
+    #[error("ffmpeg error: {0}")]
+    FFmpeg(#[from] ffmpeg_next::Error),
+
     /// Reqwest response serialization failed.
     #[error("response deserialization failed: {0}")]
     ResponseDeserialize(reqwest::Error),
@@ -42,4 +50,8 @@ pub enum Error {
     /// Thread join failed.
     #[error("failed to join thread: {0}")]
     ThreadJoin(#[from] JoinError),
+
+    /// Generic error.
+    #[error("{0}")]
+    Generic(String),
 }

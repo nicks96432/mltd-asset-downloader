@@ -27,7 +27,10 @@ impl StreamFile<'_> {
     /// let vgmstream = VgmStream::new().unwrap();
     /// let stream = StreamFile::open(&vgmstream, "path/to/file").unwrap();
     /// ```
-    pub fn open<P: AsRef<Path>>(_: &VgmStream, path: P) -> Result<Self, Error> {
+    pub fn open<P>(_: &VgmStream, path: &P) -> Result<Self, Error>
+    where
+        P: AsRef<Path> + ?Sized,
+    {
         let path = CString::new(path.as_ref().to_string_lossy().as_ref()).unwrap();
         let inner = unsafe { vgmstream_sys::libstreamfile_open_from_stdio(path.as_ptr()) };
 

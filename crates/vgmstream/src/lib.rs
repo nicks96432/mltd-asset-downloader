@@ -3,6 +3,7 @@ mod sf;
 
 use std::ffi::CStr;
 
+use bitflags::bitflags;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
@@ -21,6 +22,69 @@ impl From<vgmstream_sys::libvgmstream_sample_t> for SampleType {
     fn from(value: vgmstream_sys::libvgmstream_sample_t) -> Self {
         #[allow(clippy::unnecessary_cast)] // libvgmstream_sample_t is i32 on windows
         SampleType::from_u32(value as u32).expect("Invalid sample type")
+    }
+}
+
+bitflags! {
+    /// The `speaker_t` type in vgmstream.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct Speaker: u32 {
+        /// front left
+        const FL = (1 << 0);
+        /// front right
+        const FR = (1 << 1);
+        /// front center
+        const FC = (1 << 2);
+        /// low frequency effects
+        const LFE = (1 << 3);
+        /// back left
+        const BL = (1 << 4);
+        /// back right
+        const BR = (1 << 5);
+        /// front left center
+        const FLC = (1 << 6);
+        /// front right center
+        const FRC = (1 << 7);
+        /// back center
+        const BC = (1 << 8);
+        /// side left
+        const SL = (1 << 9);
+        /// side right
+        const SR = (1 << 10);
+
+        /// top center
+        const TC = (1 << 11);
+        /// top front left
+        const TFL = (1 << 12);
+        /// top front center
+        const TFC = (1 << 13);
+        /// top front right
+        const TFR = (1 << 14);
+        /// top back left
+        const TBL = (1 << 15);
+        /// top back center
+        const TBC = (1 << 16);
+        /// top back left
+        const TBR = (1 << 17);
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct ChannelMapping: u32 {
+        const MONO              = Speaker::FC.bits();
+        const STEREO            = Speaker::FL.bits() | Speaker::FR.bits();
+        const _2POINT1          = Speaker::FL.bits() | Speaker::FR.bits() | Speaker::LFE.bits();
+        const _2POINT1_XIPH     = Speaker::FL.bits() | Speaker::FR.bits() | Speaker::FC.bits();
+        const QUAD              = Speaker::FL.bits() | Speaker::FR.bits() | Speaker::BL.bits()  | Speaker::BR.bits();
+        const QUAD_SURROUND     = Speaker::FL.bits() | Speaker::FR.bits() | Speaker::FC.bits()  | Speaker::BC.bits();
+        const QUAD_SIDE         = Speaker::FL.bits() | Speaker::FR.bits() | Speaker::SL.bits()  | Speaker::SR.bits();
+        const _5POINT0          = Speaker::FL.bits() | Speaker::FR.bits() | Speaker::LFE.bits() | Speaker::BL.bits() | Speaker::BR.bits();
+        const _5POINT0_XIPH     = Speaker::FL.bits() | Speaker::FR.bits() | Speaker::FC.bits()  | Speaker::BL.bits() | Speaker::BR.bits();
+        const _5POINT0_SURROUND = Speaker::FL.bits() | Speaker::FR.bits() | Speaker::FC.bits()  | Speaker::SL.bits() | Speaker::SR.bits();
+        const _5POINT1          = Speaker::FL.bits() | Speaker::FR.bits() | Speaker::FC.bits()  | Speaker::LFE.bits() | Speaker::BL.bits() | Speaker::BR.bits();
+        const _5POINT1_SURROUND = Speaker::FL.bits() | Speaker::FR.bits() | Speaker::FC.bits()  | Speaker::LFE.bits() | Speaker::SL.bits() | Speaker::SR.bits();
+        const _7POINT0          = Speaker::FL.bits() | Speaker::FR.bits() | Speaker::FC.bits()  | Speaker::LFE.bits() | Speaker::BC.bits() | Speaker::FLC.bits() | Speaker::FRC.bits();
+        const _7POINT1          = Speaker::FL.bits() | Speaker::FR.bits() | Speaker::FC.bits()  | Speaker::LFE.bits() | Speaker::BL.bits() | Speaker::BR.bits()  | Speaker::FLC.bits() | Speaker::FRC.bits();
+        const _7POINT1_SURROUND = Speaker::FL.bits() | Speaker::FR.bits() | Speaker::FC.bits()  | Speaker::LFE.bits() | Speaker::BL.bits() | Speaker::BR.bits()  | Speaker::SL.bits()  | Speaker::SR.bits();
     }
 }
 
@@ -103,7 +167,7 @@ pub struct Format {
 
     /* extra info (may be 0 if not known or not relevant) */
     /// standard WAVE bitflags
-    pub channel_layout: u32,
+    pub channel_layout: ChannelMapping,
 
     /// 0 = none, N = loaded subsong N (1=first)
     pub subsong_index: i32,
@@ -261,7 +325,8 @@ impl VgmStream {
             sample_rate: format.sample_rate,
             sample_type,
             sample_size: format.sample_size,
-            channel_layout: format.channel_layout,
+            channel_layout: ChannelMapping::from_bits(format.channel_layout)
+                .ok_or(Error::InvalidChannelMapping(format.channel_layout))?,
             subsong_index: format.subsong_index,
             subsong_count: format.subsong_count,
             input_channels: format.input_channels,

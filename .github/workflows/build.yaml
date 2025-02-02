@@ -27,23 +27,28 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install nasm
-        uses: ilammy/setup-nasm@v1
+      - name: Install FFmpeg
+        id: setup-ffmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          ffmpeg-version: "7.1"
+          linking-type: shared
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build
-        run: cargo build --release
-
-      - name: Get version (Windows)
+      - name: Build (Windows)
         if: ${{ contains('Windows', runner.os) }}
-        id: version_windows
-        run: echo "version=$(git describe --tags --dirty)" >> $env:GITHUB_OUTPUT
+        run: |
+          $env:FFMPEG_DIR='${{ steps.setup-ffmpeg.outputs.ffmpeg-path }}'
+          cargo build-windows --release
+          echo "version=$(git describe --tags --dirty)" >> $env:GITHUB_OUTPUT
 
-      - name: Get version
+      - name: Build
         if: ${{ !contains('Windows', runner.os) }}
-        id: version
-        run: echo "version=$(git describe --tags --dirty)" >> $GITHUB_OUTPUT
+        run: |
+          export FFMPEG_DIR='${{ steps.setup-ffmpeg.outputs.ffmpeg-path }}'
+          cargo build --release
+          echo "version=$(git describe --tags --dirty)" >> $GITHUB_OUTPUT
 
       - name: Publish artifact (Windows)
         if: ${{ contains('Windows', runner.os) }}
