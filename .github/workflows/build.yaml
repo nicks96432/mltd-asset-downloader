@@ -33,7 +33,7 @@ jobs:
             sudo apt-get update
             sudo apt-get install libavformat-dev libavcodec-dev libavutil-dev libswresample-dev
           elif [ "${{ runner.os }}" = "macOS" ]; then
-            sudo brew install ffmpeg
+            brew install ffmpeg
           elif [ "${{ runner.os }}" = "Windows" ]; then
             curl --location https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-lgpl-shared-7.1.zip --output ffmpeg.zip
             unzip ffmpeg.zip
