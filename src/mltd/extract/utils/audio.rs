@@ -316,9 +316,9 @@ fn to_ffmpeg_channel_layout(
 }
 
 /// Returns a list of supported audio formats.
-/// 
+///
 /// XXX: In the next version of FFmpeg, this function will be removed. Use
-/// `get_supported_formats_new` instead.
+/// `get_supported_formats_new` below.
 fn get_supported_formats(
     encoder: &ffmpeg_next::codec::encoder::Encoder,
 ) -> Result<Vec<ffmpeg_next::format::Sample>, Error> {
@@ -328,7 +328,7 @@ fn get_supported_formats(
     }
 }
 
-#[allow(dead_code)]
+/*
 fn get_supported_formats_new(
     encoder: &ffmpeg_next::codec::encoder::Encoder,
 ) -> Result<Vec<ffmpeg_next::format::Sample>, Error> {
@@ -358,6 +358,7 @@ fn get_supported_formats_new(
     .map(|fmt| (*fmt).into())
     .collect())
 }
+*/
 
 fn choose_format(
     supported_formats: &[ffmpeg_next::format::Sample],
