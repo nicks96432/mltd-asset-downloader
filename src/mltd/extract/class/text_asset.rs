@@ -20,7 +20,8 @@ use tempfile::tempdir;
 
 use crate::extract::utils::audio::Encoder;
 use crate::extract::utils::ReadAlignedExt;
-use crate::extract::{version::*, ExtractorArgs};
+use crate::extract::version::*;
+use crate::extract::ExtractorArgs;
 
 pub(super) fn _construct_text_asset<E>(
     data: &[u8],
