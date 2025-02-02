@@ -24,19 +24,20 @@ version = "2.0.0"
 
 [dependencies]
 aes = { optional = true, version = "0.8.4" }
-anyhow = "1.0.95"
+anyhow = { features = ["backtrace"], version = "1.0.95" }
 byteorder = { optional = true, version = "1.5.0" }
 cbc = { optional = true, version = "0.1.2" }
-clap = { features = ["color", "deprecated", "derive", "unicode", "wrap_help"], version = "4.5.26" }
+clap = { features = ["color", "deprecated", "derive", "unicode", "wrap_help"], version = "4.5.27" }
 clap-verbosity-flag = "3.0.2"
 env_logger = { default-features = false, features = ["humantime"], version = "0.11.6" }
+ffmpeg-next = { default-features = false, features = ["codec", "format", "software-resampling"], optional = true, version = "7.1.0" }
 futures = "0.3.31"
 human_bytes = { default-features = false, optional = true, version = "0.4.3" }
 image = { default-features = false, features = ["png"], optional = true, version = "0.25.5" }
-indicatif = { default-features = false, version = "0.17.9" }
+indicatif = { default-features = false, version = "0.17.11" }
 lazy-regex = { default-features = false, optional = true, features = ["std", "perf"], version = "3.4.1" }
 linked-hash-map = { features = ["serde_impl"], version = "0.5.6" }
-log = "0.4.22"
+log = "0.4.25"
 num_cpus = { optional = true, version = "1.16.0" }
 num-derive = { optional = true, version = "0.4.2" }
 num-traits = { optional = true, version = "0.2.19" }
@@ -46,8 +47,9 @@ rayon = { optional = true, version = "1.10.0" }
 reqwest = { features = ["deflate", "gzip", "json", "stream", "zstd"], version = "0.12.12" }
 rmp-serde = "1.3.0"
 serde = { features = ["derive"], version = "1.0.217" }
+tempfile = { optional = true, version = "3.16.0" }
 texture2ddecoder = { optional = true, version = "0.1.1" }
-thiserror = "2.0.10"
+thiserror = "2.0.11"
 tokio = { features = ["macros", "rt-multi-thread"], version = "1.43.0" }
 tokio-util = { features = ["compat"], version = "0.7.13" }
 vgmstream = { optional = true, path = "crates/vgmstream" }
@@ -58,8 +60,8 @@ vergen-gitcl = { version = "1.0.5" }
 
 [dev-dependencies]
 ctor = "0.2.9"
-rand = "0.8.5"
-rand_xoshiro = "0.6.0"
+rand = "0.9.0"
+rand_xoshiro = "0.7.0"
 tokio-test = "0.4.4"
 
 [lib]
@@ -89,6 +91,7 @@ extract = [
     "dep:aes",
     "dep:byteorder",
     "dep:cbc",
+    "dep:ffmpeg-next",
     "dep:image",
     "dep:lazy-regex",
     "dep:num_cpus",
@@ -96,5 +99,6 @@ extract = [
     "dep:num-traits",
     "dep:rabex",
     "dep:rayon",
+    "dep:tempfile",
     "dep:texture2ddecoder"
 ]

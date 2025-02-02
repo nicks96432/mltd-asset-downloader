@@ -1,5 +1,3 @@
-use std::ffi::c_int;
-
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -7,8 +5,8 @@ pub enum Error {
     #[error("vgmstream initialization failed")]
     InitializationFailed,
 
-    #[error("invalid sample type: {0}")]
-    InvalidSampleType(c_int),
+    #[error("invalid channel mapping: {0}")]
+    InvalidChannelMapping(u32),
 
     #[error("vgmstream generic error")]
     Generic,

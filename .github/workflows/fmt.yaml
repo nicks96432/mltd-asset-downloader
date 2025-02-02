@@ -22,9 +22,6 @@ jobs:
         with:
           components: rustfmt
 
-      - name: Install nasm
-        uses: ilammy/setup-nasm@v1
-
       - uses: Swatinem/rust-cache@v2
 
       - name: Fmt

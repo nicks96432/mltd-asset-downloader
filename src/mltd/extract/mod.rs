@@ -37,15 +37,22 @@ pub struct ExtractorArgs {
     #[arg(default_value_os_t = [".", "output"].iter().collect())]
     output: PathBuf,
 
-    /// Extension for audio output
-    #[arg(long, value_name = "EXT", display_order = 2)]
+    /// Audio output format extension
+    #[arg(long, value_name = "FORMAT", display_order = 2)]
     #[arg(default_value_t = String::from("wav"))]
-    audio_ext: String,
+    audio_format: String,
 
-    /// Arguments to pass to ffmpeg for audio output
-    #[arg(long, value_name = "ARGS", display_order = 2, hide_default_value = true)]
-    #[arg(default_value_t = String::from(""))]
-    audio_args: String,
+    /// Audio output codec
+    #[arg(long, value_name = "CODEC", display_order = 2)]
+    #[arg(default_value_t = String::from("pcm_s16le"))]
+    audio_codec: String,
+
+    /// Arguments to pass to ffmpeg encoder for audio output
+    ///
+    /// Value should be a list of -arg=value pairs separated by commas
+    #[arg(long, value_name = "ARGS", display_order = 2)]
+    #[arg(value_parser = parse_key_val::<String, String>, allow_hyphen_values = true)]
+    audio_args: Vec<(String, String)>,
 
     /// Extension for image output
     #[arg(long, value_name = "EXT", display_order = 2)]
@@ -63,6 +70,22 @@ pub struct ExtractorArgs {
     #[arg(default_value_t = num_cpus::get() as u32)]
     parallel: u32,
     // TODO: Add option to extract only specific files
+}
+
+/// Parse a single key-value pair
+fn parse_key_val<T, U>(s: &str) -> Result<(T, U), Box<dyn Error + Send + Sync + 'static>>
+where
+    T: std::str::FromStr,
+    T::Err: Error + Send + Sync + 'static,
+    U: std::str::FromStr,
+    U::Err: Error + Send + Sync + 'static,
+{
+    if !s.starts_with('-') {
+        return Err(format!("invalid -KEY=value: no `-` found in `{s}`").into());
+    }
+    let pos = s.find('=').ok_or_else(|| format!("invalid -KEY=value: no `=` found in `{s}`"))?;
+
+    Ok((s[1..pos].parse()?, s[pos + 1..].parse()?))
 }
 
 pub fn extract_media(args: &ExtractorArgs) -> Result<(), Box<dyn Error>> {
@@ -222,8 +245,8 @@ fn extract_object(
         match object_info.m_ClassID {
             map::TextAsset => {
                 let text_asset = construct_text_asset(data, serialized_file)?;
-                match text_asset.m_Name.contains("acb") {
-                    true => extract_acb(data, &output_dir, serialized_file)?,
+                match text_asset.m_Name.contains(".acb") {
+                    true => extract_acb(data, &output_dir, args, serialized_file).unwrap(),
                     false => {
                         let output_path = output_dir.join(text_asset.m_Name).with_extension("txt");
                         log::info!("writing text to {}", output_path.display());

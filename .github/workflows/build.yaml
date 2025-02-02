@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-    branches: ["main"]
+    branches: [main]
     tags: ["*"]
 
 env:
@@ -27,34 +27,39 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install nasm
-        uses: ilammy/setup-nasm@v1
+      - name: Install FFmpeg
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install libavformat-dev libavcodec-dev libavutil-dev libswresample-dev
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            sudo brew install ffmpeg
+          elif [ "${{ runner.os }}" = "Windows" ]; then
+            curl --location https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-lgpl-shared-7.1.zip --output ffmpeg.zip
+            unzip ffmpeg.zip
+          fi
+        shell: bash
 
       - uses: Swatinem/rust-cache@v2
 
       - name: Build
-        run: cargo build --release
+        run: |
+          export name=mltd-git-$(git describe --tags --dirty)-${{ runner.os }}
 
-      - name: Get version (Windows)
-        if: ${{ contains('Windows', runner.os) }}
-        id: version_windows
-        run: echo "version=$(git describe --tags --dirty)" >> $env:GITHUB_OUTPUT
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            export FFMPEG_DIR=$PWD/ffmpeg-n7.1-latest-win64-lgpl-shared-7.1
+            cargo build-windows --release
+            export name=$name.exe
+          else
+            cargo build --release
+          fi
 
-      - name: Get version
-        if: ${{ !contains('Windows', runner.os) }}
-        id: version
-        run: echo "version=$(git describe --tags --dirty)" >> $GITHUB_OUTPUT
+          echo "name=$name" >> $GITHUB_OUTPUT
 
-      - name: Publish artifact (Windows)
-        if: ${{ contains('Windows', runner.os) }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: mltd-git-${{ steps.version_windows.outputs.version }}-Windows.exe
-          path: target/release/mltd.exe
+        shell: bash
 
       - name: Publish artifact
-        if: ${{ !contains('Windows', runner.os) }}
         uses: actions/upload-artifact@v4
         with:
-          name: mltd-git-${{ steps.version.outputs.version }}-${{ runner.os }}
-          path: target/release/mltd
+          name: ${{ steps.version.outputs.name }}
+          path: target/release/mltd-git-*

@@ -4,3 +4,5 @@ output/
 build/
 
 .vscode/
+
+.cargo/config-windows.toml

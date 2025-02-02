@@ -1,3 +1,4 @@
+pub mod audio;
 mod puzzle;
 mod read_ext;
 

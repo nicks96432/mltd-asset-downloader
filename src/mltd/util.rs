@@ -95,15 +95,15 @@ pub(crate) use init_test_logger;
 pub(crate) mod test_util {
     use std::io::Cursor;
 
-    use rand::distributions::uniform::{SampleRange, SampleUniform};
-    use rand::{thread_rng, Rng, SeedableRng};
+    use rand::distr::uniform::{SampleRange, SampleUniform};
+    use rand::{rng, Rng, SeedableRng};
     use rand_xoshiro::Xoshiro256PlusPlus as MyRng;
 
     pub fn rand_ascii_string(len: usize) -> Cursor<Vec<u8>> {
-        let mut rng = MyRng::from_rng(thread_rng()).unwrap();
+        let mut rng = MyRng::from_rng(&mut rng());
         let mut buf = vec![0u8; len];
         for byte in buf.iter_mut().take(len) {
-            *byte = u8::try_from(rng.gen_range(0x33..0x7f)).unwrap(); // printable ascii
+            *byte = u8::try_from(rng.random_range(0x33..0x7f)).unwrap(); // printable ascii
         }
         buf.push(0u8);
 
@@ -115,8 +115,8 @@ pub(crate) mod test_util {
         T: SampleUniform,
         R: SampleRange<T>,
     {
-        let mut rng = MyRng::from_rng(thread_rng()).unwrap();
+        let mut rng = MyRng::from_rng(&mut rng());
 
-        rng.gen_range(range)
+        rng.random_range(range)
     }
 }

@@ -11,9 +11,6 @@
 
 ## 用法
 
-> [!NOTE]
-> 若要轉換資源格式，ffmpeg必須要在`$PATH`中。
-
 ```console
 $ ./mltd --help
 偶像大師 百萬人演唱會！ 劇場時光 (MLTD) 遊戲資源下載器
@@ -35,8 +32,14 @@ Commands:
 
 ## 下載
 
-* [Github最新版本](https://github.com/nicks96432/mltd-asset-downloader/releases/latest)
-* [main自動編譯版](https://nightly.link/nicks96432/mltd-asset-downloader/workflows/build.yaml/main)
+1. 下載主程式
+   * [Github最新版本](https://github.com/nicks96432/mltd-asset-downloader/releases/latest)
+   * [main自動編譯版](https://nightly.link/nicks96432/mltd-asset-downloader/workflows/build.yaml/main)
+2. 安裝FFmpeg >= 7.1 共享函式庫版
+   * [FFmpeg官網連結](https://www.ffmpeg.org/download.html)
+   * 確保FFmpeg共享函式庫在你的 `PATH` 裡面
+   * Windows上可以用 `winget` 來安裝FFmpeg，這樣它就會被自動加進`PATH`裡，例如
+     `winget install BtbN.FFmpeg.LGPL.Shared.7.1` 。用 `winget search ffmpeg` 可以查看更多選擇
 
 ## 編譯
 
@@ -46,21 +49,38 @@ Commands:
 * rust 編譯工具 ([安裝教學](https://www.rust-lang.org/tools/install))
 * cmake >= 3.6 (vgmstream要用到)
 * clang (bindgen要用到) ([安裝教學](https://rust-lang.github.io/rust-bindgen/requirements.html))
+  * Windows上要記得設定 `LIBCLANG_PATH` 環境變數
+* pkg-config (Linux/MacOS)
+* 在你的 `PATH` (Windows) 或 `LD_LIBRARY_PATH` (Linux/MacOS) 中有FFmpeg >= 7.1 共享函式庫版
+  * Windows上要額外設定 `FFMPEG_DIR` 環境變數為FFmpeg安裝資料夾，例如在Powershell中設定 `winget` 安裝的FFmpeg套件：
+
+  ```powershell
+  $env:FFMPEG_DIR='C:\Users\username\AppData\Local\Microsoft\WinGet\Packages\BtbN.FFmpeg.LGPL.Shared.7.1_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-n7.1-62-gb168ed9b14-win64-lgpl-shared-7.1'
+  ```
+
+環境變數也可以在 `.cargo/config-windows.toml` 中設定。
+
+編譯 (Windows)：
+
+```shell
+cargo build-windows --release
+```
+
+Linux/MacOS：
 
 ```shell
 cargo build --release
 ```
 
-執行檔會出現在`target/release`資料夾裡。
-
-## 免責聲明
-
-本軟體、工具、以及本軟體的作者與本軟體的repo與萬代南夢宮娛樂、Unity Technologies、以及他們的子公司
-沒有任何關係，也沒有任何贊助或授權關係。
+執行檔會出現在 `target/release` 資料夾裡。
 
 ## 授權條款
 
 本軟體遵守[MIT](LICENSE)授權條款。
+
+本軟體在[LGPLv2.1](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html)授權條款下使用
+[FFmpeg](https://ffmpeg.org)的程式，它的原始碼可以在[這裡](https://github.com/FFmpeg/FFmpeg)
+下載。
 
 本程式為個人專案，與萬代南夢宮娛樂無關，亦未受其贊助或認可。本程式的任何輸出內容之著作權均屬其作者所有。
 使用或散布本程式的輸出內容，須遵循使用者所在地的相關法律規範。

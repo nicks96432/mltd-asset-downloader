@@ -17,11 +17,13 @@ jobs:
         with:
           submodules: true
 
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install libavformat-dev libavcodec-dev libavutil-dev libswresample-dev
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Install nasm
-        uses: ilammy/setup-nasm@v1
 
       - uses: Swatinem/rust-cache@v2
 
