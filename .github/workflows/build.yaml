@@ -48,6 +48,7 @@ jobs:
 
           if [ "${{ runner.os }}" = "Windows" ]; then
             export FFMPEG_DIR=$PWD/ffmpeg-n7.1-latest-win64-lgpl-shared-7.1
+            export LIBCLANG_PATH=$(dirname "$(which clang.exe)")
             cargo build-windows --release
             export name=$name.exe
           else
