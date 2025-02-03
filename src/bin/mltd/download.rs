@@ -89,13 +89,11 @@ async fn download_task(
 
 pub async fn download_assets(args: &DownloaderArgs) -> Result<(), Error> {
     log::debug!("create output directory at {}", args.output_dir.display());
-    if let Err(e) = create_dir_all(&args.output_dir).await {
-        return Err(Error::FileCreate(e));
-    }
+    create_dir_all(&args.output_dir).await?;
 
     let (manifest, manifest_info) = match &args.manifest {
         Some(path) => {
-            let buf = tokio::fs::read(path).await.map_err(Error::FileRead)?;
+            let buf = tokio::fs::read(path).await?;
             let manifest: Manifest = Manifest::from_slice(&buf)?;
             drop(buf);
 

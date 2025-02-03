@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::ffi::{c_int, c_uint};
 use std::path::Path;
 
-use ffmpeg_next::packet::Ref;
+use ffmpeg_next::packet::Mut;
 use ffmpeg_next::Rescale;
 use vgmstream::{Options, StreamFile, VgmStream};
 
@@ -53,9 +53,6 @@ impl<'a> Encoder<'a> {
 
         let acb_fmt = vgmstream.format()?;
 
-        #[cfg(debug_assertions)]
-        ffmpeg_next::log::set_level(ffmpeg_next::log::Level::Debug);
-
         let mut output = match options {
             Some(ref o) => ffmpeg_next::format::output_with(output, o.clone()),
             None => ffmpeg_next::format::output(output.as_ref()),
@@ -80,7 +77,7 @@ impl<'a> Encoder<'a> {
 
         if output.format().flags().contains(ffmpeg_next::format::Flags::GLOBAL_HEADER) {
             let flag = ffmpeg_next::codec::Flags::from_bits(
-                unsafe { encoder.as_mut_ptr().as_ref() }.unwrap().flags as c_uint,
+                unsafe { *encoder.as_mut_ptr() }.flags as c_uint,
             )
             .unwrap();
             encoder.set_flags(flag | ffmpeg_next::codec::Flags::GLOBAL_HEADER);
@@ -165,7 +162,7 @@ impl<'a> Encoder<'a> {
             match unsafe {
                 ffmpeg_next::ffi::av_interleaved_write_frame(
                     self.output.as_mut_ptr(),
-                    packet.as_ptr() as *mut _,
+                    packet.as_mut_ptr(),
                 )
             } {
                 0 => Ok(()),

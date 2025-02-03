@@ -1,6 +1,9 @@
 #[cfg(feature = "download")]
 mod download;
 
+#[cfg(feature = "extract")]
+mod extract;
+
 mod manifest;
 mod util;
 
@@ -33,7 +36,7 @@ enum Command {
 
     /// Extract media from MLTD assets
     #[cfg(feature = "extract")]
-    Extract(mltd::extract::ExtractorArgs),
+    Extract(self::extract::ExtractorArgs),
 
     /// Download manifest from MLTD asset server
     Manifest(self::manifest::ManifestArgs),
@@ -53,11 +56,7 @@ async fn main() -> Result<()> {
         Command::Download(d) => self::download::download_assets(&d).await?,
 
         #[cfg(feature = "extract")]
-        Command::Extract(e) => {
-            if let Err(e) = mltd::extract::extract_media(&e) {
-                log::error!("asset extract failed: {}", e);
-            }
-        }
+        Command::Extract(e) => self::extract::extract_files(&e).await?,
 
         Command::Manifest(m) => self::manifest::manifest_main(&m).await?,
     }

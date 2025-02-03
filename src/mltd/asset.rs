@@ -126,7 +126,7 @@ impl Asset<'_> {
         let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
 
         let mut buf = BufWriter::new(Vec::new());
-        tokio::io::copy(&mut stream_reader, &mut buf).await.map_err(Error::FileWrite)?;
+        tokio::io::copy(&mut stream_reader, &mut buf).await?;
 
         Ok(Self { data: Cow::Owned(buf.into_inner()), info: asset_info })
     }
@@ -167,7 +167,7 @@ impl Asset<'_> {
         progress_bar: Option<&mut ProgressBar>,
     ) -> Result<(), Error> {
         let output = output.unwrap_or(asset_info.filename.as_ref());
-        let mut out = BufWriter::new(File::create(output).await.map_err(Error::FileCreate)?);
+        let mut out = BufWriter::new(File::create(output).await?);
 
         let res = Self::send_request(asset_info).await?;
 
@@ -185,7 +185,7 @@ impl Asset<'_> {
 
         let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
 
-        tokio::io::copy(&mut stream_reader, &mut out).await.map_err(Error::FileWrite)?;
+        tokio::io::copy(&mut stream_reader, &mut out).await?;
 
         Ok(())
     }
