@@ -128,7 +128,7 @@ impl Asset<'_> {
         let mut buf = BufWriter::new(Vec::new());
         tokio::io::copy(&mut stream_reader, &mut buf).await?;
 
-        Ok(Self { data: Cow::Owned(buf.into_inner()), info: asset_info })
+        Ok(Self { data: Cow::from(buf.into_inner()), info: asset_info })
     }
 
     /// Download the specified asset from MLTD asset server and write it to disk.
