@@ -64,7 +64,7 @@ impl<'a> Encoder<'a> {
         let mut encoder = ffmpeg_next::codec::Context::new_with_codec(codec).encoder().audio()?;
 
         let supported_formats = get_supported_formats(&encoder)?;
-        log::debug!("supported formats: {:?}", supported_formats);
+        log::trace!("supported formats: {:?}", supported_formats);
 
         let from_sample_format = to_ffmpeg_sample_format(acb_fmt.sample_type)?;
         let from_channel_layout = to_ffmpeg_channel_layout(acb_fmt.channel_layout)?;
@@ -97,7 +97,7 @@ impl<'a> Encoder<'a> {
             .intersects(ffmpeg_next::codec::Capabilities::VARIABLE_FRAME_SIZE)
         {
             true => {
-                log::debug!("variable frame size detected, using default frame size");
+                log::trace!("variable frame size detected, using default frame size");
                 Self::DEFAULT_FRAME_SIZE
             }
             false => encoder.frame_size(),
@@ -249,7 +249,7 @@ impl<'a> Encoder<'a> {
             self.frame.set_pts(Some(pts));
             self.sample_count += self.frame.samples() as i64;
 
-            log::debug!("flushed {} samples", self.frame.samples());
+            log::trace!("flushed {} samples", self.frame.samples());
             self.write_frame(false)?;
         }
 
@@ -372,7 +372,7 @@ fn choose_format(
         .min_by_key(|(diff, _)| *diff)
         .unwrap();
 
-    log::debug!("original sample format not supported, using closest: {:?}", closest.1);
+    log::trace!("original sample format not supported, using closest: {:?}", closest.1);
 
     *closest.1
 }

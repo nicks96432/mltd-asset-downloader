@@ -220,7 +220,7 @@ async fn extract_text_asset(
                     options.set(&key, &value);
                 }
                 if !args.is_empty() {
-                    log::debug!("audio options: {:#?}", options);
+                    log::trace!("audio options: {:#?}", options);
                 }
                 let mut encoder = Encoder::open(
                     &file_path.clone(),
