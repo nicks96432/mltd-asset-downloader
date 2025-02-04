@@ -1,6 +1,9 @@
 #[cfg(feature = "download")]
 mod download;
 
+#[cfg(feature = "extract")]
+mod extract;
+
 mod manifest;
 mod util;
 
@@ -10,13 +13,8 @@ use clap_verbosity_flag::{InfoLevel, Verbosity};
 use mltd::util::log_formatter;
 
 #[derive(Parser)]
-#[command(
-    author,
-    version = env!("VERGEN_GIT_DESCRIBE"),
-    long_version = env!("MLTD_VERSION_LONG"),
-    about,
-    arg_required_else_help = true
-)]
+#[command(author, version = env!("VERGEN_GIT_DESCRIBE"), long_version = env!("MLTD_VERSION_LONG"))]
+#[command(about, arg_required_else_help = true)]
 struct Cli {
     #[command(subcommand)]
     pub command: Command,
@@ -33,7 +31,7 @@ enum Command {
 
     /// Extract media from MLTD assets
     #[cfg(feature = "extract")]
-    Extract(mltd::extract::ExtractorArgs),
+    Extract(self::extract::ExtractorArgs),
 
     /// Download manifest from MLTD asset server
     Manifest(self::manifest::ManifestArgs),
@@ -50,17 +48,13 @@ async fn main() -> Result<()> {
 
     match args.command {
         #[cfg(feature = "download")]
-        Command::Download(d) => self::download::download_assets(&d).await?,
+        Command::Download(d) => self::download::download_assets(&d).await,
 
         #[cfg(feature = "extract")]
-        Command::Extract(e) => {
-            if let Err(e) = mltd::extract::extract_media(&e) {
-                log::error!("asset extract failed: {}", e);
-            }
-        }
+        Command::Extract(e) => self::extract::extract_files(&e).await,
 
-        Command::Manifest(m) => self::manifest::manifest_main(&m).await?,
-    }
+        Command::Manifest(m) => self::manifest::manifest_main(&m).await,
+    }?;
 
     Ok(())
 }

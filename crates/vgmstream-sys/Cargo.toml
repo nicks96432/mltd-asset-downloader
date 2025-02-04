@@ -9,7 +9,7 @@ version = "0.1.0-vgmstream-r1980-16-g1f3a6b36"
 
 [build-dependencies]
 bindgen = "0.71.1"
-cmake = "0.1.52"
+cmake = "0.1.53"
 
 [features]
 default = []

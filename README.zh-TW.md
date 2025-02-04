@@ -40,6 +40,9 @@ Commands:
    * 確保FFmpeg共享函式庫在你的 `PATH` 裡面
    * Windows上可以用 `winget` 來安裝FFmpeg，這樣它就會被自動加進`PATH`裡，例如
      `winget install BtbN.FFmpeg.LGPL.Shared.7.1` 。用 `winget search ffmpeg` 可以查看更多選擇
+3. 如果要拆包，下載[AssetRipper](https://github.com/AssetRipper/AssetRipper)
+   * 解壓縮後重新命名為`./AssetRipper`
+   * 或是用`--asset-ripper-path`指定執行檔路徑
 
 ## 編譯
 

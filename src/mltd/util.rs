@@ -90,33 +90,3 @@ macro_rules! init_test_logger {
 
 #[cfg(test)]
 pub(crate) use init_test_logger;
-
-#[cfg(test)]
-pub(crate) mod test_util {
-    use std::io::Cursor;
-
-    use rand::distr::uniform::{SampleRange, SampleUniform};
-    use rand::{rng, Rng, SeedableRng};
-    use rand_xoshiro::Xoshiro256PlusPlus as MyRng;
-
-    pub fn rand_ascii_string(len: usize) -> Cursor<Vec<u8>> {
-        let mut rng = MyRng::from_rng(&mut rng());
-        let mut buf = vec![0u8; len];
-        for byte in buf.iter_mut().take(len) {
-            *byte = u8::try_from(rng.random_range(0x33..0x7f)).unwrap(); // printable ascii
-        }
-        buf.push(0u8);
-
-        Cursor::new(buf)
-    }
-
-    pub fn rand_range<T, R>(range: R) -> T
-    where
-        T: SampleUniform,
-        R: SampleRange<T>,
-    {
-        let mut rng = MyRng::from_rng(&mut rng());
-
-        rng.random_range(range)
-    }
-}

@@ -1,73 +1,103 @@
+//! Audio transcoding.
+
 use std::collections::VecDeque;
 use std::ffi::{c_int, c_uint};
 use std::path::Path;
 
-use ffmpeg_next::packet::Ref;
+use ffmpeg_next::packet::Mut;
 use ffmpeg_next::Rescale;
 use vgmstream::{Options, StreamFile, VgmStream};
 
 use crate::Error;
 
+/// An encoder that transcodes game audio to the target codec.
 pub struct Encoder<'a> {
-    pub options: Option<ffmpeg_next::Dictionary<'a>>,
-
+    /// VgmStream stream file.
     pub vgmstream: VgmStream,
+
+    /// Original audio channel layout.
     pub from_channel_layout: ffmpeg_next::ChannelLayout,
+    /// Original sample format.
     pub from_sample_format: ffmpeg_next::format::Sample,
+    /// Original sample rate.
     pub from_sample_rate: i32,
 
+    /// FFmpeg encoder.
     pub encoder: ffmpeg_next::codec::encoder::audio::Encoder,
 
+    /// FFmpeg encoder options.
+    pub options: Option<ffmpeg_next::Dictionary<'a>>,
+
+    /// FFmpeg output context.
     pub output: ffmpeg_next::format::context::Output,
 
+    /// FFmpeg resampler context.
     pub resampler: ffmpeg_next::software::resampling::Context,
 
+    /// FFmpeg audio frame.
     pub frame: ffmpeg_next::frame::Audio,
 
+    /// Audio sample count.
     pub sample_count: i64,
+
+    /// Audio next presentation timestamp.
     pub next_pts: i64,
 
-    queue: VecDeque<u8>,
+    /// Fifo for audio data.
+    fifo: VecDeque<u8>,
 }
 
 impl<'a> Encoder<'a> {
+    /// Default audio frame size.
+    ///
+    /// Some codecs accept variable frame sizes, and this is used for those codecs.
     pub const DEFAULT_FRAME_SIZE: u32 = 4096;
 
+    /// Opens the encoder with the given parameters.
+    ///
+    /// VgmStream will decode the input game audio, and FFmpeg will enocde with the given
+    /// codec and options. The output file will be truncated if it exists.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::VGMStream`]: if vgmstream cannot identify the input file format.
+    ///
+    /// [`Error::FFmpeg`]: if ffmpeg encoder initialization failed.
     pub fn open<P>(
-        input: &P,
-        output: &P,
-        codec: &str,
-        options: Option<ffmpeg_next::Dictionary<'a>>,
+        input_file: P,
+        output_dir: P,
+        output_codec: &str,
+        output_options: Option<ffmpeg_next::Dictionary<'a>>,
     ) -> Result<Self, Error>
     where
-        P: AsRef<Path> + ?Sized,
+        P: AsRef<Path>,
     {
         let mut vgmstream = VgmStream::new()?;
-        let sf = StreamFile::open(&vgmstream, input)?;
+        let sf = StreamFile::open(&vgmstream, input_file.as_ref())?;
         vgmstream.open_song(&mut Options {
             libsf: &sf,
             format_id: 0,
             stereo_track: 0,
+            // FIXME: there are more subsongs
             subsong_index: 0,
         })?;
 
         let acb_fmt = vgmstream.format()?;
 
-        #[cfg(debug_assertions)]
-        ffmpeg_next::log::set_level(ffmpeg_next::log::Level::Debug);
+        log::trace!("audio format: {:#?}", acb_fmt);
 
-        let mut output = match options {
-            Some(ref o) => ffmpeg_next::format::output_with(output, o.clone()),
-            None => ffmpeg_next::format::output(output.as_ref()),
+        let mut output = match output_options {
+            Some(ref o) => ffmpeg_next::format::output_with(output_dir.as_ref(), o.clone()),
+            None => ffmpeg_next::format::output(output_dir.as_ref()),
         }?;
 
-        let codec = ffmpeg_next::encoder::find_by_name(codec)
-            .ok_or(Error::Generic("Failed to find encoder".to_owned()))?;
+        let codec = ffmpeg_next::encoder::find_by_name(output_codec)
+            .ok_or(Error::Generic(String::from("Failed to find encoder")))?;
 
         let mut encoder = ffmpeg_next::codec::Context::new_with_codec(codec).encoder().audio()?;
 
         let supported_formats = get_supported_formats(&encoder)?;
-        log::debug!("supported formats: {:?}", supported_formats);
+        log::trace!("supported formats: {:?}", supported_formats);
 
         let from_sample_format = to_ffmpeg_sample_format(acb_fmt.sample_type)?;
         let from_channel_layout = to_ffmpeg_channel_layout(acb_fmt.channel_layout)?;
@@ -80,13 +110,13 @@ impl<'a> Encoder<'a> {
 
         if output.format().flags().contains(ffmpeg_next::format::Flags::GLOBAL_HEADER) {
             let flag = ffmpeg_next::codec::Flags::from_bits(
-                unsafe { encoder.as_mut_ptr().as_ref() }.unwrap().flags as c_uint,
+                unsafe { *encoder.as_mut_ptr() }.flags as c_uint,
             )
             .unwrap();
             encoder.set_flags(flag | ffmpeg_next::codec::Flags::GLOBAL_HEADER);
         }
 
-        let encoder = match options {
+        let encoder = match output_options {
             Some(ref o) => encoder.open_with(o.clone()),
             None => encoder.open(),
         }?;
@@ -100,7 +130,7 @@ impl<'a> Encoder<'a> {
             .intersects(ffmpeg_next::codec::Capabilities::VARIABLE_FRAME_SIZE)
         {
             true => {
-                log::debug!("variable frame size detected, using default frame size");
+                log::trace!("variable frame size detected, using default frame size");
                 Self::DEFAULT_FRAME_SIZE
             }
             false => encoder.frame_size(),
@@ -117,12 +147,12 @@ impl<'a> Encoder<'a> {
         )?;
 
         Ok(Self {
-            options,
             vgmstream,
             from_channel_layout,
             from_sample_format,
             from_sample_rate: acb_fmt.sample_rate,
             encoder,
+            options: output_options,
             output,
             resampler,
             frame,
@@ -130,10 +160,13 @@ impl<'a> Encoder<'a> {
             sample_count: 0,
             next_pts: 0,
 
-            queue: VecDeque::new(),
+            fifo: VecDeque::new(),
         })
     }
 
+    /// Encodes the next audio frame and writes the encoded packets to the output file.
+    ///
+    /// Returns `false` if there is more audio data to encode.
     fn write_frame(&mut self, eof: bool) -> Result<bool, Error> {
         match eof {
             false => self.encoder.send_frame(&self.frame),
@@ -165,7 +198,7 @@ impl<'a> Encoder<'a> {
             match unsafe {
                 ffmpeg_next::ffi::av_interleaved_write_frame(
                     self.output.as_mut_ptr(),
-                    packet.as_ptr() as *mut _,
+                    packet.as_mut_ptr(),
                 )
             } {
                 0 => Ok(()),
@@ -187,18 +220,18 @@ impl<'a> Encoder<'a> {
                 break;
             }
 
-            self.queue.extend(buf);
-            if self.queue.len() >= needed_len {
+            self.fifo.extend(buf);
+            if self.fifo.len() >= needed_len {
                 break;
             }
         }
 
-        let samples = match self.queue.len() {
+        let samples = match self.fifo.len() {
             0 => return None,
-            len if len < needed_len => std::mem::take(&mut self.queue).into(),
+            len if len < needed_len => std::mem::take(&mut self.fifo).into(),
             _ => {
-                let mut rest = self.queue.split_off(needed_len);
-                std::mem::swap(&mut rest, &mut self.queue);
+                let mut rest = self.fifo.split_off(needed_len);
+                std::mem::swap(&mut rest, &mut self.fifo);
 
                 Vec::from(rest)
             }
@@ -223,6 +256,8 @@ impl<'a> Encoder<'a> {
     }
 
     /// Encodes the next audio frame.
+    ///
+    /// Returns `false` if there is more audio data to encode.
     fn write_audio_frame(&mut self) -> Result<bool, Error> {
         if let Some(frame) = self.get_audio_frame() {
             assert_eq!(self.resampler.delay(), None, "there should be no delay");
@@ -252,13 +287,18 @@ impl<'a> Encoder<'a> {
             self.frame.set_pts(Some(pts));
             self.sample_count += self.frame.samples() as i64;
 
-            log::debug!("flushed {} samples", self.frame.samples());
+            log::trace!("flushed {} samples", self.frame.samples());
             self.write_frame(false)?;
         }
 
         self.write_frame(true)
     }
 
+    /// Encodes the audio streams.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::FFmpeg`]: if encoding failed.
     pub fn encode(&mut self) -> Result<(), Error> {
         match self.options {
             Some(ref o) => {
@@ -324,11 +364,12 @@ fn get_supported_formats(
 ) -> Result<Vec<ffmpeg_next::format::Sample>, Error> {
     match encoder.codec().unwrap().audio()?.formats() {
         Some(f) => Ok(f.collect()),
-        None => Err(Error::Generic("no supported audio formats found".to_owned())),
+        None => Err(Error::Generic(String::from("no supported audio formats found"))),
     }
 }
 
-/*
+/// Returns a list of supported audio formats.
+#[cfg(any())]
 fn get_supported_formats_new(
     encoder: &ffmpeg_next::codec::encoder::Encoder,
 ) -> Result<Vec<ffmpeg_next::format::Sample>, Error> {
@@ -345,7 +386,7 @@ fn get_supported_formats_new(
         )
     };
     if supported_formats.is_null() {
-        return Err(Error::Generic("Failed to get supported configs".to_owned()));
+        return Err(Error::Generic(String::from("Failed to get supported configs")));
     }
 
     Ok(unsafe {
@@ -358,7 +399,6 @@ fn get_supported_formats_new(
     .map(|fmt| (*fmt).into())
     .collect())
 }
-*/
 
 fn choose_format(
     supported_formats: &[ffmpeg_next::format::Sample],
@@ -375,7 +415,7 @@ fn choose_format(
         .min_by_key(|(diff, _)| *diff)
         .unwrap();
 
-    log::debug!("original sample format not supported, using closest: {:?}", closest.1);
+    log::trace!("original sample format not supported, using closest: {:?}", closest.1);
 
     *closest.1
 }

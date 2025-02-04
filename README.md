@@ -40,6 +40,9 @@ Options:
    * Make sure FFmpeg shared library is in your `PATH`
    * On Windows, you can use `winget` to install FFmpeg so that it will be added to your `PATH` automatically.
      For example, `winget install BtbN.FFmpeg.LGPL.Shared.7.1`. See `winget search ffmpeg` for more options.
+3. Download [AssetRipper](https://github.com/AssetRipper/AssetRipper) to extract assets
+   * decompress the zip file and rename the folder to `./AssetRipper`.
+   * you can also specify the path via the `--asset-ripper-path` option.
 
 ## Build From Source
 

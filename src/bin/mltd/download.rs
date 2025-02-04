@@ -69,12 +69,15 @@ async fn download_manifest(
     Ok((manifest, manifest_info))
 }
 
-async fn download_task(
+async fn download_task<P>(
     asset_info: AssetInfo,
-    output_path: impl AsRef<Path>,
+    output_path: P,
     multi_progress: MultiProgress,
-) -> Result<(), Error> {
-    let file_name = output_path.as_ref().file_name().unwrap().to_str().unwrap().to_owned();
+) -> Result<(), Error>
+where
+    P: AsRef<Path>,
+{
+    let file_name = String::from(output_path.as_ref().file_name().unwrap().to_str().unwrap());
     let mut progress_bar =
         multi_progress.insert_from_back(1, create_progress_bar().with_message(file_name));
 
@@ -89,13 +92,11 @@ async fn download_task(
 
 pub async fn download_assets(args: &DownloaderArgs) -> Result<(), Error> {
     log::debug!("create output directory at {}", args.output_dir.display());
-    if let Err(e) = create_dir_all(&args.output_dir).await {
-        return Err(Error::FileCreate(e));
-    }
+    create_dir_all(&args.output_dir).await?;
 
     let (manifest, manifest_info) = match &args.manifest {
         Some(path) => {
-            let buf = tokio::fs::read(path).await.map_err(Error::FileRead)?;
+            let buf = tokio::fs::read(path).await?;
             let manifest: Manifest = Manifest::from_slice(&buf)?;
             drop(buf);
 
