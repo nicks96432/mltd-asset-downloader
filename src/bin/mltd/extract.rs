@@ -231,7 +231,7 @@ async fn extract_assets(
 ) -> Result<(), Error> {
     for info in &infos {
         match info.entry.1.as_str() {
-            "TextAsset" => extract_text_asset(&info, asset_ripper, args).await?,
+            "TextAsset" => extract_text_asset(info, asset_ripper, args).await?,
 
             // Texture2D requires all relavent Sprite infos to be extracted
             "Texture2D" => {

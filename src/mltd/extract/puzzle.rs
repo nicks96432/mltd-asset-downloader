@@ -29,8 +29,9 @@ pub fn solve_puzzle(
                 .get(i * piece_count + j)
                 .ok_or(Error::Puzzle(String::from("piece not found")))?;
 
-            let mut piece =
-                img.crop_imm(piece.offsets().0, piece.offsets().1, piece.width(), piece.height()).flipv();
+            let mut piece = img
+                .crop_imm(piece.offsets().0, piece.offsets().1, piece.width(), piece.height())
+                .flipv();
 
             match puzzle.pieces[j].rotate {
                 90 => piece = piece.rotate90(),
@@ -101,10 +102,7 @@ fn piece_map(puzzle_name: &str) -> Option<Puzzle> {
         "card_big" => Some(Puzzle {
             width: 1280,
             height: 720,
-            pieces: vec![
-                Piece { x: 0, y: 0, rotate: 0 },
-                Piece { x: 1022, y: 0, rotate: 270 },
-            ],
+            pieces: vec![Piece { x: 0, y: 0, rotate: 0 }, Piece { x: 1022, y: 0, rotate: 270 }],
             img_count: 1,
         }),
         _ => None,
