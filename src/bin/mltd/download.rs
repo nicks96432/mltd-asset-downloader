@@ -69,11 +69,14 @@ async fn download_manifest(
     Ok((manifest, manifest_info))
 }
 
-async fn download_task(
+async fn download_task<P>(
     asset_info: AssetInfo,
-    output_path: impl AsRef<Path>,
+    output_path: P,
     multi_progress: MultiProgress,
-) -> Result<(), Error> {
+) -> Result<(), Error>
+where
+    P: AsRef<Path>,
+{
     let file_name = String::from(output_path.as_ref().file_name().unwrap().to_str().unwrap());
     let mut progress_bar =
         multi_progress.insert_from_back(1, create_progress_bar().with_message(file_name));

@@ -48,13 +48,13 @@ async fn main() -> Result<()> {
 
     match args.command {
         #[cfg(feature = "download")]
-        Command::Download(d) => self::download::download_assets(&d).await?,
+        Command::Download(d) => self::download::download_assets(&d).await,
 
         #[cfg(feature = "extract")]
-        Command::Extract(e) => self::extract::extract_files(&e).await?,
+        Command::Extract(e) => self::extract::extract_files(&e).await,
 
-        Command::Manifest(m) => self::manifest::manifest_main(&m).await?,
-    }
+        Command::Manifest(m) => self::manifest::manifest_main(&m).await,
+    }?;
 
     Ok(())
 }

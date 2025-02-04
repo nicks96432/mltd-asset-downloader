@@ -55,6 +55,10 @@ pub enum Error {
     #[error("AES error: {0}")]
     Aes(String),
 
+    /// zip related error.
+    #[error("zip error: {0}")]
+    Zip(#[from] zip::result::ZipError),
+
     /// Generic error.
     #[error("{0}")]
     Generic(String),

@@ -64,16 +64,16 @@ impl<'a> Encoder<'a> {
     ///
     /// [`Error::FFmpeg`]: if ffmpeg encoder initialization failed.
     pub fn open<P>(
-        input_file: &P,
-        output_dir: &P,
+        input_file: P,
+        output_dir: P,
         output_codec: &str,
         output_options: Option<ffmpeg_next::Dictionary<'a>>,
     ) -> Result<Self, Error>
     where
-        P: AsRef<Path> + ?Sized,
+        P: AsRef<Path>,
     {
         let mut vgmstream = VgmStream::new()?;
-        let sf = StreamFile::open(&vgmstream, input_file)?;
+        let sf = StreamFile::open(&vgmstream, input_file.as_ref())?;
         vgmstream.open_song(&mut Options {
             libsf: &sf,
             format_id: 0,
@@ -87,7 +87,7 @@ impl<'a> Encoder<'a> {
         log::trace!("audio format: {:#?}", acb_fmt);
 
         let mut output = match output_options {
-            Some(ref o) => ffmpeg_next::format::output_with(output_dir, o.clone()),
+            Some(ref o) => ffmpeg_next::format::output_with(output_dir.as_ref(), o.clone()),
             None => ffmpeg_next::format::output(output_dir.as_ref()),
         }?;
 

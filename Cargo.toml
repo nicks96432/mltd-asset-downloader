@@ -49,6 +49,7 @@ thiserror = "2.0.11"
 tokio = { features = ["macros", "rt-multi-thread"], version = "1.43.0" }
 tokio-util = { features = ["compat"], version = "0.7.13" }
 vgmstream = { optional = true, path = "crates/vgmstream" }
+zip = { default-features = false, features = ["deflate"], optional = true, version = "2.2.2" }
 
 [build-dependencies]
 vergen = { features = ["cargo", "emit_and_set", "rustc"], version = "9.0.4" }
@@ -89,5 +90,6 @@ extract = [
     "dep:num_cpus",
     "dep:scraper",
     "dep:tempfile",
-    "dep:vgmstream"
+    "dep:vgmstream",
+    "dep:zip"
 ]

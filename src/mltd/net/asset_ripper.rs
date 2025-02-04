@@ -1,13 +1,16 @@
 //! AssetRipper client.
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 
-use futures::StreamExt;
+use futures::TryStreamExt;
+use indicatif::ProgressBar;
 use reqwest::Response;
+use tokio_util::compat::FuturesAsyncReadCompatExt;
 
+use crate::util::ProgressReadAdapter;
 use crate::Error;
 
 /// Asset entry on `/Collections/View`.
@@ -39,9 +42,9 @@ pub struct AssetRipper {
 
 impl AssetRipper {
     /// Starts a new AssetRipper instance with the given executable path and port.
-    pub fn new<P>(path: &P, port: u16) -> Result<Self, Error>
+    pub fn new<P>(path: P, port: u16) -> Result<Self, Error>
     where
-        P: AsRef<Path> + ?Sized,
+        P: AsRef<Path>,
     {
         let process = match Command::new(path.as_ref().as_os_str())
             .args(["--port", &port.to_string()])
@@ -76,9 +79,9 @@ impl AssetRipper {
     }
 
     /// Loads an asset or a folder into the AssetRipper.
-    pub async fn load<P>(&mut self, path: &P) -> Result<(), Error>
+    pub async fn load<P>(&mut self, path: P) -> Result<(), Error>
     where
-        P: AsRef<Path> + ?Sized,
+        P: AsRef<Path>,
     {
         let url = match path.as_ref().is_dir() {
             true => "LoadFolder",
@@ -294,9 +297,9 @@ impl AssetRipper {
     }
 
     /// Exports the primary content on the AssetRipper.
-    pub async fn export_primary<P>(&mut self, path: &P) -> Result<(), Error>
+    pub async fn export_primary<P>(&mut self, path: P) -> Result<(), Error>
     where
-        P: AsRef<Path> + ?Sized,
+        P: AsRef<Path>,
     {
         let url = format!("{}/Export/PrimaryContent", &self.base_url);
         let mut form = HashMap::new();
@@ -326,38 +329,68 @@ impl AssetRipper {
         Ok(())
     }
 
-    /// Downloads the latest version of AssetRipper.
-    pub async fn download_latest() -> Result<(), Error> {
+    /// Downloads the latest release zip of AssetRipper from GitHub to the given path.
+    pub async fn download_latest_zip<P>(
+        path: P,
+        progress_bar: Option<&mut ProgressBar>,
+    ) -> Result<(), Error>
+    where
+        P: AsRef<Path>,
+    {
         let client = reqwest::Client::new();
         let base_url = "https://github.com/AssetRipper/AssetRipper/releases/latest/download/";
 
-        let os = match std::env::consts::OS {
-            "windows" => "win",
-            "linux" => "linux",
-            "macos" => "mac",
-            _ => return Err(Error::Generic("unsupported OS".to_string())),
-        };
-        let arch = match std::env::consts::ARCH {
-            "x86_64" => "x64",
-            "aarch64" => "arm64",
-            _ => return Err(Error::Generic("unsupported architecture".to_string())),
-        };
-        let req = client.get(format!("{}/AssetRipper_{}_{}.zip", base_url, os, arch));
+        let zip_path = path.as_ref().join("AssetRipper.zip");
+        let file = match tokio::fs::File::create_new(&zip_path).await {
+            Ok(mut file) => {
+                let os = match std::env::consts::OS {
+                    "windows" => "win",
+                    "linux" => "linux",
+                    "macos" => "mac",
+                    _ => return Err(Error::Generic("unsupported OS".to_string())),
+                };
+                let arch = match std::env::consts::ARCH {
+                    "x86_64" => "x64",
+                    "aarch64" => "arm64",
+                    _ => return Err(Error::Generic("unsupported architecture".to_string())),
+                };
+                let req = client.get(format!("{}/AssetRipper_{}_{}.zip", base_url, os, arch));
 
-        let res = match req.send().await {
-            Ok(res) => res,
-            Err(e) => return Err(Error::Request(e)),
+                let res = match req.send().await {
+                    Ok(res) => res,
+                    Err(e) => return Err(Error::Request(e)),
+                };
+
+                let stream_reader = res
+                    .bytes_stream()
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                    .into_async_read()
+                    .compat();
+
+                let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
+                tokio::io::copy(&mut stream_reader, &mut file).await?;
+
+                file
+            }
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::AlreadyExists => {
+                    log::debug!("AssetRipper.zip already exists, skipping download");
+                    tokio::fs::File::open(&zip_path).await?
+                }
+                _ => return Err(e.into()),
+            },
         };
 
-        let mut file = std::fs::File::create("AssetRipper.zip")?;
-        let mut stream = res.bytes_stream();
-        while let Some(chunk) = stream.next().await {
-            let chunk = match chunk {
-                Ok(chunk) => chunk,
-                Err(e) => return Err(Error::Request(e)),
-            };
-            file.write_all(&chunk)?;
-        }
+        let mut file = zip::ZipArchive::new(file.into_std().await)?;
+
+        let mut output_path = zip_path.clone();
+        output_path.pop();
+        output_path.push("AssetRipper");
+        log::debug!("unzip to {}", output_path.display());
+        file.extract(output_path)?;
+        drop(file);
+
+        tokio::fs::remove_file(zip_path).await?;
 
         Ok(())
     }

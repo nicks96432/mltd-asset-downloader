@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use clap::{value_parser, Args};
@@ -8,6 +9,8 @@ use mltd::extract::text::decrypt_text;
 use mltd::net::{AssetInfo, AssetRipper};
 use mltd::Error;
 use tokio::fs::create_dir_all;
+
+use crate::util::create_progress_bar;
 
 #[derive(Debug, Args)]
 #[command(author, version, about, arg_required_else_help(true))]
@@ -74,7 +77,7 @@ fn parse_key_val(s: &str) -> Result<(String, String), Error> {
 
 #[inline]
 fn default_asset_ripper_path() -> PathBuf {
-    let mut path = std::env::current_exe().unwrap();
+    let mut path = std::env::current_exe().expect("failed to get current executable path");
     path.pop();
     path.push("AssetRipper");
     path.push("AssetRipper.GUI.Free");
@@ -83,11 +86,13 @@ fn default_asset_ripper_path() -> PathBuf {
 }
 
 pub async fn extract_files(args: &ExtractorArgs) -> Result<(), Error> {
+    ensure_asset_ripper_installed(&args.asset_ripper_path).await?;
+
     create_dir_all(&args.output).await?;
 
     let port_start = 50000;
     log::debug!(
-        "creating {} asset rippers using {}",
+        "creating {} AssetRippers using {}",
         args.parallel,
         args.asset_ripper_path.display()
     );
@@ -136,14 +141,48 @@ pub async fn extract_files(args: &ExtractorArgs) -> Result<(), Error> {
     Ok(())
 }
 
+pub async fn ensure_asset_ripper_installed<P>(path: P) -> Result<(), Error>
+where
+    P: AsRef<Path>,
+{
+    if path.as_ref().is_file() {
+        return Ok(());
+    }
+
+    log::info!("AssetRipper is not found at {}", path.as_ref().display());
+
+    println!("Trying to download AssetRipper. This project is not affiliated with, sponsored, or endorsed by AssetRipper.");
+    println!("By downloading, you agree to the terms of the license of AssetRipper.");
+
+    print!("Do you want to install it now? (y/N) ");
+    std::io::stdout().flush()?;
+
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+
+    if input.trim().to_ascii_lowercase() != "y" {
+        log::error!("User refused to install AssetRipper");
+        return Err(Error::Generic("AssetRipper not installed".to_owned()));
+    }
+
+    let mut path = path.as_ref().to_path_buf();
+    path.pop();
+    path.pop();
+
+    let mut progress_bar = create_progress_bar().with_message("Downloading AssetRipper...");
+    AssetRipper::download_latest_zip(&path, Some(&mut progress_bar)).await?;
+
+    Ok(())
+}
+
 /// Extracts a single .unity3d file.
 async fn extract_file<P>(
-    path: &P,
+    path: P,
     asset_ripper: &mut AssetRipper,
     args: &ExtractorArgs,
 ) -> Result<(), Error>
 where
-    P: AsRef<Path> + ?Sized,
+    P: AsRef<Path>,
 {
     log::debug!("extracting file: {}", path.as_ref().display());
 
@@ -194,7 +233,9 @@ async fn extract_text_asset(
     asset_ripper: &mut AssetRipper,
     args: &ExtractorArgs,
 ) -> Result<(), Error> {
-    let mut asset_output_dir = args.output.join(info.original_path.as_ref().unwrap());
+    let asset_original_path =
+        info.original_path.as_ref().expect("original path of TextAsset should exist");
+    let mut asset_output_dir = args.output.join(asset_original_path);
     asset_output_dir.pop();
     create_dir_all(&asset_output_dir).await?;
 
@@ -211,17 +252,17 @@ async fn extract_text_asset(
     // function to get the text data.
     asset_ripper.export_primary(tmpdir.path()).await?;
 
-    let file_path = tmpdir.path().join(info.original_path.as_ref().unwrap());
+    let file_path = tmpdir.path().join(asset_original_path);
     match &info.entry.2 {
         // CRI .acb and .awb audio
         n if n.ends_with(".acb") || n.ends_with(".awb") => {
             // remove .bytes extension for vgmstream
-            std::fs::rename(&file_path, file_path.with_extension(""))?;
+            tokio::fs::rename(&file_path, file_path.with_extension("")).await?;
             let file_path = file_path.with_extension("");
 
             let output_path = args
                 .output
-                .join(info.original_path.as_ref().unwrap())
+                .join(asset_original_path)
                 .with_extension("")
                 .with_extension(&args.audio_format);
 
@@ -259,8 +300,8 @@ async fn extract_text_asset(
 
             log::info!("extracting text to {}", output_path.display());
 
-            let buf = std::fs::read(&file_path)?;
-            std::fs::write(&output_path, decrypt_text(&buf)?)?;
+            let buf = tokio::fs::read(&file_path).await?;
+            tokio::fs::write(&output_path, decrypt_text(&buf)?).await?;
         }
         _ => return Err(Error::Generic(String::from("this shouldn't happen"))),
     };
