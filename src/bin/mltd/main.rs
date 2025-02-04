@@ -13,13 +13,8 @@ use clap_verbosity_flag::{InfoLevel, Verbosity};
 use mltd::util::log_formatter;
 
 #[derive(Parser)]
-#[command(
-    author,
-    version = env!("VERGEN_GIT_DESCRIBE"),
-    long_version = env!("MLTD_VERSION_LONG"),
-    about,
-    arg_required_else_help = true
-)]
+#[command(author, version = env!("VERGEN_GIT_DESCRIBE"), long_version = env!("MLTD_VERSION_LONG"))]
+#[command(about, arg_required_else_help = true)]
 struct Cli {
     #[command(subcommand)]
     pub command: Command,

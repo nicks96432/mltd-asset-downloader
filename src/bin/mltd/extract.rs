@@ -55,7 +55,7 @@ pub struct ExtractorArgs {
     parallel: u32,
 
     /// The path to the asset ripper executable
-    #[arg(long, value_name = "PATH", display_order = 2)]
+    #[arg(long, value_name = "PATH", display_order = 3)]
     #[arg(default_value_os_t = std::env::current_dir().unwrap().join("AssetRipper").join("AssetRipper.GUI.Free"))]
     asset_ripper_path: PathBuf,
 }
@@ -184,8 +184,7 @@ async fn extract_text_asset(
     asset_ripper: &mut AssetRipper,
     args: &ExtractorArgs,
 ) -> Result<(), Error> {
-    let asset_output_dir =
-        args.output.join(info.original_path.as_ref().unwrap().to_ascii_lowercase());
+    let asset_output_dir = args.output.join(info.original_path.as_ref().unwrap());
     let asset_output_dir = asset_output_dir.parent().unwrap();
     create_dir_all(&asset_output_dir).await?;
 
@@ -212,7 +211,7 @@ async fn extract_text_asset(
 
             let output_path = args
                 .output
-                .join(info.original_path.as_ref().unwrap().to_ascii_lowercase())
+                .join(info.original_path.as_ref().unwrap())
                 .with_extension("")
                 .with_extension(&args.audio_format);
 
@@ -244,7 +243,7 @@ async fn extract_text_asset(
         n if n.ends_with(".gtx") => {
             let output_path = args
                 .output
-                .join(info.original_path.as_ref().unwrap().to_ascii_lowercase())
+                .join(info.original_path.as_ref().unwrap())
                 .with_extension("")
                 .with_extension("txt");
 
