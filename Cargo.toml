@@ -35,7 +35,6 @@ futures = "0.3.31"
 glob = "0.3.2"
 human_bytes = { default-features = false, optional = true, version = "0.4.3" }
 indicatif = { default-features = false, version = "0.17.11" }
-lazy-regex = { default-features = false, optional = true, features = ["std", "perf"], version = "3.4.1" }
 linked-hash-map = { features = ["serde_impl"], version = "0.5.6" }
 log = "0.4.25"
 num_cpus = { optional = true, version = "1.16.0" }
@@ -86,7 +85,6 @@ extract = [
     "dep:bytes",
     "dep:cbc",
     "dep:ffmpeg-next",
-    "dep:lazy-regex",
     "dep:num_cpus",
     "dep:scraper",
     "dep:tempfile",
