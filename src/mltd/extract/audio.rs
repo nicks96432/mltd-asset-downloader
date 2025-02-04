@@ -48,10 +48,13 @@ impl<'a> Encoder<'a> {
             libsf: &sf,
             format_id: 0,
             stereo_track: 0,
+            // FIXME: there are more subsongs
             subsong_index: 0,
         })?;
 
         let acb_fmt = vgmstream.format()?;
+
+        log::trace!("audio format: {:#?}", acb_fmt);
 
         let mut output = match options {
             Some(ref o) => ffmpeg_next::format::output_with(output, o.clone()),

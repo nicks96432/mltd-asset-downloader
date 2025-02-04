@@ -185,7 +185,10 @@ async fn extract_text_asset(
     let asset_output_dir = asset_output_dir.parent().unwrap();
     create_dir_all(&asset_output_dir).await?;
 
-    if !info.entry.2.ends_with(".acb") && !info.entry.2.ends_with(".gtx") {
+    if !info.entry.2.ends_with(".acb")
+        && !info.entry.2.ends_with(".awb")
+        && !info.entry.2.ends_with(".gtx")
+    {
         return Err(Error::Generic(format!("unknown text asset: {}", info.entry.2)));
     }
 
@@ -197,7 +200,7 @@ async fn extract_text_asset(
 
     let file_path = tmpdir.path().join(info.original_path.as_ref().unwrap());
     match &info.entry.2 {
-        n if n.ends_with(".acb") => {
+        n if n.ends_with(".acb") || n.ends_with(".awb") => {
             // remove .bytes extension for vgmstream
             std::fs::rename(&file_path, &file_path.with_extension(""))?;
             let file_path = file_path.with_extension("");
