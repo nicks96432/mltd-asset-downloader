@@ -90,18 +90,24 @@ pub async fn extract_files(args: &ExtractorArgs) -> Result<(), Error> {
 
     create_dir_all(&args.output).await?;
 
-    let port_start = 50000;
     log::debug!(
         "creating {} AssetRippers using {}",
         args.parallel,
         args.asset_ripper_path.display()
     );
-    let asset_rippers = (0..args.parallel as u16)
-        .map(|i| AssetRipper::new(&args.asset_ripper_path, port_start + i))
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .map(Mutex::new)
-        .collect::<Vec<_>>();
+
+    let mut port_start = 50000;
+    let mut asset_rippers = Vec::new();
+    while asset_rippers.len() < args.parallel as usize {
+        match AssetRipper::new(&args.asset_ripper_path, port_start) {
+            Ok(ripper) => {
+                asset_rippers.push(Mutex::new(ripper));
+                port_start += 1;
+            }
+            Err(Error::IO(e)) if e.kind() == std::io::ErrorKind::AddrInUse => port_start += 1,
+            Err(e) => return Err(e),
+        };
+    }
 
     let files = args
         .input_paths
