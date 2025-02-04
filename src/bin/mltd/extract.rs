@@ -56,7 +56,7 @@ pub struct ExtractorArgs {
 
     /// The path to the asset ripper executable
     #[arg(long, value_name = "PATH", display_order = 3)]
-    #[arg(default_value_os_t = std::env::current_dir().unwrap().join("AssetRipper").join("AssetRipper.GUI.Free"))]
+    #[arg(default_value_os_t = default_asset_ripper_path())]
     asset_ripper_path: PathBuf,
 }
 
@@ -70,6 +70,16 @@ fn parse_key_val(s: &str) -> Result<(String, String), Error> {
         .ok_or_else(|| Error::Generic(format!("invalid -KEY=value: no `=` found in `{}`", s)))?;
 
     Ok((s[1..pos].to_owned(), s[pos + 1..].to_owned()))
+}
+
+#[inline]
+fn default_asset_ripper_path() -> PathBuf {
+    let mut path = std::env::current_exe().unwrap();
+    path.pop();
+    path.push("AssetRipper");
+    path.push("AssetRipper.GUI.Free");
+
+    path
 }
 
 pub async fn extract_files(args: &ExtractorArgs) -> Result<(), Error> {
@@ -184,8 +194,8 @@ async fn extract_text_asset(
     asset_ripper: &mut AssetRipper,
     args: &ExtractorArgs,
 ) -> Result<(), Error> {
-    let asset_output_dir = args.output.join(info.original_path.as_ref().unwrap());
-    let asset_output_dir = asset_output_dir.parent().unwrap();
+    let mut asset_output_dir = args.output.join(info.original_path.as_ref().unwrap());
+    asset_output_dir.pop();
     create_dir_all(&asset_output_dir).await?;
 
     if !info.entry.2.ends_with(".acb")
@@ -217,8 +227,8 @@ async fn extract_text_asset(
 
             log::info!("extracting audio to {}", output_path.display());
 
-            let audio_codec = args.audio_codec.to_owned();
-            let args = args.audio_args.to_owned();
+            let audio_codec = args.audio_codec.clone();
+            let args = args.audio_args.clone();
 
             // turn this into a blocking task to run asynchronously
             tokio::task::spawn_blocking(move || {
@@ -252,7 +262,7 @@ async fn extract_text_asset(
             let buf = std::fs::read(&file_path)?;
             std::fs::write(&output_path, decrypt_text(&buf)?)?;
         }
-        _ => return Err(Error::Generic("this shouldn't happen".to_owned())),
+        _ => return Err(Error::Generic(String::from("this shouldn't happen"))),
     };
 
     Ok(())

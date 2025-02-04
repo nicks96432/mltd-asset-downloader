@@ -441,7 +441,7 @@ mod tests {
 
         assert_eq!(
             asset_info.original_path,
-            Some("Assets/imas/resources/adx2/song3/song3_00test.acb.bytes".to_owned())
+            Some(String::from("Assets/imas/resources/adx2/song3/song3_00test.acb.bytes"))
         );
     }
 }

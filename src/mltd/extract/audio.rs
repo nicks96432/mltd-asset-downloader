@@ -92,7 +92,7 @@ impl<'a> Encoder<'a> {
         }?;
 
         let codec = ffmpeg_next::encoder::find_by_name(output_codec)
-            .ok_or(Error::Generic("Failed to find encoder".to_owned()))?;
+            .ok_or(Error::Generic(String::from("Failed to find encoder")))?;
 
         let mut encoder = ffmpeg_next::codec::Context::new_with_codec(codec).encoder().audio()?;
 
@@ -364,7 +364,7 @@ fn get_supported_formats(
 ) -> Result<Vec<ffmpeg_next::format::Sample>, Error> {
     match encoder.codec().unwrap().audio()?.formats() {
         Some(f) => Ok(f.collect()),
-        None => Err(Error::Generic("no supported audio formats found".to_owned())),
+        None => Err(Error::Generic(String::from("no supported audio formats found"))),
     }
 }
 
@@ -386,7 +386,7 @@ fn get_supported_formats_new(
         )
     };
     if supported_formats.is_null() {
-        return Err(Error::Generic("Failed to get supported configs".to_owned()));
+        return Err(Error::Generic(String::from("Failed to get supported configs")));
     }
 
     Ok(unsafe {

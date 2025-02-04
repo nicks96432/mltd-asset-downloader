@@ -74,7 +74,7 @@ async fn download_task(
     output_path: impl AsRef<Path>,
     multi_progress: MultiProgress,
 ) -> Result<(), Error> {
-    let file_name = output_path.as_ref().file_name().unwrap().to_str().unwrap().to_owned();
+    let file_name = String::from(output_path.as_ref().file_name().unwrap().to_str().unwrap());
     let mut progress_bar =
         multi_progress.insert_from_back(1, create_progress_bar().with_message(file_name));
 
