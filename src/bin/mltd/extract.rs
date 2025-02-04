@@ -166,7 +166,7 @@ where
     let mut input = String::new();
     std::io::stdin().read_line(&mut input)?;
 
-    if input.trim().to_ascii_lowercase() != "y" {
+    if input.trim().eq_ignore_ascii_case("y") {
         log::error!("User refused to install AssetRipper");
         return Err(Error::Generic("AssetRipper not installed".to_owned()));
     }
