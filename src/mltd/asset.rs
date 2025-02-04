@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
-use std::io;
+use std::io::{self, Cursor};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -125,7 +125,7 @@ impl Asset<'_> {
 
         let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
 
-        let mut buf = BufWriter::new(Vec::new());
+        let mut buf = Cursor::new(Vec::new());
         tokio::io::copy(&mut stream_reader, &mut buf).await?;
 
         Ok(Self { data: Cow::from(buf.into_inner()), info: asset_info })

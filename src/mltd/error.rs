@@ -6,6 +6,7 @@ use tokio::task::JoinError;
 
 /// Error type for this crate.
 #[derive(thiserror::Error, Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// Manifest deserialization failed.
     #[error("manifest deserialization failed: {0}")]
@@ -58,6 +59,14 @@ pub enum Error {
     /// zip related error.
     #[error("zip error: {0}")]
     Zip(#[from] zip::result::ZipError),
+
+    /// image crate related error.
+    #[error("image error: {0}")]
+    Image(#[from] image::ImageError),
+
+    /// Puzzle solving failed.
+    #[error("failed to solve puzzle: {0}")]
+    Puzzle(String),
 
     /// Generic error.
     #[error("{0}")]
