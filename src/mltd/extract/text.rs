@@ -1,3 +1,5 @@
+//! Encrypt and decrypt text assets in MLTD.
+
 use aes::cipher::block_padding::Pkcs7;
 use aes::cipher::inout::InOutBufReserved;
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
@@ -6,8 +8,16 @@ use cbc::{Decryptor, Encryptor};
 
 use crate::Error;
 
+/// The key used to derive [`MLTD_TEXT_DECRYPT_KEY`] and
+/// [`MLTD_TEXT_DECRYPT_IV`].
 pub const MLTD_TEXT_PBKDF2_HMAC_SHA1_KEY: &[u8; 8] = b"Millicon";
+
+/// The salt used to derive [`MLTD_TEXT_DECRYPT_KEY`] and
+/// [`MLTD_TEXT_DECRYPT_IV`].
 pub const MLTD_TEXT_PBKDF2_HMAC_SHA1_SALT: &[u8; 9] = b"DAISUL___";
+
+/// The number of iterations used to derive [`MLTD_TEXT_DECRYPT_KEY`] and
+/// [`MLTD_TEXT_DECRYPT_IV`].
 pub const MLTD_TEXT_PBKDF2_HMAC_SHA1_ROUNDS: u32 = 1000;
 
 /// The AES-192-CBC key used to decrypt the text asset.
@@ -33,9 +43,28 @@ pub const MLTD_TEXT_DECRYPT_IV: &[u8; 16] = &[
     0x12, 0x2c, 0x5f, 0xad, 0xcc, 0xa3, 0x68, 0x5d,
 ];
 
+/// AES-192-CBC encryptor for text assets in MLTD.
 pub type MltdTextEncryptor = Encryptor<Aes192>;
+
+/// AES-192-CBC decryptor for text assets in MLTD.
 pub type MltdTextDecryptor = Decryptor<Aes192>;
 
+/// Encrypts text using AES-192-CBC with MLTD's key and IV.
+///
+/// The input text is padded with PKCS7 padding.
+///
+/// # Errors
+///
+/// [`Error::Aes`]: if encryption failed.
+///
+/// # Example
+///
+/// ```no_run
+/// use mltd::extract::text::encrypt_text;
+///
+/// let text = b"Hello, world!";
+/// let cipher = encrypt_text(text).unwrap();
+/// ```
 pub fn encrypt_text(text: &[u8]) -> Result<Vec<u8>, Error> {
     let encryptor =
         MltdTextEncryptor::new(MLTD_TEXT_DECRYPT_KEY.into(), MLTD_TEXT_DECRYPT_IV.into());
@@ -49,6 +78,22 @@ pub fn encrypt_text(text: &[u8]) -> Result<Vec<u8>, Error> {
     Ok(buf.to_owned())
 }
 
+/// Decrypts text using AES-192-CBC with MLTD's key and IV.
+///
+/// The output text is unpadded with PKCS7 padding.
+///
+/// # Errors
+///
+/// [`Error::Aes`]: if decryption failed.
+///
+/// # Example
+///
+/// ```no_run
+/// use mltd::extract::text::decrypt_text;
+///
+/// let cipher = b"Hello, world!";
+/// let text = decrypt_text(cipher).unwrap();
+/// ```
 pub fn decrypt_text(cipher: &[u8]) -> Result<Vec<u8>, Error> {
     let decryptor =
         MltdTextDecryptor::new(MLTD_TEXT_DECRYPT_KEY.into(), MLTD_TEXT_DECRYPT_IV.into());

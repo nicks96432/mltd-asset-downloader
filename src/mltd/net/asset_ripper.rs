@@ -1,3 +1,5 @@
+//! AssetRipper client.
+
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
@@ -8,19 +10,30 @@ use reqwest::Response;
 
 use crate::Error;
 
+/// Asset entry on `/Collections/View`.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct AssetEntry(pub i64, pub String, pub String);
 
+/// Information about an asset on `/Assets/View`.
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct AssetInfo {
+    /// Asset entry on `/Collections/View`.
     pub entry: AssetEntry,
+
+    /// Original path of the asset before bundled.
     pub original_path: Option<String>,
+
+    /// Name of the bundle file.
     pub asset_bundle_name: String,
 }
 
-/// Asset ripper process.
+/// AssetRipper client.
+#[derive(Debug)]
 pub struct AssetRipper {
+    /// Base URL of AssetRipper.
     base_url: String,
 
+    /// AssetRipper child process.
     process: Option<Child>,
 }
 
@@ -31,9 +44,9 @@ impl AssetRipper {
         P: AsRef<Path> + ?Sized,
     {
         let process = match Command::new(path.as_ref().as_os_str())
-            .args(&["--port", &port.to_string()])
-            .args(&["--launch-browser", "false"])
-            .args(&["--log", "false"])
+            .args(["--port", &port.to_string()])
+            .args(["--launch-browser", "false"])
+            .args(["--log", "false"])
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -57,10 +70,12 @@ impl AssetRipper {
         Ok(Self { base_url: format!("http://localhost:{}", port), process: Some(process) })
     }
 
+    /// Connects th an existing AssetRipper instance with the given host and port.
     pub fn connect(host: &str, port: u16) -> Result<Self, Error> {
         Ok(Self { base_url: format!("http://{}:{}", host, port), process: None })
     }
 
+    /// Loads an asset or a folder into the AssetRipper.
     pub async fn load<P>(&mut self, path: &P) -> Result<(), Error>
     where
         P: AsRef<Path> + ?Sized,
@@ -86,6 +101,7 @@ impl AssetRipper {
         Ok(())
     }
 
+    /// Sends a GET request with the given path parameter to AssetRipper.
     pub async fn send_request(&mut self, url: &str, path: &str) -> Result<Response, Error> {
         let url = format!("{}/{}", &self.base_url, url);
         let client = reqwest::Client::new();
@@ -106,7 +122,7 @@ impl AssetRipper {
     pub async fn bundles(&mut self) -> Result<Vec<String>, Error> {
         let path = r#"{"P":[]}"#;
 
-        let html = match self.send_request("Bundles/View", &path).await?.text().await {
+        let html = match self.send_request("Bundles/View", path).await?.text().await {
             Ok(html) => html,
             Err(e) => return Err(Error::ResponseDeserialize(e)),
         };
@@ -203,6 +219,7 @@ impl AssetRipper {
         Ok(text.parse()?)
     }
 
+    /// Returns information about the specified asset.
     pub async fn asset_info(
         &mut self,
         bundle_no: usize,
@@ -243,6 +260,7 @@ impl AssetRipper {
         })
     }
 
+    /// Returns the JSON representation of the specified asset.
     pub async fn asset_json(
         &mut self,
         bundle_no: usize,
@@ -256,10 +274,11 @@ impl AssetRipper {
 
         match self.send_request("Assets/Json", &path).await?.json().await {
             Ok(json) => Ok(json),
-            Err(e) => return Err(Error::ResponseDeserialize(e)),
+            Err(e) => Err(Error::ResponseDeserialize(e)),
         }
     }
 
+    /// Returns the text data stream of the specified asset.
     pub async fn asset_text(
         &mut self,
         bundle_no: usize,
@@ -274,6 +293,7 @@ impl AssetRipper {
         Ok(self.send_request("Assets/Text", &path).await?.bytes_stream())
     }
 
+    /// Exports the primary content on the AssetRipper.
     pub async fn export_primary<P>(&mut self, path: &P) -> Result<(), Error>
     where
         P: AsRef<Path> + ?Sized,
@@ -306,6 +326,7 @@ impl AssetRipper {
         Ok(())
     }
 
+    /// Downloads the latest version of AssetRipper.
     pub async fn download_latest() -> Result<(), Error> {
         let client = reqwest::Client::new();
         let base_url = "https://github.com/AssetRipper/AssetRipper/releases/latest/download/";

@@ -86,13 +86,13 @@ pub async fn extract_files(args: &ExtractorArgs) -> Result<(), Error> {
         .map(|i| AssetRipper::new(&args.asset_ripper_path, port_start + i))
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()
-        .map(|a| Mutex::new(a))
+        .map(Mutex::new)
         .collect::<Vec<_>>();
 
     let files = args
         .input_paths
         .iter()
-        .filter_map(|p| match glob::glob(&p) {
+        .filter_map(|p| match glob::glob(p) {
             Ok(paths) => Some(paths),
             Err(e) => {
                 log::warn!("failed to glob `{}`: {}", p, e);
@@ -127,6 +127,7 @@ pub async fn extract_files(args: &ExtractorArgs) -> Result<(), Error> {
     Ok(())
 }
 
+/// Extracts a single .unity3d file.
 async fn extract_file<P>(
     path: &P,
     asset_ripper: &mut AssetRipper,
@@ -157,6 +158,7 @@ where
     Ok(())
 }
 
+/// Extracts a single asset according to its class.
 async fn extract_asset(
     _bundle_no: usize,
     _collection_no: usize,
@@ -175,6 +177,9 @@ async fn extract_asset(
     Ok(())
 }
 
+/// Extracts a TextAsset.
+///
+/// Audio assets are binary TextAsset, so they are handled here as well.
 async fn extract_text_asset(
     info: AssetInfo,
     asset_ripper: &mut AssetRipper,
@@ -200,9 +205,10 @@ async fn extract_text_asset(
 
     let file_path = tmpdir.path().join(info.original_path.as_ref().unwrap());
     match &info.entry.2 {
+        // CRI .acb and .awb audio
         n if n.ends_with(".acb") || n.ends_with(".awb") => {
             // remove .bytes extension for vgmstream
-            std::fs::rename(&file_path, &file_path.with_extension(""))?;
+            std::fs::rename(&file_path, file_path.with_extension(""))?;
             let file_path = file_path.with_extension("");
 
             let output_path = args
@@ -220,7 +226,7 @@ async fn extract_text_asset(
             tokio::task::spawn_blocking(move || {
                 let mut options = ffmpeg_next::Dictionary::new();
                 for (key, value) in &args {
-                    options.set(&key, &value);
+                    options.set(key, value);
                 }
                 if !args.is_empty() {
                     log::trace!("audio options: {:#?}", options);
@@ -235,6 +241,7 @@ async fn extract_text_asset(
             })
             .await??;
         }
+        // AES-192-CBC encrypted plot text
         n if n.ends_with(".gtx") => {
             let output_path = args
                 .output

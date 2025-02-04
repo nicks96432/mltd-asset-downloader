@@ -1,4 +1,4 @@
-//! This module provides functions related to network requests.
+//! Functions related to network requests.
 
 mod asset_ripper;
 mod matsuri_api;

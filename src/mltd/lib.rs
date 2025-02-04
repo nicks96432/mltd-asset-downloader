@@ -6,6 +6,7 @@
 
 #![warn(clippy::print_stderr)]
 #![warn(clippy::print_stdout)]
+#![warn(missing_docs)]
 
 pub mod asset;
 mod error;
