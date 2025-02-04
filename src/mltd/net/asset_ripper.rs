@@ -434,7 +434,7 @@ mod tests {
     async fn test_asset_info() {
         let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56793).unwrap();
 
-        let (acb_path, _, _) = TEST_CASES[0];
+        let (acb_path, ..) = TEST_CASES[0];
         asset_ripper.load(acb_path).await.unwrap();
         let asset_entry = &asset_ripper.assets(0, 0).await.unwrap()[0];
         let asset_info = asset_ripper.asset_info(0, 0, asset_entry.0).await.unwrap();

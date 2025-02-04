@@ -5,10 +5,9 @@ use futures::lock::Mutex;
 use futures::{stream, StreamExt};
 use mltd::extract::audio::Encoder;
 use mltd::extract::text::decrypt_text;
-use tokio::fs::create_dir_all;
-
 use mltd::net::{AssetInfo, AssetRipper};
 use mltd::Error;
+use tokio::fs::create_dir_all;
 
 #[derive(Debug, Args)]
 #[command(author, version, about, arg_required_else_help(true))]
