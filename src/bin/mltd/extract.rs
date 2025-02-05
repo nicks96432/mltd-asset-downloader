@@ -6,7 +6,7 @@ use clap::{value_parser, Args};
 use futures::lock::Mutex;
 use futures::{stream, StreamExt, TryStreamExt};
 use image::GenericImageView;
-use mltd::extract::audio::Encoder;
+use mltd::extract::audio::{Encoder, EncoderOutputOptions};
 use mltd::extract::puzzle::solve_puzzle;
 use mltd::extract::text::decrypt_text;
 use mltd::net::{AssetInfo, AssetRipper};
@@ -355,9 +355,9 @@ async fn extract_text_asset(
 ) -> Result<(), Error> {
     let asset_original_path =
         info.original_path.as_ref().expect("original path of TextAsset should exist");
-    let mut asset_output_dir = args.output.join(asset_original_path);
-    asset_output_dir.pop();
-    create_dir_all(&asset_output_dir).await?;
+    let mut output_dir = args.output.join(asset_original_path);
+    output_dir.pop();
+    create_dir_all(&output_dir).await?;
 
     if !info.entry.2.ends_with(".acb")
         && !info.entry.2.ends_with(".awb")
@@ -379,44 +379,57 @@ async fn extract_text_asset(
             // remove .bytes extension for vgmstream
             tokio::fs::rename(&file_path, file_path.with_extension("")).await?;
             let file_path = file_path.with_extension("");
-
-            let output_path = args
-                .output
-                .join(asset_original_path)
+            let output_prefix = file_path
                 .with_extension("")
-                .with_extension(&args.audio_format);
+                .file_name()
+                .expect("file name should exist")
+                .to_os_string();
 
-            log::info!("extracting audio to {}", output_path.display());
+            log::info!("extracting audio to {}", output_dir.display());
 
-            let audio_codec = args.audio_codec.clone();
-            let args = args.audio_args.clone();
+            for subsong_index in 0.. {
+                let file_path = file_path.clone();
+                let output_dir = output_dir.clone();
 
-            // turn this into a blocking task to run asynchronously
-            tokio::task::spawn_blocking(move || {
-                let mut options = ffmpeg_next::Dictionary::new();
-                for (key, value) in &args {
-                    options.set(key, value);
+                let output_prefix = output_prefix.clone();
+                let audio_codec = args.audio_codec.clone();
+                let audio_format = args.audio_format.clone();
+                let audio_options = args.audio_args.clone();
+
+                // turn this into a blocking task to run asynchronously
+                let result = tokio::task::spawn_blocking(move || {
+                    let mut options = ffmpeg_next::Dictionary::new();
+                    for (key, value) in &audio_options {
+                        options.set(key, value);
+                    }
+                    if !audio_options.is_empty() {
+                        log::trace!("audio options: {:#?}", options);
+                    }
+                    let mut encoder = Encoder::open(
+                        &file_path.clone(),
+                        subsong_index,
+                        &output_dir.clone(),
+                        EncoderOutputOptions {
+                            prefix: output_prefix.as_os_str().to_str().unwrap(),
+                            codec: &audio_codec,
+                            format: &audio_format,
+                            options: Some(options),
+                        },
+                    )?;
+                    encoder.encode()
+                })
+                .await?;
+
+                match result {
+                    Ok(()) => (),
+                    Err(Error::VGMStream(_)) => break,
+                    Err(e) => return Err(e),
                 }
-                if !args.is_empty() {
-                    log::trace!("audio options: {:#?}", options);
-                }
-                let mut encoder = Encoder::open(
-                    &file_path.clone(),
-                    &output_path.clone(),
-                    &audio_codec,
-                    Some(options),
-                )?;
-                encoder.encode()
-            })
-            .await??;
+            }
         }
         // AES-192-CBC encrypted plot text
         n if n.ends_with(".gtx") => {
-            let output_path = args
-                .output
-                .join(info.original_path.as_ref().unwrap())
-                .with_extension("")
-                .with_extension("txt");
+            let output_path = output_dir.with_extension("").with_extension("txt");
 
             log::info!("extracting text to {}", output_path.display());
 

@@ -47,6 +47,21 @@ pub struct Encoder<'a> {
     fifo: VecDeque<u8>,
 }
 
+/// Audio encoder output options.
+pub struct EncoderOutputOptions<'a> {
+    /// Output filename prefix if stream name is empty.
+    pub prefix: &'a str,
+
+    /// FFmpeg codec name.
+    pub codec: &'a str,
+
+    /// FFmpeg codec format.
+    pub format: &'a str,
+
+    /// FFmpeg codec and format options.
+    pub options: Option<ffmpeg_next::Dictionary<'a>>,
+}
+
 impl<'a> Encoder<'a> {
     /// Default audio frame size.
     ///
@@ -65,9 +80,9 @@ impl<'a> Encoder<'a> {
     /// [`Error::FFmpeg`]: if ffmpeg encoder initialization failed.
     pub fn open<P>(
         input_file: P,
+        subsong_index: usize,
         output_dir: P,
-        output_codec: &str,
-        output_options: Option<ffmpeg_next::Dictionary<'a>>,
+        output_options: EncoderOutputOptions<'a>,
     ) -> Result<Self, Error>
     where
         P: AsRef<Path>,
@@ -79,19 +94,14 @@ impl<'a> Encoder<'a> {
             format_id: 0,
             stereo_track: 0,
             // FIXME: there are more subsongs
-            subsong_index: 0,
+            subsong_index: subsong_index as i32,
         })?;
 
         let acb_fmt = vgmstream.format()?;
 
         log::trace!("audio format: {:#?}", acb_fmt);
 
-        let mut output = match output_options {
-            Some(ref o) => ffmpeg_next::format::output_with(output_dir.as_ref(), o.clone()),
-            None => ffmpeg_next::format::output(output_dir.as_ref()),
-        }?;
-
-        let codec = ffmpeg_next::encoder::find_by_name(output_codec)
+        let codec = ffmpeg_next::encoder::find_by_name(output_options.codec)
             .ok_or(Error::Generic(String::from("Failed to find encoder")))?;
 
         let mut encoder = ffmpeg_next::codec::Context::new_with_codec(codec).encoder().audio()?;
@@ -108,6 +118,26 @@ impl<'a> Encoder<'a> {
         encoder.set_rate(acb_fmt.sample_rate);
         encoder.set_channel_layout(from_channel_layout);
 
+        let output_filename = match acb_fmt.stream_name.as_str() {
+            "" => format!("{}_{}.{}", output_options.prefix, subsong_index, output_options.format),
+            name => format!("{}.{}", name, output_options.format),
+        };
+        let output_path = output_dir.as_ref().join(&output_filename);
+
+        log::info!("writing audio to {}", output_path.display());
+        if acb_fmt.loop_flag {
+            log::info!(
+                "this audio has a loop from sample {} to {}",
+                acb_fmt.loop_start,
+                acb_fmt.loop_end
+            );
+        }
+
+        let mut output = match output_options.options {
+            Some(ref o) => ffmpeg_next::format::output_with(&output_path, o.clone()),
+            None => ffmpeg_next::format::output(output_dir.as_ref()),
+        }?;
+
         if output.format().flags().contains(ffmpeg_next::format::Flags::GLOBAL_HEADER) {
             let flag = ffmpeg_next::codec::Flags::from_bits(
                 unsafe { *encoder.as_mut_ptr() }.flags as c_uint,
@@ -116,7 +146,7 @@ impl<'a> Encoder<'a> {
             encoder.set_flags(flag | ffmpeg_next::codec::Flags::GLOBAL_HEADER);
         }
 
-        let encoder = match output_options {
+        let encoder = match output_options.options {
             Some(ref o) => encoder.open_with(o.clone()),
             None => encoder.open(),
         }?;
@@ -152,7 +182,7 @@ impl<'a> Encoder<'a> {
             from_sample_format,
             from_sample_rate: acb_fmt.sample_rate,
             encoder,
-            options: output_options,
+            options: output_options.options,
             output,
             resampler,
             frame,
