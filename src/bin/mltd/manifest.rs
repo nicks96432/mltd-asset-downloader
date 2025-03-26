@@ -2,10 +2,10 @@ use std::fs::read;
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
+use mltd::Error;
 use mltd::asset::{Asset, AssetInfo, Platform};
 use mltd::manifest::Manifest;
 use mltd::net::{get_all_asset_versions, get_asset_version, latest_asset_version};
-use mltd::Error;
 
 use crate::util::create_progress_bar;
 

@@ -1,6 +1,6 @@
 //! Puzzle handling.
 
-use image::{imageops, DynamicImage, GenericImageView, SubImage};
+use image::{DynamicImage, GenericImageView, SubImage, imageops};
 
 use crate::Error;
 

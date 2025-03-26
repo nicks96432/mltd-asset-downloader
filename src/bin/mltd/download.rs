@@ -1,13 +1,13 @@
 use std::path::{Path, PathBuf};
 
 use clap::Args;
-use futures::{stream, StreamExt};
+use futures::{StreamExt, stream};
 use human_bytes::human_bytes;
 use indicatif::{MultiProgress, MultiProgressAlignment, ProgressDrawTarget};
 use mltd::asset::{Asset, AssetInfo, Platform};
 use mltd::manifest::Manifest;
 use mltd::net::AssetVersion;
-use mltd::{net, Error};
+use mltd::{Error, net};
 use tokio::fs::create_dir_all;
 
 use crate::util::create_progress_bar;

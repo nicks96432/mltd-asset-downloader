@@ -4,9 +4,9 @@ use std::collections::VecDeque;
 use std::ffi::{c_int, c_uint};
 use std::path::Path;
 
-use ffmpeg_next::packet::Mut;
 use ffmpeg_next::Rescale;
-use vgmstream::{Options, StreamFile, VgmStream};
+use ffmpeg_next::packet::Mut;
+use vgmstream::{StreamFile, VgmStream};
 
 use crate::Error;
 
@@ -88,16 +88,14 @@ impl<'a> Encoder<'a> {
         P: AsRef<Path>,
     {
         let mut vgmstream = VgmStream::new()?;
-        let sf = StreamFile::open(&vgmstream, input_file.as_ref())?;
-        vgmstream.open_song(&mut Options {
-            libsf: &sf,
-            format_id: 0,
-            stereo_track: 0,
-            // FIXME: there are more subsongs
-            subsong_index: subsong_index as i32,
-        })?;
+        let mut sf = StreamFile::open(&vgmstream, input_file.as_ref())?;
+        vgmstream.open_song(&mut sf, subsong_index)?;
 
         let acb_fmt = vgmstream.format()?;
+
+        if subsong_index >= acb_fmt.subsong_count as usize {
+            return Err(Error::OutOfRange(subsong_index, acb_fmt.subsong_count as usize));
+        }
 
         log::trace!("audio format: {:#?}", acb_fmt);
 
@@ -109,7 +107,7 @@ impl<'a> Encoder<'a> {
         let supported_formats = get_supported_formats(&encoder)?;
         log::trace!("supported formats: {:?}", supported_formats);
 
-        let from_sample_format = to_ffmpeg_sample_format(acb_fmt.sample_type)?;
+        let from_sample_format = to_ffmpeg_sample_format(acb_fmt.sample_format)?;
         let from_channel_layout = to_ffmpeg_channel_layout(acb_fmt.channel_layout)?;
 
         encoder.set_format(choose_format(&supported_formats, from_sample_format));
@@ -151,7 +149,7 @@ impl<'a> Encoder<'a> {
             None => encoder.open(),
         }?;
 
-        let _ = output.add_stream_with(&encoder.0 .0 .0)?;
+        let _ = output.add_stream_with(&encoder.0.0.0)?;
 
         let frame_size = match encoder
             .codec()
@@ -160,7 +158,10 @@ impl<'a> Encoder<'a> {
             .intersects(ffmpeg_next::codec::Capabilities::VARIABLE_FRAME_SIZE)
         {
             true => {
-                log::trace!("variable frame size detected, using default frame size");
+                log::trace!(
+                    "variable frame size detected, using default frame size ({})",
+                    Self::DEFAULT_FRAME_SIZE
+                );
                 Self::DEFAULT_FRAME_SIZE
             }
             false => encoder.frame_size(),
@@ -352,13 +353,9 @@ fn to_ffmpeg_sample_format(
         vgmstream::SampleType::Pcm16 => {
             Ok(ffmpeg_next::format::Sample::I16(ffmpeg_next::format::sample::Type::Packed))
         }
-        vgmstream::SampleType::Pcm32 => {
-            Ok(ffmpeg_next::format::Sample::I32(ffmpeg_next::format::sample::Type::Packed))
-        }
         vgmstream::SampleType::Float => {
             Ok(ffmpeg_next::format::Sample::F32(ffmpeg_next::format::sample::Type::Packed))
         }
-        _ => Err(Error::Generic(format!("Unsupported sample type: {:?}", value))),
     }
 }
 
@@ -436,6 +433,14 @@ fn choose_format(
 ) -> ffmpeg_next::format::Sample {
     if supported_formats.contains(&wanted_format) {
         return wanted_format;
+    }
+
+    if let ffmpeg_next::format::Sample::F32(_) = wanted_format {
+        if let Some(fmt) =
+            supported_formats.iter().find(|f| matches!(f, ffmpeg_next::format::Sample::I16(_)))
+        {
+            return *fmt;
+        }
     }
 
     // Try to find the closest supported format

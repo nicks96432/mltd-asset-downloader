@@ -68,6 +68,10 @@ pub enum Error {
     #[error("failed to solve puzzle: {0}")]
     Puzzle(String),
 
+    /// Array index out of range error.
+    #[error("try to access index {0} but the length is {1}")]
+    OutOfRange(usize, usize),
+
     /// Generic error.
     #[error("{0}")]
     Generic(String),

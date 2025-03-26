@@ -2,15 +2,15 @@ use std::collections::BTreeMap;
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 
-use clap::{value_parser, Args};
+use clap::{Args, value_parser};
 use futures::lock::Mutex;
-use futures::{stream, StreamExt, TryStreamExt};
+use futures::{StreamExt, TryStreamExt, stream};
 use image::GenericImageView;
+use mltd::Error;
 use mltd::extract::audio::{Encoder, EncoderOutputOptions};
 use mltd::extract::puzzle::solve_puzzle;
 use mltd::extract::text::decrypt_text;
 use mltd::net::{AssetInfo, AssetRipper};
-use mltd::Error;
 use tokio::fs::create_dir_all;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 
@@ -164,7 +164,9 @@ where
 
     log::info!("AssetRipper is not found at {}", path.as_ref().display());
 
-    println!("Trying to download AssetRipper. This project is not affiliated with, sponsored, or endorsed by AssetRipper.");
+    println!(
+        "Trying to download AssetRipper. This project is not affiliated with, sponsored, or endorsed by AssetRipper."
+    );
     println!("By downloading, you agree to the terms of the license of AssetRipper.");
 
     print!("Do you want to install it now? (y/N) ");
@@ -422,7 +424,7 @@ async fn extract_text_asset(
 
                 match result {
                     Ok(()) => (),
-                    Err(Error::VGMStream(_)) => break,
+                    Err(Error::VGMStream(_)) | Err(Error::OutOfRange(..)) => break,
                     Err(e) => return Err(e),
                 }
             }
