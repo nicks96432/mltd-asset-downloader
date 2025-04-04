@@ -7,11 +7,12 @@ use futures::lock::Mutex;
 use futures::{StreamExt, TryStreamExt, stream};
 use image::GenericImageView;
 use mltd::Error;
-use mltd::extract::audio::{Encoder, EncoderOutputOptions};
+use mltd::extract::audio::{Encoder, EncoderOutputOptions, MLTD_HCA_KEY};
 use mltd::extract::puzzle::solve_puzzle;
 use mltd::extract::text::decrypt_text;
 use mltd::net::{AssetInfo, AssetRipper};
 use tokio::fs::create_dir_all;
+use tokio::io::AsyncWriteExt;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 
 use crate::util::create_progress_bar;
@@ -384,12 +385,15 @@ async fn extract_text_asset(
         n if n.ends_with(".acb") || n.ends_with(".awb") => {
             // remove .bytes extension for vgmstream
             tokio::fs::rename(&file_path, file_path.with_extension("")).await?;
+
+            // According to https://github.com/vgmstream/vgmstream/blob/master/doc/USAGE.md#decryption-keys,
+            // we can specify the decryption key in the .hcakey file.
+            let mut key_file = tokio::fs::File::create(file_path.with_file_name(".hcakey")).await?;
+            key_file.write_all(MLTD_HCA_KEY.to_string().as_bytes()).await?;
+
             let file_path = file_path.with_extension("");
-            let output_prefix = file_path
-                .with_extension("")
-                .file_name()
-                .expect("file name should exist")
-                .to_os_string();
+            let output_prefix =
+                file_path.file_name().expect("file name should exist").to_os_string();
 
             log::info!("extracting audio to {}", output_dir.display());
 

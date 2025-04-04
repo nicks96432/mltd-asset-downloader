@@ -19,7 +19,7 @@ license = { workspace = true }
 name = "mltd"
 readme = "README.md"
 repository = { workspace = true }
-version = "3.0.0-alpha.2"
+version = "3.0.0-alpha.3"
 
 [dependencies]
 aes = { optional = true, version = "0.8.4" }

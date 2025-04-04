@@ -1537,7 +1537,7 @@ dependencies = [
 
 [[package]]
 name = "mltd"
-version = "3.0.0-alpha.2"
+version = "3.0.0-alpha.3"
 dependencies = [
  "aes",
  "anyhow",
@@ -2791,7 +2791,7 @@ dependencies = [
 
 [[package]]
 name = "vgmstream-sys"
-version = "0.2.0-vgmstream-r1980-202-g2e3ff29f"
+version = "0.2.0-vgmstream-r1980-219-gcaa00ea4"
 dependencies = [
  "bindgen 0.71.1",
  "cmake",

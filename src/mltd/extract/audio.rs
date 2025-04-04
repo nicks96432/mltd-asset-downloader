@@ -10,6 +10,9 @@ use vgmstream::{StreamFile, VgmStream};
 
 use crate::Error;
 
+/// HCA key used to decrypt MLTD audio asset.
+pub const MLTD_HCA_KEY: u64 = 765765765765765;
+
 /// An encoder that transcodes game audio to the target codec.
 pub struct Encoder<'a> {
     /// VgmStream stream file.
