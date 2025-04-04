@@ -87,7 +87,11 @@ fn default_asset_ripper_path() -> PathBuf {
     let mut path = std::env::current_exe().expect("failed to get current executable path");
     path.pop();
     path.push("AssetRipper");
-    path.push("AssetRipper.GUI.Free");
+
+    path.push(match cfg!(windows) {
+        true => "AssetRipper.GUI.Free.exe",
+        false => "AssetRipper.GUI.Free",
+    });
 
     path
 }
