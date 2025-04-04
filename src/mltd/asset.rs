@@ -14,9 +14,9 @@ use tokio::fs::File;
 use tokio::io::BufWriter;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 
+use crate::Error;
 use crate::net::AssetVersion;
 use crate::util::ProgressReadAdapter;
-use crate::Error;
 
 /// Base URL of MLTD asset server.
 pub const ASSET_URL_BASE: &str = "https://td-assets.bn765.com";
@@ -84,7 +84,7 @@ impl Asset<'_> {
     ///
     /// # Errors
     ///
-    /// - [`Error::FileWrite`]: if it cannot write the downloaded data to file.
+    /// - [`Error::IO`]: if it cannot write the downloaded data to file.
     /// - [`Error::Request`]: if it cannot send request to MLTD asset server.
     ///
     /// # Example
@@ -138,8 +138,7 @@ impl Asset<'_> {
     ///
     /// # Errors
     ///
-    /// - [`Error::FileCreate`]: if it cannot create the output file.
-    /// - [`Error::FileWrite`]: if it cannot write the downloaded data to file.
+    /// - [`Error::IO`]: if it cannot write the downloaded data to file.
     /// - [`Error::Request`]: if it cannot send request to MLTD asset server.
     ///
     /// # Example

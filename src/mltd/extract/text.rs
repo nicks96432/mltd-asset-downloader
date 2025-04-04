@@ -1,9 +1,9 @@
 //! Encrypt and decrypt text assets in MLTD.
 
+use aes::Aes192;
 use aes::cipher::block_padding::Pkcs7;
 use aes::cipher::inout::InOutBufReserved;
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
-use aes::Aes192;
 use cbc::{Decryptor, Encryptor};
 
 use crate::Error;

@@ -1,27 +1,33 @@
 mod error;
 mod sf;
 
-use std::ffi::CStr;
+use std::ffi::{CStr, c_int};
 
 use bitflags::bitflags;
-use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
+use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::{FromPrimitive, ToPrimitive};
 
 pub use crate::error::Error;
 pub use crate::sf::StreamFile;
 
-#[derive(Debug, Clone, Copy, PartialEq, FromPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum SampleType {
-    Pcm16 = vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_PCM16 as isize,
-    Pcm24 = vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_PCM24 as isize,
-    Pcm32 = vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_PCM32 as isize,
-    Float = vgmstream_sys::libvgmstream_sample_t_LIBVGMSTREAM_SAMPLE_FLOAT as isize,
+    Pcm16 = vgmstream_sys::libvgmstream_sfmt_t_LIBVGMSTREAM_SFMT_PCM16 as isize,
+    // Pcm24 = vgmstream_sys::libvgmstream_sfmt_t_LIBVGMSTREAM_SFMT_PCM24 as isize,
+    // Pcm32 = vgmstream_sys::libvgmstream_sfmt_t_LIBVGMSTREAM_SFMT_PCM32 as isize,
+    Float = vgmstream_sys::libvgmstream_sfmt_t_LIBVGMSTREAM_SFMT_FLOAT as isize,
 }
 
-impl From<vgmstream_sys::libvgmstream_sample_t> for SampleType {
-    fn from(value: vgmstream_sys::libvgmstream_sample_t) -> Self {
-        #[allow(clippy::unnecessary_cast)] // libvgmstream_sample_t is i32 on windows
+impl From<vgmstream_sys::libvgmstream_sfmt_t> for SampleType {
+    fn from(value: vgmstream_sys::libvgmstream_sfmt_t) -> Self {
+        #[allow(clippy::unnecessary_cast)] // libvgmstream_sfmt_t is i32 on windows
         SampleType::from_u32(value as u32).expect("Invalid sample type")
+    }
+}
+
+impl From<SampleType> for vgmstream_sys::libvgmstream_sfmt_t {
+    fn from(value: SampleType) -> Self {
+        value.to_u32().expect("Invalid sample type") as vgmstream_sys::libvgmstream_sfmt_t
     }
 }
 
@@ -118,6 +124,10 @@ pub struct Config {
     /// fade delay after target loops
     pub fade_delay: f64,
 
+    /// forces vgmstream to decode one 2ch+2ch+2ch... 'track' and discard other channels,
+    /// where 0 = disabled, 1..N = Nth track
+    pub stereo_track: i32,
+
     /// downmixing if vgmstream's channels are higher than value
     ///
     /// for players that can only handle N channels
@@ -125,31 +135,8 @@ pub struct Config {
     /// this type of downmixing is very simplistic and **not** recommended
     pub auto_downmix_channels: i32,
 
-    /// forces output buffer to be remixed into PCM16
-    pub force_pcm16: bool,
-    /// forces output buffer to be remixed into float
-    pub force_float: bool,
-}
-
-/// configures how vgmstream opens the format
-pub struct Options<'a> {
-    /// custom IO streamfile that provides reader info for vgmstream
-    ///
-    /// not needed after _open and should be closed, as vgmstream re-opens its own SFs internally as needed
-    pub libsf: &'a sf::StreamFile<'a>,
-
-    /// target subsong (1..N) or 0 = default/first
-    ///
-    /// to check if a file has subsongs, _open first + check format->total_subsongs
-    /// (then _open 2nd, 3rd, etc)
-    pub subsong_index: i32,
-
-    /// force a format (for example when loading new subsong of the same archive)
-    pub format_id: i32,
-
-    /// forces vgmstream to decode one 2ch+2ch+2ch... 'track' and discard other channels,
-    /// where 0 = disabled, 1..N = Nth track
-    pub stereo_track: i32,
+    /// forces output buffer to be remixed into some sample format
+    pub force_sfmt: SampleType,
 }
 
 #[derive(Debug, Clone)]
@@ -161,7 +148,7 @@ pub struct Format {
     pub sample_rate: i32,
 
     /// output buffer's sample type
-    pub sample_type: SampleType,
+    pub sample_format: SampleType,
     /// derived from sample_type (pcm16=0x02, float=0x04, etc)
     pub sample_size: i32,
 
@@ -171,7 +158,8 @@ pub struct Format {
 
     /// 0 = none, N = loaded subsong N (1=first)
     pub subsong_index: i32,
-    /// 0 = format has no concept of subsongs, N = has N subsongs
+    /// 0 = format has no concept of subsongs  
+    /// N = has N subsongs  
     /// 1 = format has subsongs, and only 1 for current file
     pub subsong_count: i32,
     /// original file's channels before downmixing (if any)
@@ -260,9 +248,9 @@ impl VgmStream {
             fade_time: config.fade_time,
             fade_delay: config.fade_delay,
 
+            stereo_track: config.stereo_track,
             auto_downmix_channels: config.auto_downmix_channels,
-            force_pcm16: config.force_pcm16,
-            force_float: config.force_float,
+            force_sfmt: config.force_sfmt.into(),
         };
 
         unsafe {
@@ -273,15 +261,14 @@ impl VgmStream {
         Ok(vgmstream)
     }
 
-    pub fn open_song<'a>(&'a mut self, options: &'a mut Options<'a>) -> Result<(), Error> {
-        let mut options = vgmstream_sys::libvgmstream_options_t {
-            libsf: options.libsf.inner,
-            subsong_index: options.subsong_index,
-            format_id: options.format_id,
-            stereo_track: options.stereo_track,
-        };
-
-        if unsafe { vgmstream_sys::libvgmstream_open_song(self.inner, &mut options as *mut _) } != 0
+    pub fn open_song<'a>(
+        &'a mut self,
+        libsf: &'a mut sf::StreamFile<'a>,
+        subsong: usize,
+    ) -> Result<(), Error> {
+        if unsafe {
+            vgmstream_sys::libvgmstream_open_stream(self.inner, libsf.inner, subsong as c_int)
+        } != 0
         {
             return Err(Error::Generic);
         }
@@ -309,7 +296,7 @@ impl VgmStream {
             None => return Err(Error::Generic),
         };
 
-        let sample_type = SampleType::from(format.sample_type);
+        let sample_format = SampleType::from(format.sample_format);
 
         let codec_name =
             unsafe { CStr::from_ptr(format.codec_name.as_ptr()) }.to_string_lossy().to_string();
@@ -323,7 +310,7 @@ impl VgmStream {
         Ok(Format {
             channels: format.channels,
             sample_rate: format.sample_rate,
-            sample_type,
+            sample_format,
             sample_size: format.sample_size,
             channel_layout: ChannelMapping::from_bits(format.channel_layout)
                 .ok_or(Error::InvalidChannelMapping(format.channel_layout))?,
@@ -384,24 +371,22 @@ mod tests {
     #[test]
     fn test_vgmstream_open_song() {
         let mut vgmstream = VgmStream::new().unwrap();
-        let sf = StreamFile::open(&vgmstream, ACB_PATH).unwrap();
-        let mut options = Options { libsf: &sf, subsong_index: 0, format_id: 0, stereo_track: 0 };
+        let mut sf = StreamFile::open(&vgmstream, ACB_PATH).unwrap();
 
-        assert!(vgmstream.open_song(&mut options).is_ok());
+        assert!(vgmstream.open_song(&mut sf, 0).is_ok());
     }
 
     #[test]
     fn test_vgmstream_format() {
         let mut vgmstream = VgmStream::new().unwrap();
-        let sf = StreamFile::open(&vgmstream, ACB_PATH).unwrap();
-        let mut options = Options { libsf: &sf, subsong_index: 0, format_id: 0, stereo_track: 0 };
+        let mut sf = StreamFile::open(&vgmstream, ACB_PATH).unwrap();
 
-        vgmstream.open_song(&mut options).unwrap();
+        vgmstream.open_song(&mut sf, 0).unwrap();
         let format = vgmstream.format().unwrap();
 
         assert_eq!(format.channels, 2);
         assert_eq!(format.sample_rate, 44100);
-        assert_eq!(format.sample_type, SampleType::Pcm16);
+        assert_eq!(format.sample_format, SampleType::Pcm16);
         assert_eq!(format.sample_size, 2);
         assert_eq!(format.codec_name, "CRI HCA");
         assert_eq!(format.layout_name, "flat");
@@ -411,10 +396,9 @@ mod tests {
     #[test]
     fn test_vgmstream_render() {
         let mut vgmstream = VgmStream::new().unwrap();
-        let sf = StreamFile::open(&vgmstream, ACB_PATH).unwrap();
-        let mut options = Options { libsf: &sf, subsong_index: 0, format_id: 0, stereo_track: 0 };
+        let mut sf = StreamFile::open(&vgmstream, ACB_PATH).unwrap();
 
-        vgmstream.open_song(&mut options).unwrap();
+        vgmstream.open_song(&mut sf, 0).unwrap();
 
         let mut size = 0usize;
         while let Ok(buf) = vgmstream.render() {

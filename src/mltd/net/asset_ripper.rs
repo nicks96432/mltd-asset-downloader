@@ -10,8 +10,8 @@ use indicatif::ProgressBar;
 use reqwest::Response;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 
-use crate::util::ProgressReadAdapter;
 use crate::Error;
+use crate::util::ProgressReadAdapter;
 
 /// Asset entry on `/Collections/View`.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -302,7 +302,7 @@ impl AssetRipper {
         bundle_no: usize,
         collection_no: usize,
         path_id: i64,
-    ) -> Result<impl futures::Stream<Item = reqwest::Result<bytes::Bytes>>, Error> {
+    ) -> Result<impl futures::Stream<Item = reqwest::Result<bytes::Bytes>> + use<>, Error> {
         let path = format!(
             r#"{{"C":{{"B":{{"P":[{}]}},"I":{}}},"D":{}}}"#,
             bundle_no, collection_no, path_id
