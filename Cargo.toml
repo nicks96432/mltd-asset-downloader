@@ -47,7 +47,7 @@ serde = { features = ["derive"], version = "1.0.219" }
 serde_json = { optional = true, version = "1.0.140" }
 tempfile = { optional = true, version = "3.19.1" }
 thiserror = "2.0.12"
-tokio = { features = ["macros", "rt-multi-thread"], version = "1.44.1" }
+tokio = { features = ["macros", "rt-multi-thread"], version = "1.44.2" }
 tokio-util = { features = ["compat"], version = "0.7.14" }
 vgmstream = { optional = true, path = "crates/vgmstream" }
 zip = { default-features = false, features = ["deflate"], optional = true, version = "2.6.0" }
