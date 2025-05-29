@@ -23,11 +23,11 @@ version = "3.0.0-alpha.3"
 
 [dependencies]
 aes = { optional = true, version = "0.8.4" }
-anyhow = { features = ["backtrace"], version = "1.0.97" }
+anyhow = { features = ["backtrace"], version = "1.0.98" }
 bytes = { optional = true, version = "1.10.1" }
 cbc = { optional = true, version = "0.1.2" }
-clap = { features = ["color", "deprecated", "derive", "unicode", "wrap_help"], version = "4.5.35" }
-clap-verbosity-flag = "3.0.2"
+clap = { features = ["color", "deprecated", "derive", "unicode", "wrap_help"], version = "4.5.39" }
+clap-verbosity-flag = "3.0.3"
 env_logger = { default-features = false, features = ["humantime"], version = "0.11.8" }
 ffmpeg-next = { default-features = false, features = ["codec", "format", "software-resampling"], optional = true, version = "7.1.0" }
 futures = "0.3.31"
@@ -40,24 +40,24 @@ log = "0.4.27"
 num_cpus = { optional = true, version = "1.16.0" }
 pin-project = "1.1.10"
 regex = { default-features = false, features = ["perf", "std"], optional = true, version = "1.11.1" }
-reqwest = { features = ["deflate", "gzip", "json", "stream", "zstd"], version = "0.12.15" }
+reqwest = { features = ["deflate", "gzip", "json", "stream", "zstd"], version = "0.12.18" }
 rmp-serde = "1.3.0"
 scraper = { optional = true, version = "0.23.1" }
 serde = { features = ["derive"], version = "1.0.219" }
 serde_json = { optional = true, version = "1.0.140" }
-tempfile = { optional = true, version = "3.19.1" }
+tempfile = { optional = true, version = "3.20.0" }
 thiserror = "2.0.12"
-tokio = { features = ["macros", "rt-multi-thread"], version = "1.44.1" }
-tokio-util = { features = ["compat"], version = "0.7.14" }
+tokio = { features = ["macros", "rt-multi-thread"], version = "1.45.1" }
+tokio-util = { features = ["compat"], version = "0.7.15" }
 vgmstream = { optional = true, path = "crates/vgmstream" }
-zip = { default-features = false, features = ["deflate"], optional = true, version = "2.6.0" }
+zip = { default-features = false, features = ["deflate"], optional = true, version = "4.0.0" }
 
 [build-dependencies]
-vergen = { features = ["cargo", "emit_and_set", "rustc"], version = "9.0.4" }
-vergen-gitcl = { version = "1.0.5" }
+vergen = { features = ["cargo", "emit_and_set", "rustc"], version = "9.0.6" }
+vergen-gitcl = { version = "1.0.8" }
 
 [dev-dependencies]
-ctor = "0.4.1"
+ctor = "0.4.2"
 tokio-test = "0.4.4"
 
 [lib]
