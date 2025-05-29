@@ -284,7 +284,7 @@ async fn extract_texture2d_assets(
     let mut async_reader = asset_ripper
         .asset_image(bundle_no, collection_no, texture_info.entry.0)
         .await?
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+        .map_err(|e| std::io::Error::other(e))
         .into_async_read()
         .compat();
     tokio::io::copy(&mut async_reader, &mut image).await?;

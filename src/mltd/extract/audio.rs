@@ -1,5 +1,7 @@
 //! Audio transcoding.
 
+#![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+
 use std::collections::VecDeque;
 use std::ffi::{c_int, c_uint};
 use std::path::Path;
@@ -11,7 +13,7 @@ use vgmstream::{StreamFile, VgmStream};
 use crate::Error;
 
 /// HCA key used to decrypt MLTD audio asset.
-pub const MLTD_HCA_KEY: u64 = 765765765765765;
+pub const MLTD_HCA_KEY: u64 = 765_765_765_765_765;
 
 /// An encoder that transcodes game audio to the target codec.
 pub struct Encoder<'a> {
@@ -100,7 +102,7 @@ impl<'a> Encoder<'a> {
             return Err(Error::OutOfRange(subsong_index, acb_fmt.subsong_count as usize));
         }
 
-        log::trace!("audio format: {:#?}", acb_fmt);
+        log::trace!("audio format: {acb_fmt:#?}");
 
         let codec = ffmpeg_next::encoder::find_by_name(output_options.codec)
             .ok_or(Error::Generic(String::from("Failed to find encoder")))?;
@@ -108,13 +110,13 @@ impl<'a> Encoder<'a> {
         let mut encoder = ffmpeg_next::codec::Context::new_with_codec(codec).encoder().audio()?;
 
         let supported_formats = get_supported_formats(&encoder)?;
-        log::trace!("supported formats: {:?}", supported_formats);
+        log::trace!("supported formats: {supported_formats:?}");
 
         let from_sample_format = to_ffmpeg_sample_format(acb_fmt.sample_format)?;
         let from_channel_layout = to_ffmpeg_channel_layout(acb_fmt.channel_layout)?;
 
         encoder.set_format(choose_format(&supported_formats, from_sample_format));
-        encoder.set_bit_rate(320000);
+        encoder.set_bit_rate(320_000);
         encoder.set_compression(Some(12));
         encoder.set_rate(acb_fmt.sample_rate);
         encoder.set_channel_layout(from_channel_layout);
@@ -154,20 +156,19 @@ impl<'a> Encoder<'a> {
 
         let _ = output.add_stream_with(&encoder.0.0.0)?;
 
-        let frame_size = match encoder
+        let frame_size = if encoder
             .codec()
             .unwrap()
             .capabilities()
             .intersects(ffmpeg_next::codec::Capabilities::VARIABLE_FRAME_SIZE)
         {
-            true => {
-                log::trace!(
-                    "variable frame size detected, using default frame size ({})",
-                    Self::DEFAULT_FRAME_SIZE
-                );
+            log::trace!(
+                "variable frame size detected, using default frame size ({})",
                 Self::DEFAULT_FRAME_SIZE
-            }
-            false => encoder.frame_size(),
+            );
+            Self::DEFAULT_FRAME_SIZE
+        } else {
+            encoder.frame_size()
         } as usize;
 
         let mut frame =
@@ -202,10 +203,7 @@ impl<'a> Encoder<'a> {
     ///
     /// Returns `false` if there is more audio data to encode.
     fn write_frame(&mut self, eof: bool) -> Result<bool, Error> {
-        match eof {
-            false => self.encoder.send_frame(&self.frame),
-            true => self.encoder.send_eof(),
-        }?;
+        if eof { self.encoder.send_eof() } else { self.encoder.send_frame(&self.frame) }?;
 
         loop {
             let mut packet = ffmpeg_next::Packet::empty();
@@ -339,7 +337,7 @@ impl<'a> Encoder<'a> {
                 let _ = self.output.write_header_with(o.clone())?;
             }
             None => self.output.write_header()?,
-        };
+        }
 
         while self.write_audio_frame()? {}
 
@@ -381,7 +379,7 @@ fn to_ffmpeg_channel_layout(
         vgmstream::ChannelMapping::_7POINT1_SURROUND => {
             Ok(ffmpeg_next::ChannelLayout::_7POINT1_WIDE)
         }
-        _ => Err(Error::Generic(format!("Unsupported channel layout: {:?}", value))),
+        _ => Err(Error::Generic(format!("Unsupported channel layout: {value:?}"))),
     }
 }
 

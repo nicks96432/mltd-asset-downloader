@@ -42,6 +42,7 @@ impl Manifest {
     }
 
     /// Computes the difference from `other` manifest.
+    #[must_use]
     pub fn diff<'a>(&'a self, other: &'a Manifest) -> ManifestDiff<'a> {
         let mut diff = ManifestDiff::new();
 
@@ -67,18 +68,21 @@ impl Manifest {
 
     /// Returns the number of entries in the manifest.
     #[inline]
+    #[must_use]
     pub fn len(&self) -> usize {
         self.data[0].len()
     }
 
     /// Returns `true` if the manifest is empty.
     #[inline]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
     /// Returns the total size of all assets in the manifest.
     #[inline]
+    #[must_use]
     pub fn asset_size(&self) -> usize {
         self.data[0].values().fold(0, |acc, v| acc + v.2)
     }

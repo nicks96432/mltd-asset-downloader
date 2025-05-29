@@ -117,11 +117,8 @@ impl Asset<'_> {
 
         log::debug!("download {} to buf", asset_info.filename);
 
-        let stream_reader = res
-            .bytes_stream()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
-            .into_async_read()
-            .compat();
+        let stream_reader =
+            res.bytes_stream().map_err(|e| io::Error::other(e)).into_async_read().compat();
 
         let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
 
@@ -176,11 +173,8 @@ impl Asset<'_> {
 
         log::debug!("save asset to {}", output.display());
 
-        let stream_reader = res
-            .bytes_stream()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
-            .into_async_read()
-            .compat();
+        let stream_reader =
+            res.bytes_stream().map_err(|e| io::Error::other(e)).into_async_read().compat();
 
         let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
 
@@ -205,6 +199,7 @@ pub enum Platform {
 
 impl Platform {
     /// Returns the string representation of the [`Platform`].
+    #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
             Self::Android => "Android",
@@ -213,6 +208,7 @@ impl Platform {
     }
 
     /// Returns the `User-Agent` string of the [`Platform`] in HTTP request.
+    #[must_use]
     pub fn user_agent(&self) -> &str {
         match self {
             Self::Android => "UnityPlayer/2020.3.32f1 (UnityWebRequest/1.0, libcurl/7.80.0-DEV)",

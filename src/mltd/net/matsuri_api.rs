@@ -144,7 +144,7 @@ pub async fn get_all_asset_versions() -> Result<Vec<AssetVersion>, Error> {
 pub async fn get_asset_version(version: u64) -> Result<AssetVersion, Error> {
     let client = reqwest::Client::new();
     let req = client
-        .get(format!("{}/version/assets/{}", MATSURI_API_ENDPOINT, version))
+        .get(format!("{MATSURI_API_ENDPOINT}/version/assets/{version}"))
         .query(&[("prettyPrint", "false")]);
 
     let res = match req.send().await {

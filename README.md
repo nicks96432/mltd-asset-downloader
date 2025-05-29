@@ -49,7 +49,7 @@ Options:
 The following tools are required:
 
 * git
-* A rust toolchain ([installation guide](https://www.rust-lang.org/tools/install))
+* Latest stable rust toolchain ([installation guide](https://www.rust-lang.org/tools/install))
 * cmake >= 3.6 (for vgmstream)
 * clang (for bindgen) ([installation guide](https://rust-lang.github.io/rust-bindgen/requirements.html))
   * remember to set `LIBCLANG_PATH` environment variable on Windows

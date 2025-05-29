@@ -28,11 +28,7 @@ pub fn log_formatter(buf: &mut Formatter, record: &Record) -> Result<()> {
     let timestamp = buf.timestamp_micros();
     let body = record.args();
 
-    writeln!(
-        buf,
-        "[\x1b[3{}m{}\x1b[0m]{} {} {} - {}",
-        color_code, level, space, timestamp, target, body
-    )
+    writeln!(buf, "[\x1b[3{color_code}m{level}\x1b[0m]{space} {timestamp} {target} - {body}")
 }
 
 /// Adapter for [`tokio::io::AsyncRead`] to show progress.

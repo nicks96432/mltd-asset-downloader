@@ -4,9 +4,8 @@
 //!
 //! [github]: https://img.shields.io/badge/github-333333?style=for-the-badge&labelColor=555555&logo=github
 
-#![warn(clippy::print_stderr)]
-#![warn(clippy::print_stdout)]
-#![warn(missing_docs)]
+#![warn(clippy::all, clippy::pedantic)]
+#![allow(clippy::doc_markdown, clippy::similar_names)]
 
 pub mod asset;
 mod error;

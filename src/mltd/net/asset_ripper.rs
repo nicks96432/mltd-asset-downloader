@@ -70,12 +70,12 @@ impl AssetRipper {
             Err(err) => return Err(err.into()),
         };
 
-        Ok(Self { base_url: format!("http://localhost:{}", port), process: Some(process) })
+        Ok(Self { base_url: format!("http://localhost:{port}"), process: Some(process) })
     }
 
     /// Connects th an existing AssetRipper instance with the given host and port.
     pub fn connect(host: &str, port: u16) -> Result<Self, Error> {
-        Ok(Self { base_url: format!("http://{}:{}", host, port), process: None })
+        Ok(Self { base_url: format!("http://{host}:{port}"), process: None })
     }
 
     /// Loads an asset or a folder into the AssetRipper.
@@ -83,10 +83,7 @@ impl AssetRipper {
     where
         P: AsRef<Path>,
     {
-        let url = match path.as_ref().is_dir() {
-            true => "LoadFolder",
-            false => "LoadFile",
-        };
+        let url = if path.as_ref().is_dir() { "LoadFolder" } else { "LoadFile" };
         let url = format!("{}/{}", &self.base_url, url);
 
         let mut form = HashMap::new();
@@ -143,7 +140,7 @@ impl AssetRipper {
 
     /// Returns a list of collections in the specified bundle.
     pub async fn collections(&mut self, bundle_no: usize) -> Result<Vec<String>, Error> {
-        let path = format!(r#"{{"P":[{}]}}"#, bundle_no);
+        let path = format!(r#"{{"P":[{bundle_no}]}}"#);
 
         let html = match self.send_request("Bundles/View", &path).await?.text().await {
             Ok(html) => html,
@@ -163,7 +160,7 @@ impl AssetRipper {
         bundle_no: usize,
         collection_no: usize,
     ) -> Result<Vec<AssetEntry>, Error> {
-        let path = format!(r#"{{"B":{{"P":[{}]}},"I":{}}}"#, bundle_no, collection_no);
+        let path = format!(r#"{{"B":{{"P":[{bundle_no}]}},"I":{collection_no}}}"#);
 
         let html = match self.send_request("Collections/View", &path).await?.text().await {
             Ok(html) => html,
@@ -212,7 +209,7 @@ impl AssetRipper {
         bundle_no: usize,
         collection_no: usize,
     ) -> Result<usize, Error> {
-        let path = format!(r#"{{"B":{{"P":[{}]}},"I":{}}}"#, bundle_no, collection_no);
+        let path = format!(r#"{{"B":{{"P":[{bundle_no}]}},"I":{collection_no}}}"#);
 
         let text = match self.send_request("Bundles/View", &path).await?.text().await {
             Ok(text) => text,
@@ -229,10 +226,8 @@ impl AssetRipper {
         collection_no: usize,
         path_id: i64,
     ) -> Result<AssetInfo, Error> {
-        let path = format!(
-            r#"{{"C":{{"B":{{"P":[{}]}},"I":{}}},"D":{}}}"#,
-            bundle_no, collection_no, path_id
-        );
+        let path =
+            format!(r#"{{"C":{{"B":{{"P":[{bundle_no}]}},"I":{collection_no}}},"D":{path_id}}}"#);
 
         let html = match self.send_request("Assets/View", &path).await?.text().await {
             Ok(html) => html,
@@ -270,10 +265,8 @@ impl AssetRipper {
         collection_no: usize,
         path_id: i64,
     ) -> Result<serde_json::Value, Error> {
-        let path = format!(
-            r#"{{"C":{{"B":{{"P":[{}]}},"I":{}}},"D":{}}}"#,
-            bundle_no, collection_no, path_id
-        );
+        let path =
+            format!(r#"{{"C":{{"B":{{"P":[{bundle_no}]}},"I":{collection_no}}},"D":{path_id}}}"#);
 
         match self.send_request("Assets/Json", &path).await?.json().await {
             Ok(json) => Ok(json),
@@ -288,10 +281,8 @@ impl AssetRipper {
         collection_no: usize,
         path_id: i64,
     ) -> Result<impl futures::Stream<Item = reqwest::Result<bytes::Bytes>>, Error> {
-        let path = format!(
-            r#"{{"C":{{"B":{{"P":[{}]}},"I":{}}},"D":{}}}"#,
-            bundle_no, collection_no, path_id
-        );
+        let path =
+            format!(r#"{{"C":{{"B":{{"P":[{bundle_no}]}},"I":{collection_no}}},"D":{path_id}}}"#);
 
         Ok(self.send_request("Assets/Text", &path).await?.bytes_stream())
     }
@@ -303,10 +294,8 @@ impl AssetRipper {
         collection_no: usize,
         path_id: i64,
     ) -> Result<impl futures::Stream<Item = reqwest::Result<bytes::Bytes>> + use<>, Error> {
-        let path = format!(
-            r#"{{"C":{{"B":{{"P":[{}]}},"I":{}}},"D":{}}}"#,
-            bundle_no, collection_no, path_id
-        );
+        let path =
+            format!(r#"{{"C":{{"B":{{"P":[{bundle_no}]}},"I":{collection_no}}},"D":{path_id}}}"#);
 
         let url = format!("{}/Assets/Image", &self.base_url);
         let client = reqwest::Client::new();
@@ -347,7 +336,7 @@ impl AssetRipper {
             match process.try_wait() {
                 Ok(None) => Ok(()),
                 Ok(Some(status)) => {
-                    Err(Error::Generic(format!("AssetRipper process died with status {}", status)))
+                    Err(Error::Generic(format!("AssetRipper process died with status {status}")))
                 }
                 Err(err) => Err(err.into()),
             }?;
@@ -381,7 +370,7 @@ impl AssetRipper {
                     "aarch64" => "arm64",
                     _ => return Err(Error::Generic("unsupported architecture".to_string())),
                 };
-                let req = client.get(format!("{}/AssetRipper_{}_{}.zip", base_url, os, arch));
+                let req = client.get(format!("{base_url}/AssetRipper_{os}_{arch}.zip"));
 
                 let res = match req.send().await {
                     Ok(res) => res,
@@ -390,7 +379,7 @@ impl AssetRipper {
 
                 let stream_reader = res
                     .bytes_stream()
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                    .map_err(|e| std::io::Error::other(e))
                     .into_async_read()
                     .compat();
 
