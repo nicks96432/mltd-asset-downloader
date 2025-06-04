@@ -1,6 +1,6 @@
 [package]
 name = "vgmstream"
-version = "0.1.0"
+version = "0.2.0"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,5 @@ repository.workspace = true
 
 [dependencies]
 bitflags = "2.9.1"
-num-derive = "0.4.2"
-num-traits = "0.2.19"
 thiserror = "2.0.12"
 vgmstream-sys = { path = "../vgmstream-sys" }

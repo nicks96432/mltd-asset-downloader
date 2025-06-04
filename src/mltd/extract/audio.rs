@@ -93,8 +93,8 @@ impl<'a> Encoder<'a> {
         P: AsRef<Path>,
     {
         let mut vgmstream = VgmStream::new()?;
-        let mut sf = StreamFile::open(&vgmstream, input_file.as_ref())?;
-        vgmstream.open_song(&mut sf, subsong_index)?;
+        let mut sf = StreamFile::open(input_file.as_ref())?;
+        vgmstream.open(&mut sf, subsong_index)?;
 
         let acb_fmt = vgmstream.format()?;
 
@@ -348,13 +348,16 @@ impl<'a> Encoder<'a> {
 }
 
 fn to_ffmpeg_sample_format(
-    value: vgmstream::SampleType,
+    value: vgmstream::SampleFormat,
 ) -> Result<ffmpeg_next::format::Sample, Error> {
     match value {
-        vgmstream::SampleType::Pcm16 => {
+        vgmstream::SampleFormat::Pcm16 => {
             Ok(ffmpeg_next::format::Sample::I16(ffmpeg_next::format::sample::Type::Packed))
         }
-        vgmstream::SampleType::Float => {
+        vgmstream::SampleFormat::Pcm24 | vgmstream::SampleFormat::Pcm32 => {
+            Ok(ffmpeg_next::format::Sample::I32(ffmpeg_next::format::sample::Type::Packed))
+        }
+        vgmstream::SampleFormat::Float => {
             Ok(ffmpeg_next::format::Sample::F32(ffmpeg_next::format::sample::Type::Packed))
         }
     }

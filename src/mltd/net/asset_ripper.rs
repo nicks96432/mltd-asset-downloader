@@ -46,14 +46,13 @@ impl AssetRipper {
     where
         P: AsRef<Path>,
     {
-        let process = match Command::new(path.as_ref().as_os_str())
+        let process = match Command::new(path.as_ref())
             .args(["--port", &port.to_string()])
             .args(["--launch-browser", "false"])
             .args(["--log", "false"])
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
-            .env_clear()
             .spawn()
         {
             Ok(mut process) => {
@@ -83,11 +82,13 @@ impl AssetRipper {
     where
         P: AsRef<Path>,
     {
-        let url = if path.as_ref().is_dir() { "LoadFolder" } else { "LoadFile" };
+        let path = path.as_ref();
+
+        let url = if path.is_dir() { "LoadFolder" } else { "LoadFile" };
         let url = format!("{}/{}", &self.base_url, url);
 
         let mut form = HashMap::new();
-        form.insert("path", path.as_ref().to_string_lossy().to_string());
+        form.insert("path", path.to_string_lossy().to_string());
 
         let client = reqwest::Client::new();
         let req = client.post(url).form(&form);
@@ -211,7 +212,7 @@ impl AssetRipper {
     ) -> Result<usize, Error> {
         let path = format!(r#"{{"B":{{"P":[{bundle_no}]}},"I":{collection_no}}}"#);
 
-        let text = match self.send_request("Bundles/View", &path).await?.text().await {
+        let text = match self.send_request("Collections/Count", &path).await?.text().await {
             Ok(text) => text,
             Err(e) => return Err(Error::ResponseDeserialize(e)),
         };
@@ -422,9 +423,16 @@ impl Drop for AssetRipper {
 
 #[cfg(test)]
 mod tests {
+    use std::path::{MAIN_SEPARATOR_STR, Path};
+
     use super::AssetRipper;
-    const ASSET_RIPPER_PATH: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/AssetRipper/AssetRipper.GUI.Free");
+
+    const ASSET_RIPPER_PATH: &str = if cfg!(windows) {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/AssetRipper/AssetRipper.GUI.Free.exe")
+    } else {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/AssetRipper/AssetRipper.GUI.Free")
+    };
+
     const TEST_CASES: &[(&str, usize, usize)] = &[
         (concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_acb.unity3d"), 1, 2),
         (concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_sprite.unity3d"), 1, 14),
@@ -432,10 +440,10 @@ mod tests {
     ];
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "need to download AssetRipper"]
     async fn test_bundles() {
         let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56789).unwrap();
-        asset_ripper.load(concat!(env!("CARGO_MANIFEST_DIR"), "/tests")).await.unwrap();
+        asset_ripper.load(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests")).await.unwrap();
 
         let bundles = asset_ripper.bundles().await.unwrap();
 
@@ -443,7 +451,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "need to download AssetRipper"]
     async fn test_collections() {
         let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56790).unwrap();
 
@@ -455,19 +463,19 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "need to download AssetRipper"]
     async fn test_asset_count() {
         let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56791).unwrap();
 
         for (path, _, asset_count) in TEST_CASES {
-            asset_ripper.load(path).await.unwrap();
+            asset_ripper.load(*path).await.unwrap();
             let count = asset_ripper.asset_count(0, 0).await.unwrap();
             assert_eq!(count, *asset_count);
         }
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "need to download AssetRipper"]
     async fn test_assets() {
         let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56792).unwrap();
 
@@ -479,7 +487,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "need to download AssetRipper"]
     async fn test_asset_info() {
         let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56793).unwrap();
 
@@ -490,7 +498,10 @@ mod tests {
 
         assert_eq!(
             asset_info.original_path,
-            Some(String::from("Assets/imas/resources/adx2/song3/song3_00test.acb.bytes"))
+            Some(
+                ["Assets", "imas", "resources", "adx2", "song3", "song3_00test.acb.bytes"]
+                    .join(MAIN_SEPARATOR_STR)
+            )
         );
     }
 }

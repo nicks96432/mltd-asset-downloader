@@ -132,15 +132,16 @@ pub async fn extract_files(args: &ExtractorArgs) -> Result<(), Error> {
         args.asset_ripper_path.display()
     );
 
-    let mut port_start = 50000;
+    let mut port = 50000;
     let mut asset_rippers = Vec::new();
     while asset_rippers.len() < args.parallel as usize {
-        match AssetRipper::new(&args.asset_ripper_path, port_start) {
+        match AssetRipper::new(&args.asset_ripper_path, port) {
             Ok(ripper) => {
+                log::trace!("created AssetRipper on port {}", port);
                 asset_rippers.push(Mutex::new(ripper));
-                port_start += 1;
+                port += 1;
             }
-            Err(Error::IO(e)) if e.kind() == std::io::ErrorKind::AddrInUse => port_start += 1,
+            Err(Error::IO(e)) if e.kind() == std::io::ErrorKind::AddrInUse => port += 1,
             Err(e) => return Err(e),
         };
     }
