@@ -400,6 +400,24 @@ impl AssetRipper {
         Ok(())
     }
 
+    /// Updates the settings on the AssetRipper.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Network`] if the update request fails.
+    pub async fn set(&mut self, form: HashMap<String, String>) -> Result<()> {
+        let url = self.full_url("Settings/update")?;
+
+        let client = reqwest::Client::new();
+        let req = client.post(url.clone()).form(&form);
+
+        if let Err(e) = req.send().await {
+            return Err(Error::request(url, Some(e)).into());
+        }
+
+        Ok(())
+    }
+
     /// Downloads the latest release zip of AssetRipper from GitHub to the given path.
     ///
     /// # Errors

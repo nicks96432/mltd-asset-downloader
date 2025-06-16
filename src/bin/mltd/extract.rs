@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap};
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 
@@ -10,7 +10,7 @@ use image::GenericImageView;
 use mltd::ErrorKind;
 use mltd::extract::audio::{Encoder, EncoderOutputOptions, MLTD_HCA_KEY};
 use mltd::extract::puzzle::solve_puzzle;
-use mltd::extract::text::decrypt_text;
+use mltd::extract::text::{ENCRYPTED_FILE_EXTENSIONS, UNENCRYPTED_FILE_EXTENSIONS, decrypt_text};
 use mltd::net::{AssetInfo, AssetRipper};
 use tokio::fs::create_dir_all;
 use tokio::io::AsyncWriteExt;
@@ -174,12 +174,11 @@ where
 
     log::info!("AssetRipper is not found at {}", path.as_ref().display());
 
-    println!(
-        "Trying to download AssetRipper. This project is not affiliated with, sponsored, or endorsed by AssetRipper."
-    );
-    println!("By downloading, you agree to the terms of the license of AssetRipper.");
-
-    print!("Do you want to install it now? (y/N) ");
+    print!(concat!(
+        "Trying to download AssetRipper. This project is not affiliated with, sponsored, or endorsed by AssetRipper.\n",
+        "By downloading, you agree to the terms of the license of AssetRipper.\n",
+        "Do you want to install it now? (y/N) "
+    ));
     std::io::stdout().flush()?;
 
     let mut input = String::new();
@@ -243,7 +242,28 @@ async fn extract_assets(
 ) -> Result<()> {
     for info in &infos {
         match info.entry.1.as_str() {
-            "TextAsset" => extract_text_asset(info, asset_ripper, args).await?,
+            "TextAsset" => {
+                let file_name = PathBuf::from(
+                    info.original_path
+                        .as_ref()
+                        .ok_or_else(|| anyhow!("original path should exist"))?,
+                )
+                .file_stem()
+                .ok_or_else(|| anyhow!("file stem should exist"))?
+                .to_str()
+                .ok_or_else(|| anyhow!("file stem should be string"))?
+                .to_owned();
+
+                if ENCRYPTED_FILE_EXTENSIONS
+                    .iter()
+                    .chain(UNENCRYPTED_FILE_EXTENSIONS)
+                    .any(|ext| file_name.ends_with(ext))
+                {
+                    extract_binary_asset(info, asset_ripper, args).await?;
+                } else {
+                    extract_text_asset(bundle_no, collection_no, info, asset_ripper, args).await?;
+                }
+            }
 
             // Texture2D requires all relavent Sprite infos to be extracted
             "Texture2D" => {
@@ -260,7 +280,7 @@ async fn extract_assets(
                         asset_ripper,
                         args,
                     )
-                    .await?
+                    .await?;
                 }
             }
             "Sprite" => (),      // sprites should be handled in Texture2D extractor
@@ -359,23 +379,31 @@ async fn extract_texture2d_assets(
     Ok(())
 }
 
-/// Extracts a TextAsset.
+/// Extracts a TextAsset with binary content.
 ///
-/// Audio assets are binary TextAsset, so they are handled here as well.
-async fn extract_text_asset(
+/// # Panics
+///
+/// panics if the asset is not a TextAsset with binary content.
+async fn extract_binary_asset(
     info: &AssetInfo,
     asset_ripper: &mut AssetRipper,
     args: &ExtractorArgs,
 ) -> Result<()> {
-    let asset_original_path =
-        info.original_path.as_ref().expect("original path of TextAsset should exist");
+    let asset_original_path = &PathBuf::from(
+        info.original_path.as_ref().expect("original path of TextAsset should exist"),
+    );
+
+    // remove .bytes extension
+    let asset_original_filename =
+        asset_original_path.with_extension("").file_name().unwrap().to_string_lossy().into_owned();
+    let asset_original_extension =
+        asset_original_path.with_extension("").extension().unwrap().to_string_lossy().into_owned();
+
     let mut output_dir = args.output.join(asset_original_path);
     output_dir.pop();
-    create_dir_all(&output_dir).await?;
+    let output_dir = output_dir;
 
-    if ["acb", "awb", "gtx"].iter().find(|ext| info.entry.2.ends_with(*ext)) == None {
-        return Err(anyhow!("unknown text asset: {}", info.entry.2));
-    }
+    create_dir_all(&output_dir).await?;
 
     let tmpdir = tempfile::tempdir()?;
 
@@ -383,27 +411,28 @@ async fn extract_text_asset(
     // function to get the text data.
     asset_ripper.export_primary(tmpdir.path()).await?;
 
-    let file_path = tmpdir.path().join(asset_original_path);
-    match &info.entry.2 {
+    let extracted_file_path = tmpdir.path().join(asset_original_path);
+    match asset_original_extension {
         // CRI .acb and .awb audio
-        n if n.ends_with(".acb") || n.ends_with(".awb") => {
+        n if n == "acb" || n == "awb" => {
+            let input_file_path = extracted_file_path.with_extension("");
             // remove .bytes extension for vgmstream
-            tokio::fs::rename(&file_path, file_path.with_extension("")).await?;
+            tokio::fs::rename(&extracted_file_path, &input_file_path).await?;
 
             // According to https://github.com/vgmstream/vgmstream/blob/master/doc/USAGE.md#decryption-keys,
             // we can specify the decryption key in the .hcakey file so that vgmstream doesn't have
             // to brute-force the key.
-            let mut key_file = tokio::fs::File::create(file_path.with_file_name(".hcakey")).await?;
+            let mut key_file =
+                tokio::fs::File::create(extracted_file_path.with_file_name(".hcakey")).await?;
             key_file.write_all(MLTD_HCA_KEY.to_string().as_bytes()).await?;
 
-            let file_path = file_path.with_extension("");
             let output_prefix =
-                file_path.file_name().expect("file name should exist").to_os_string();
+                input_file_path.file_name().expect("file name should exist").to_os_string();
 
             log::info!("extracting audio to {}", output_dir.display());
 
             for subsong_index in 0.. {
-                let file_path = file_path.clone();
+                let input_file_path = input_file_path.clone();
                 let output_dir = output_dir.clone();
 
                 let output_prefix = output_prefix.clone();
@@ -421,9 +450,9 @@ async fn extract_text_asset(
                         log::trace!("audio options: {:#?}", options);
                     }
                     let mut encoder = Encoder::open(
-                        &file_path.clone(),
+                        &input_file_path,
                         subsong_index,
-                        &output_dir.clone(),
+                        &output_dir,
                         EncoderOutputOptions {
                             prefix: output_prefix.as_os_str().to_str().unwrap(),
                             codec: &audio_codec,
@@ -440,18 +469,52 @@ async fn extract_text_asset(
                 }
             }
         }
-        // AES-192-CBC encrypted plot text
-        n if n.ends_with(".gtx") => {
-            let output_path =
-                output_dir.join(&info.entry.2).with_extension("txt");
+        // AES-192-CBC encrypted text
+        n if ENCRYPTED_FILE_EXTENSIONS.contains(&n.as_str()) => {
+            let output_path = output_dir.join(asset_original_filename);
 
             log::info!("extracting text to {}", output_path.display());
 
-            let buf = tokio::fs::read(&file_path).await?;
+            let buf = tokio::fs::read(&extracted_file_path).await?;
             tokio::fs::write(&output_path, decrypt_text(&buf)?).await?;
         }
-        _ => unreachable!("this shouldn't happen"),
+        // MP4 video
+        n if n.ends_with(".mp4") => {
+            let output_path = output_dir.join(asset_original_filename);
+
+            log::info!("extracting video to {}", output_path.display());
+
+            tokio::fs::copy(&extracted_file_path, &output_path).await?;
+        }
+        _ => panic!("this is not a TextAsset with binary content"),
     };
+
+    Ok(())
+}
+
+async fn extract_text_asset(
+    bundle_no: usize,
+    collection_no: usize,
+    info: &AssetInfo,
+    asset_ripper: &mut AssetRipper,
+    args: &ExtractorArgs,
+) -> Result<()> {
+    let asset_original_path = &PathBuf::from(
+        info.original_path.as_ref().expect("original path of TextAsset should exist"),
+    );
+
+    let output_path = args.output.join(asset_original_path);
+    let output_dir = output_path.parent().unwrap();
+
+    create_dir_all(output_dir).await?;
+    let mut f = tokio::fs::File::create(&output_path).await?;
+
+    log::info!("extracting text to {}", output_path.display());
+
+    let mut stream = asset_ripper.asset_text(bundle_no, collection_no, info.entry.0).await?;
+    while let Some(item) = stream.next().await {
+        f.write_all(item?.as_ref()).await?;
+    }
 
     Ok(())
 }
