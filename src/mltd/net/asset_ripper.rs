@@ -8,9 +8,11 @@ use std::process::{Child, Command, Stdio};
 use futures::TryStreamExt;
 use indicatif::ProgressBar;
 use reqwest::Response;
+use scraper::error::SelectorErrorKind;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 
-use crate::Error;
+use crate::error::{Repr, Result};
+use crate::net::Error;
 use crate::util::ProgressReadAdapter;
 
 /// Asset entry on `/Collections/View`.
@@ -40,9 +42,46 @@ pub struct AssetRipper {
     process: Option<Child>,
 }
 
+fn selector_should_be_valid(_: SelectorErrorKind) -> Repr {
+    Repr::bug("selector should be valid")
+}
+
 impl AssetRipper {
+    fn full_url(&self, url: &str) -> Result<reqwest::Url> {
+        let url = format!("{}/{}", &self.base_url, url);
+        reqwest::Url::parse(&url).map_err(|_| Repr::bug("url should be valid").into())
+    }
+
+    /// Sends a GET request with the given path parameter to AssetRipper.
+    async fn send_request(&mut self, url: &reqwest::Url, path: &str) -> Result<Response> {
+        let client = reqwest::Client::new();
+
+        let req = client.get(url.clone());
+        let req = if path.is_empty() { req } else { req.query(&[("Path", path)]) };
+
+        let res = match req.send().await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Error::request(url.clone(), Some(e))),
+        }?;
+
+        Ok(res)
+    }
+
+    async fn get_text(&mut self, url: &str, path: &str) -> Result<String> {
+        let url = self.full_url(url)?;
+
+        let res = self.send_request(&url, path).await?;
+
+        let text = match res.text().await {
+            Ok(t) => Ok(t),
+            Err(e) => Err(Error::decode(url, Some(e))),
+        }?;
+
+        Ok(text)
+    }
+
     /// Starts a new AssetRipper instance with the given executable path and port.
-    pub fn new<P>(path: P, port: u16) -> Result<Self, Error>
+    pub fn new<P>(path: P, port: u16) -> Result<Self>
     where
         P: AsRef<Path>,
     {
@@ -56,81 +95,63 @@ impl AssetRipper {
             .spawn()
         {
             Ok(mut process) => {
-                let reader = BufReader::new(process.stdout.take().unwrap());
+                let reader = BufReader::new(
+                    process.stdout.take().ok_or_else(|| Repr::bug("failed to get stdout"))?,
+                );
                 for line in reader.lines() {
-                    let line = line.expect("failed to read line");
+                    let line = line.map_err(|e| {
+                        Repr::io("failed to read line from AssetRipper output", Some(e))
+                    })?;
                     if line.contains("listening on: http://") {
                         break;
                     }
                 }
 
-                process
+                Ok(process)
             }
-            Err(err) => return Err(err.into()),
-        };
+            Err(err) => Err(Repr::io("failed to start AssetRipper", Some(err))),
+        }?;
 
         Ok(Self { base_url: format!("http://localhost:{port}"), process: Some(process) })
     }
 
     /// Connects th an existing AssetRipper instance with the given host and port.
-    pub fn connect(host: &str, port: u16) -> Result<Self, Error> {
-        Ok(Self { base_url: format!("http://{host}:{port}"), process: None })
+    #[must_use]
+    pub fn connect(host: &str, port: u16) -> Self {
+        Self { base_url: format!("http://{host}:{port}"), process: None }
     }
 
     /// Loads an asset or a folder into the AssetRipper.
-    pub async fn load<P>(&mut self, path: P) -> Result<(), Error>
+    pub async fn load<P>(&mut self, path: P) -> Result<()>
     where
         P: AsRef<Path>,
     {
         let path = path.as_ref();
 
         let url = if path.is_dir() { "LoadFolder" } else { "LoadFile" };
-        let url = format!("{}/{}", &self.base_url, url);
+        let url = self.full_url(url)?;
 
         let mut form = HashMap::new();
         form.insert("path", path.to_string_lossy().to_string());
 
         let client = reqwest::Client::new();
-        let req = client.post(url).form(&form);
-
-        self.check_process()?;
+        let req = client.post(url.clone()).form(&form);
 
         if let Err(e) = req.send().await {
-            return Err(Error::Request(e));
+            return Err(Error::request(url, Some(e)).into());
         }
 
         Ok(())
     }
 
-    /// Sends a GET request with the given path parameter to AssetRipper.
-    pub async fn send_request(&mut self, url: &str, path: &str) -> Result<Response, Error> {
-        let url = format!("{}/{}", &self.base_url, url);
-        let client = reqwest::Client::new();
-
-        let req = client.get(url).query(&[("Path", path)]);
-
-        self.check_process()?;
-
-        let res = match req.send().await {
-            Ok(r) => r,
-            Err(e) => return Err(Error::Request(e)),
-        };
-
-        Ok(res)
-    }
-
     /// Returns a list of loaded bundles.
-    pub async fn bundles(&mut self) -> Result<Vec<String>, Error> {
+    pub async fn bundles(&mut self) -> Result<Vec<String>> {
         let path = r#"{"P":[]}"#;
-
-        let html = match self.send_request("Bundles/View", path).await?.text().await {
-            Ok(html) => html,
-            Err(e) => return Err(Error::ResponseDeserialize(e)),
-        };
-
+        let html = self.get_text("Bundles/View", path).await?;
         let html = scraper::Html::parse_document(&html);
-        let selector =
-            scraper::Selector::parse("#app > ul:nth-child(3) a").expect("cannot create selector");
+
+        let selector = scraper::Selector::parse("#app > ul:nth-child(3) a")
+            .map_err(selector_should_be_valid)?;
         let mut bundles: Vec<_> = html.select(&selector).map(|node| node.inner_html()).collect();
 
         // Remove the last two items (Generated Engine Collections, Generated Hierarchy Assets)
@@ -140,17 +161,13 @@ impl AssetRipper {
     }
 
     /// Returns a list of collections in the specified bundle.
-    pub async fn collections(&mut self, bundle_no: usize) -> Result<Vec<String>, Error> {
+    pub async fn collections(&mut self, bundle_no: usize) -> Result<Vec<String>> {
         let path = format!(r#"{{"P":[{bundle_no}]}}"#);
-
-        let html = match self.send_request("Bundles/View", &path).await?.text().await {
-            Ok(html) => html,
-            Err(e) => return Err(Error::ResponseDeserialize(e)),
-        };
-
+        let html = self.get_text("Bundles/View", &path).await?;
         let html = scraper::Html::parse_document(&html);
-        let selector =
-            scraper::Selector::parse("#app > ul:nth-child(5) a").expect("cannot create selector");
+
+        let selector = scraper::Selector::parse("#app > ul:nth-child(5) a")
+            .map_err(selector_should_be_valid)?;
 
         Ok(html.select(&selector).map(|node| node.inner_html()).collect())
     }
@@ -160,42 +177,42 @@ impl AssetRipper {
         &mut self,
         bundle_no: usize,
         collection_no: usize,
-    ) -> Result<Vec<AssetEntry>, Error> {
+    ) -> Result<Vec<AssetEntry>> {
         let path = format!(r#"{{"B":{{"P":[{bundle_no}]}},"I":{collection_no}}}"#);
-
-        let html = match self.send_request("Collections/View", &path).await?.text().await {
-            Ok(html) => html,
-            Err(e) => return Err(Error::ResponseDeserialize(e)),
-        };
-
+        let html = self.get_text("Collections/View", &path).await?;
         let html = scraper::Html::parse_document(&html);
-        let selector = scraper::Selector::parse("tbody > tr").expect("cannot create selector");
+
+        let selector = scraper::Selector::parse("tbody > tr").map_err(selector_should_be_valid)?;
+
+        let first_child_should_exist = || Repr::bug("first child should exist");
+        let inner_text_should_exist = || Repr::bug("inner text should exist");
 
         let mut assets = Vec::new();
         for nodes in html.select(&selector) {
             let children = nodes.children().collect::<Vec<_>>();
             let path_id: i64 = children[0]
                 .first_child()
-                .expect("<td>")
+                .ok_or_else(first_child_should_exist)?
                 .value()
                 .as_text()
-                .expect("inner text")
-                .parse()?;
+                .ok_or_else(inner_text_should_exist)?
+                .parse()
+                .map_err(|_| Repr::bug("inner text should be integer"))?;
             let class = children[1]
                 .first_child()
-                .expect("<td>")
+                .ok_or_else(first_child_should_exist)?
                 .value()
                 .as_text()
-                .expect("inner text")
+                .ok_or_else(inner_text_should_exist)?
                 .to_string();
             let name = children[2]
                 .first_child()
-                .expect("<td>")
+                .ok_or_else(first_child_should_exist)?
                 .first_child()
-                .expect("<a>")
+                .ok_or_else(first_child_should_exist)?
                 .value()
                 .as_text()
-                .expect("inner text")
+                .ok_or_else(inner_text_should_exist)?
                 .to_string();
 
             assets.push(AssetEntry(path_id, class, name));
@@ -205,42 +222,40 @@ impl AssetRipper {
     }
 
     /// Returns the number of assets in the specified collection.
-    pub async fn asset_count(
-        &mut self,
-        bundle_no: usize,
-        collection_no: usize,
-    ) -> Result<usize, Error> {
+    pub async fn asset_count(&mut self, bundle_no: usize, collection_no: usize) -> Result<usize> {
         let path = format!(r#"{{"B":{{"P":[{bundle_no}]}},"I":{collection_no}}}"#);
+        let text = self.get_text("Collections/Count", &path).await?;
 
-        let text = match self.send_request("Collections/Count", &path).await?.text().await {
-            Ok(text) => text,
-            Err(e) => return Err(Error::ResponseDeserialize(e)),
-        };
+        let count = text.parse().map_err(|_| Repr::bug("text should be integer"))?;
 
-        Ok(text.parse()?)
+        Ok(count)
     }
 
     /// Returns information about the specified asset.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Network`] if the request fails.
     pub async fn asset_info(
         &mut self,
         bundle_no: usize,
         collection_no: usize,
         path_id: i64,
-    ) -> Result<AssetInfo, Error> {
+    ) -> Result<AssetInfo> {
         let path =
             format!(r#"{{"C":{{"B":{{"P":[{bundle_no}]}},"I":{collection_no}}},"D":{path_id}}}"#);
-
-        let html = match self.send_request("Assets/View", &path).await?.text().await {
-            Ok(html) => html,
-            Err(e) => return Err(Error::ResponseDeserialize(e)),
-        };
-
+        let html = self.get_text("Assets/View", &path).await?;
         let html = scraper::Html::parse_document(&html);
-        let name_selector = scraper::Selector::parse("h1").expect("cannot create selector");
-        let info_selector =
-            scraper::Selector::parse("#nav-information td").expect("cannot create selector");
 
-        let name = html.select(&name_selector).next().unwrap().inner_html();
+        let name_selector = scraper::Selector::parse("h1").map_err(selector_should_be_valid)?;
+        let info_selector =
+            scraper::Selector::parse("#nav-information td").map_err(selector_should_be_valid)?;
+
+        let name = html
+            .select(&name_selector)
+            .next()
+            .ok_or_else(|| Repr::bug("asset name should exist"))?
+            .inner_html();
         let info = html.select(&info_selector).map(|node| node.inner_html()).collect::<Vec<_>>();
 
         let class = info[3].clone();
@@ -260,154 +275,184 @@ impl AssetRipper {
     }
 
     /// Returns the JSON representation of the specified asset.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Network`] if the request fails.
     pub async fn asset_json(
         &mut self,
         bundle_no: usize,
         collection_no: usize,
         path_id: i64,
-    ) -> Result<serde_json::Value, Error> {
+    ) -> Result<serde_json::Value> {
         let path =
             format!(r#"{{"C":{{"B":{{"P":[{bundle_no}]}},"I":{collection_no}}},"D":{path_id}}}"#);
 
-        match self.send_request("Assets/Json", &path).await?.json().await {
+        let url = self.full_url("Assets/Json")?;
+        let value = match self.send_request(&url, &path).await?.json().await {
             Ok(json) => Ok(json),
-            Err(e) => Err(Error::ResponseDeserialize(e)),
-        }
+            Err(e) => Err(Error::decode(url, Some(e))),
+        }?;
+
+        Ok(value)
     }
 
     /// Returns the text data stream of the specified asset.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Network`] if the request fails.
     pub async fn asset_text(
         &mut self,
         bundle_no: usize,
         collection_no: usize,
         path_id: i64,
-    ) -> Result<impl futures::Stream<Item = reqwest::Result<bytes::Bytes>>, Error> {
+    ) -> Result<impl futures::Stream<Item = reqwest::Result<bytes::Bytes>>> {
         let path =
             format!(r#"{{"C":{{"B":{{"P":[{bundle_no}]}},"I":{collection_no}}},"D":{path_id}}}"#);
+        let url = self.full_url("Assets/Text")?;
 
-        Ok(self.send_request("Assets/Text", &path).await?.bytes_stream())
+        Ok(self.send_request(&url, &path).await?.bytes_stream())
     }
 
     /// Returns the image (in png) data stream of the specified asset.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Network`] if the request fails.
     pub async fn asset_image(
         &mut self,
         bundle_no: usize,
         collection_no: usize,
         path_id: i64,
-    ) -> Result<impl futures::Stream<Item = reqwest::Result<bytes::Bytes>> + use<>, Error> {
+    ) -> Result<impl futures::Stream<Item = reqwest::Result<bytes::Bytes>>> {
         let path =
             format!(r#"{{"C":{{"B":{{"P":[{bundle_no}]}},"I":{collection_no}}},"D":{path_id}}}"#);
 
-        let url = format!("{}/Assets/Image", &self.base_url);
+        let url = self.full_url("Assets/Image")?;
         let client = reqwest::Client::new();
 
-        let req = client.get(url).query(&[("Path", path)]).query(&[("Extension", "png")]);
-
-        self.check_process()?;
+        let req = client.get(url.clone()).query(&[("Path", path)]).query(&[("Extension", "png")]);
 
         let res = match req.send().await {
-            Ok(r) => r,
-            Err(e) => return Err(Error::Request(e)),
-        };
+            Ok(r) => Ok(r),
+            Err(e) => Err(Error::request(url, Some(e))),
+        }?;
 
         Ok(res.bytes_stream())
     }
 
     /// Exports the primary content on the AssetRipper.
-    pub async fn export_primary<P>(&mut self, path: P) -> Result<(), Error>
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Network`] if the export request fails.
+    pub async fn export_primary<P>(&mut self, path: P) -> Result<()>
     where
         P: AsRef<Path>,
     {
-        let url = format!("{}/Export/PrimaryContent", &self.base_url);
+        let url = self.full_url("Export/PrimaryContent")?;
         let mut form = HashMap::new();
         form.insert("path", path.as_ref().to_string_lossy().to_string());
 
         let client = reqwest::Client::new();
-        let req = client.post(&url).form(&form);
+        let req = client.post(url.clone()).form(&form);
 
         if let Err(e) = req.send().await {
-            return Err(Error::Request(e));
-        };
-
-        Ok(())
-    }
-
-    fn check_process(&mut self) -> Result<(), Error> {
-        if let Some(ref mut process) = self.process {
-            match process.try_wait() {
-                Ok(None) => Ok(()),
-                Ok(Some(status)) => {
-                    Err(Error::Generic(format!("AssetRipper process died with status {status}")))
-                }
-                Err(err) => Err(err.into()),
-            }?;
+            return Err(Error::request(url, Some(e)).into());
         }
 
         Ok(())
     }
 
     /// Downloads the latest release zip of AssetRipper from GitHub to the given path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Network`] if the download fails.
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Io`] if the file cannot be accessed.
+    #[cfg(all(
+        any(target_os = "windows", target_os = "linux", target_os = "macos"),
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+    ))]
     pub async fn download_latest_zip<P>(
         path: P,
         progress_bar: Option<&mut ProgressBar>,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     where
         P: AsRef<Path>,
     {
         let client = reqwest::Client::new();
-        let base_url = "https://github.com/AssetRipper/AssetRipper/releases/latest/download/";
 
         let zip_path = path.as_ref().join("AssetRipper.zip");
-        let file = match tokio::fs::File::create_new(&zip_path).await {
-            Ok(mut file) => {
-                let os = match std::env::consts::OS {
-                    "windows" => "win",
-                    "linux" => "linux",
-                    "macos" => "mac",
-                    _ => return Err(Error::Generic("unsupported OS".to_string())),
-                };
-                let arch = match std::env::consts::ARCH {
-                    "x86_64" => "x64",
-                    "aarch64" => "arm64",
-                    _ => return Err(Error::Generic("unsupported architecture".to_string())),
-                };
-                let req = client.get(format!("{base_url}/AssetRipper_{os}_{arch}.zip"));
 
-                let res = match req.send().await {
-                    Ok(res) => res,
-                    Err(e) => return Err(Error::Request(e)),
-                };
+        let mut downloaded = false;
 
-                let stream_reader = res
-                    .bytes_stream()
-                    .map_err(|e| std::io::Error::other(e))
-                    .into_async_read()
-                    .compat();
+        let mut file = match tokio::fs::File::create_new(&zip_path).await {
+            Ok(file) => Ok(file),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                log::debug!("AssetRipper.zip already exists, skipping download");
+                downloaded = true;
+                let f = tokio::fs::File::open(&zip_path)
+                    .await
+                    .map_err(|e| Repr::io("failed to open file", Some(e)))?;
 
-                let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
-                tokio::io::copy(&mut stream_reader, &mut file).await?;
-
-                file
+                Ok(f)
             }
-            Err(e) => match e.kind() {
-                std::io::ErrorKind::AlreadyExists => {
-                    log::debug!("AssetRipper.zip already exists, skipping download");
-                    tokio::fs::File::open(&zip_path).await?
-                }
-                _ => return Err(e.into()),
-            },
-        };
+            Err(e) => Err(Repr::io("failed to create file", Some(e))),
+        }?;
 
-        let mut file = zip::ZipArchive::new(file.into_std().await)?;
+        if !downloaded {
+            let os = match std::env::consts::OS {
+                "windows" => "win",
+                "linux" => "linux",
+                "macos" => "mac",
+                _ => unreachable!("unsupported OS"),
+            };
+            let arch = match std::env::consts::ARCH {
+                "x86_64" => "x64",
+                "aarch64" => "arm64",
+                _ => unreachable!("unsupported architecture"),
+            };
+
+            let base_url = "https://github.com/AssetRipper/AssetRipper/releases/latest/download/";
+            let url = reqwest::Url::parse(&format!("{base_url}/AssetRipper_{os}_{arch}.zip"))
+                .map_err(|_| Repr::bug("url should be valid"))?;
+
+            let res = match client.get(url.clone()).send().await {
+                Ok(res) => Ok(res),
+                Err(e) => Err(Error::request(url, Some(e))),
+            }?;
+
+            let stream_reader =
+                res.bytes_stream().map_err(std::io::Error::other).into_async_read().compat();
+
+            let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
+            tokio::io::copy(&mut stream_reader, &mut file)
+                .await
+                .map_err(|e| Repr::io("failed to download zip file", Some(e)))?;
+        }
+
+        let mut file = zip::ZipArchive::new(file.into_std().await).map_err(|e| match e {
+            zip::result::ZipError::Io(e) => Repr::io("failed to open zip file", Some(e)),
+            _ => Repr::bug("zip file should be valid"),
+        })?;
 
         let mut output_path = zip_path.clone();
         output_path.pop();
         output_path.push("AssetRipper");
+
         log::debug!("unzip to {}", output_path.display());
-        file.extract(output_path)?;
+        file.extract(output_path).map_err(|e| match e {
+            zip::result::ZipError::Io(e) => Repr::io("failed to extract zip file", Some(e)),
+            _ => Repr::bug("zip file should be valid"),
+        })?;
         drop(file);
 
-        tokio::fs::remove_file(zip_path).await?;
+        tokio::fs::remove_file(zip_path)
+            .await
+            .map_err(|e| Repr::io("failed to remove zip file", Some(e)))?;
 
         Ok(())
     }

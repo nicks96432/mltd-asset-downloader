@@ -5,8 +5,41 @@ use aes::cipher::block_padding::Pkcs7;
 use aes::cipher::inout::InOutBufReserved;
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use cbc::{Decryptor, Encryptor};
+use thiserror::Error as ThisError;
 
-use crate::Error;
+use crate::error::{Error, Repr, Result};
+
+#[derive(Debug, ThisError)]
+#[error("AES error: {kind}")]
+pub(crate) struct AesError {
+    pub kind: AesErrorKind,
+    pub input: Vec<u8>,
+}
+
+impl AesError {
+    pub fn pad(input: Vec<u8>) -> Self {
+        Self { kind: AesErrorKind::Pad, input }
+    }
+
+    pub fn unpad(input: Vec<u8>) -> Self {
+        Self { kind: AesErrorKind::Unpad, input }
+    }
+}
+
+impl From<AesError> for Error {
+    fn from(value: AesError) -> Self {
+        Repr::from(value).into()
+    }
+}
+
+#[derive(Debug, ThisError)]
+pub(crate) enum AesErrorKind {
+    #[error("failed to pad input")]
+    Pad,
+
+    #[error("failed to unpad output")]
+    Unpad,
+}
 
 /// The key used to derive [`MLTD_TEXT_DECRYPT_KEY`] and
 /// [`MLTD_TEXT_DECRYPT_IV`].
@@ -65,17 +98,20 @@ pub type MltdTextDecryptor = Decryptor<Aes192>;
 /// let text = b"Hello, world!";
 /// let cipher = encrypt_text(text).unwrap();
 /// ```
-pub fn encrypt_text(text: &[u8]) -> Result<Vec<u8>, Error> {
+pub fn encrypt_text(plaintext: &[u8]) -> Result<Vec<u8>> {
     let encryptor =
         MltdTextEncryptor::new(MLTD_TEXT_DECRYPT_KEY.into(), MLTD_TEXT_DECRYPT_IV.into());
-    let mut buf = text.to_owned();
+    let mut buf = plaintext.to_owned();
 
-    let buf = InOutBufReserved::from_mut_slice(&mut buf, text.len())
-        .map_err(|e| Error::Aes(e.to_string()))?;
-    let buf =
-        encryptor.encrypt_padded_inout_mut::<Pkcs7>(buf).map_err(|e| Error::Aes(e.to_string()))?;
+    debug_assert_eq!(buf.len(), plaintext.len());
 
-    Ok(buf.to_owned())
+    let buf = InOutBufReserved::from_mut_slice(&mut buf, plaintext.len())
+        .map_err(|e| Repr::bug(&e.to_string()))?;
+    let cipher = encryptor
+        .encrypt_padded_inout_mut::<Pkcs7>(buf)
+        .map_err(|_| AesError::pad(plaintext.to_owned()))?;
+
+    Ok(cipher.to_owned())
 }
 
 /// Decrypts text using AES-192-CBC with MLTD's key and IV.
@@ -94,14 +130,14 @@ pub fn encrypt_text(text: &[u8]) -> Result<Vec<u8>, Error> {
 /// let cipher = b"Hello, world!";
 /// let text = decrypt_text(cipher).unwrap();
 /// ```
-pub fn decrypt_text(cipher: &[u8]) -> Result<Vec<u8>, Error> {
+pub fn decrypt_text(cipher: &[u8]) -> Result<Vec<u8>> {
     let decryptor =
         MltdTextDecryptor::new(MLTD_TEXT_DECRYPT_KEY.into(), MLTD_TEXT_DECRYPT_IV.into());
+
     let mut buf = cipher.to_owned();
-
-    let buf = decryptor
+    let plaintext = decryptor
         .decrypt_padded_inout_mut::<Pkcs7>(buf.as_mut_slice().into())
-        .map_err(|e| Error::Aes(e.to_string()))?;
+        .map_err(|_| AesError::unpad(cipher.to_owned()))?;
 
-    Ok(buf.to_owned())
+    Ok(plaintext.to_owned())
 }

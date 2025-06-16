@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use anyhow::Result;
 use clap::Args;
 use futures::{StreamExt, stream};
 use human_bytes::human_bytes;
@@ -90,7 +91,7 @@ where
     Ok(())
 }
 
-pub async fn download_assets(args: &DownloaderArgs) -> Result<(), Error> {
+pub async fn download_assets(args: &DownloaderArgs) -> Result<()> {
     log::debug!("create output directory at {}", args.output_dir.display());
     create_dir_all(&args.output_dir).await?;
 

@@ -1,8 +1,10 @@
 //! Functions to fetch manifest version from `api.matsurihi.me`.
 
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
 
-use crate::Error;
+use crate::error::{Repr, Result};
+use crate::net::Error;
 
 /// matshrihi.me MLTD v2 API `/version/assets/:app` response body structure.
 #[derive(Debug, Clone, Deserialize)]
@@ -47,7 +49,36 @@ pub struct VersionInfo {
     pub asset_version: AssetVersion,
 }
 
-const MATSURI_API_ENDPOINT: &str = "https://api.matsurihi.me/api/mltd/v2";
+macro_rules! matsuri_api_endpoint {
+    () => {
+        "https://api.matsurihi.me/api/mltd/v2"
+    };
+}
+
+pub const MATSURI_API_ENDPOINT: & str = matsuri_api_endpoint!();
+
+async fn send_request<T: DeserializeOwned>(url: &str) -> Result<T> {
+    let client = reqwest::Client::new();
+
+    let url = match reqwest::Url::parse(url) {
+        Ok(u) => Ok(u),
+        Err(_) => Err(Repr::bug(&format!("invalid url: {url:?}"))),
+    }?;
+
+    let req = client.get(url.clone()).query(&[("prettyPrint", "false")]);
+
+    let res = match req.send().await {
+        Ok(r) => Ok(r),
+        Err(e) => Err(Error::request(url.clone(), Some(e))),
+    }?;
+
+    let value: T = match res.json().await {
+        Ok(v) => Ok(v),
+        Err(e) => Err(Error::decode(url, Some(e))),
+    }?;
+
+    Ok(value)
+}
 
 /// Gets the latest manifest filename and version from matsurihi.me.
 ///
@@ -70,21 +101,9 @@ const MATSURI_API_ENDPOINT: &str = "https://api.matsurihi.me/api/mltd/v2";
 ///     let asset_version = latest_asset_version().await.unwrap().version;
 /// });
 /// ```
-pub async fn latest_asset_version() -> Result<AssetVersion, Error> {
-    let client = reqwest::Client::new();
-    let req = client
-        .get(format!("{}{}", MATSURI_API_ENDPOINT, "/version/latest"))
-        .query(&[("prettyPrint", "false")]);
-
-    let res = match req.send().await {
-        Ok(r) => r,
-        Err(e) => return Err(Error::Request(e)),
-    };
-
-    let version_info: VersionInfo = match res.json().await {
-        Ok(info) => info,
-        Err(e) => return Err(Error::ResponseDeserialize(e)),
-    };
+pub async fn latest_asset_version() -> Result<AssetVersion> {
+    let url = concat!(matsuri_api_endpoint!(), "/version/latest");
+    let version_info: VersionInfo = send_request(url).await?;
 
     Ok(version_info.asset_version)
 }
@@ -100,21 +119,9 @@ pub async fn latest_asset_version() -> Result<AssetVersion, Error> {
 /// [`Error::Request`]: if it cannot send request to `api.matsurihi.me`.
 ///
 /// [`Error::ResponseDeserialize`]: if it cannot deserialize response.
-pub async fn get_all_asset_versions() -> Result<Vec<AssetVersion>, Error> {
-    let client = reqwest::Client::new();
-    let req = client
-        .get(format!("{}{}", MATSURI_API_ENDPOINT, "/version/assets"))
-        .query(&[("prettyPrint", "false")]);
-
-    let res = match req.send().await {
-        Ok(r) => r,
-        Err(e) => return Err(Error::Request(e)),
-    };
-
-    let versions: Vec<AssetVersion> = match res.json().await {
-        Ok(v) => v,
-        Err(e) => return Err(Error::ResponseDeserialize(e)),
-    };
+pub async fn get_all_asset_versions() -> Result<Vec<AssetVersion>> {
+    let url = concat!(matsuri_api_endpoint!(), "/version/assets");
+    let versions: Vec<AssetVersion> = send_request(url).await?;
 
     Ok(versions)
 }
@@ -141,23 +148,11 @@ pub async fn get_all_asset_versions() -> Result<Vec<AssetVersion>, Error> {
 ///     assert_eq!(asset_version.version, 1);
 /// });
 /// ```
-pub async fn get_asset_version(version: u64) -> Result<AssetVersion, Error> {
-    let client = reqwest::Client::new();
-    let req = client
-        .get(format!("{MATSURI_API_ENDPOINT}/version/assets/{version}"))
-        .query(&[("prettyPrint", "false")]);
+pub async fn get_asset_version(version: u64) -> Result<AssetVersion> {
+    let url = format!("{MATSURI_API_ENDPOINT}/version/assets/{version}");
+    let version: AssetVersion = send_request(&url).await?;
 
-    let res = match req.send().await {
-        Ok(r) => r,
-        Err(e) => return Err(Error::Request(e)),
-    };
-
-    let asset_version: AssetVersion = match res.json().await {
-        Ok(v) => v,
-        Err(e) => return Err(Error::ResponseDeserialize(e)),
-    };
-
-    Ok(asset_version)
+    Ok(version)
 }
 
 #[cfg(test)]

@@ -17,4 +17,4 @@ pub mod manifest;
 pub mod net;
 pub mod util;
 
-pub use self::error::Error;
+pub use self::error::{Error, ErrorKind};

@@ -2,11 +2,12 @@ use std::collections::BTreeMap;
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 
+use anyhow::{Result, anyhow};
 use clap::{Args, value_parser};
 use futures::lock::Mutex;
 use futures::{StreamExt, TryStreamExt, stream};
 use image::GenericImageView;
-use mltd::Error;
+use mltd::ErrorKind;
 use mltd::extract::audio::{Encoder, EncoderOutputOptions, MLTD_HCA_KEY};
 use mltd::extract::puzzle::solve_puzzle;
 use mltd::extract::text::decrypt_text;
@@ -64,21 +65,24 @@ pub struct ExtractorArgs {
 }
 
 /// Parses a single key-value pair
-fn parse_key_val(s: &str) -> Result<(String, String), Error> {
+fn parse_key_val(s: &str) -> Result<(String, String)> {
     if !s.starts_with('-') {
-        return Err(Error::Generic(format!("invalid -KEY=value: no `-` found in `{}`", s)));
+        return Err(anyhow!("invalid -KEY=value: no `-` found in `{}`", s));
     }
-    let pos = s
-        .find('=')
-        .ok_or_else(|| Error::Generic(format!("invalid -KEY=value: no `=` found in `{}`", s)))?;
+    let pos = match s.find('=') {
+        Some(p) => p,
+        None => return Err(anyhow!("invalid -KEY=value: no `=` found in `{}`", s))?,
+    };
 
     Ok((s[1..pos].to_owned(), s[pos + 1..].to_owned()))
 }
 
 /// Parses string to image format
-fn parse_image_format(s: &str) -> Result<image::ImageFormat, Error> {
-    let image_format = image::ImageFormat::from_extension(s)
-        .ok_or_else(|| Error::Generic(format!("invalid image format `{}`", s)))?;
+fn parse_image_format(s: &str) -> Result<image::ImageFormat> {
+    let image_format = match image::ImageFormat::from_extension(s) {
+        Some(f) => f,
+        None => return Err(anyhow!("invalid image format: {}", s)),
+    };
 
     Ok(image_format)
 }
@@ -97,7 +101,7 @@ fn default_asset_ripper_path() -> PathBuf {
     path
 }
 
-pub async fn extract_files(args: &ExtractorArgs) -> Result<(), Error> {
+pub async fn extract_files(args: &ExtractorArgs) -> Result<()> {
     ensure_asset_ripper_installed(&args.asset_ripper_path).await?;
 
     let files = args
@@ -141,8 +145,8 @@ pub async fn extract_files(args: &ExtractorArgs) -> Result<(), Error> {
                 asset_rippers.push(Mutex::new(ripper));
                 port += 1;
             }
-            Err(Error::IO(e)) if e.kind() == std::io::ErrorKind::AddrInUse => port += 1,
-            Err(e) => return Err(e),
+            Err(e) if e.kind() == ErrorKind::Network => port += 1,
+            Err(e) => return Err(e.into()),
         };
     }
 
@@ -160,7 +164,7 @@ pub async fn extract_files(args: &ExtractorArgs) -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn ensure_asset_ripper_installed<P>(path: P) -> Result<(), Error>
+pub async fn ensure_asset_ripper_installed<P>(path: P) -> Result<()>
 where
     P: AsRef<Path>,
 {
@@ -183,7 +187,7 @@ where
 
     if !input.trim().eq_ignore_ascii_case("y") {
         log::error!("User refused to install AssetRipper");
-        return Err(Error::Generic("AssetRipper not installed".to_owned()));
+        return Err(anyhow!("AssetRipper not installed"));
     }
 
     let mut path = path.as_ref().to_path_buf();
@@ -201,7 +205,7 @@ async fn extract_file<P>(
     path: P,
     asset_ripper: &mut AssetRipper,
     args: &ExtractorArgs,
-) -> Result<(), Error>
+) -> Result<()>
 where
     P: AsRef<Path>,
 {
@@ -236,7 +240,7 @@ async fn extract_assets(
     infos: Vec<AssetInfo>,
     asset_ripper: &mut AssetRipper,
     args: &ExtractorArgs,
-) -> Result<(), Error> {
+) -> Result<()> {
     for info in &infos {
         match info.entry.1.as_str() {
             "TextAsset" => extract_text_asset(info, asset_ripper, args).await?,
@@ -275,7 +279,7 @@ async fn extract_texture2d_assets(
     sprite_infos: &[&AssetInfo],
     asset_ripper: &mut AssetRipper,
     args: &ExtractorArgs,
-) -> Result<(), Error> {
+) -> Result<()> {
     let asset_original_path =
         texture_info.original_path.as_ref().expect("original path of Texture2D should exist");
     let mut asset_output_dir = args.output.join(asset_original_path);
@@ -285,10 +289,12 @@ async fn extract_texture2d_assets(
     let mut async_reader = asset_ripper
         .asset_image(bundle_no, collection_no, texture_info.entry.0)
         .await?
-        .map_err(|e| std::io::Error::other(e))
+        .map_err(std::io::Error::other)
         .into_async_read()
         .compat();
+
     tokio::io::copy(&mut async_reader, &mut image).await?;
+    drop(async_reader);
 
     let image = image::load_from_memory_with_format(
         image.into_inner().as_slice(),
@@ -360,7 +366,7 @@ async fn extract_text_asset(
     info: &AssetInfo,
     asset_ripper: &mut AssetRipper,
     args: &ExtractorArgs,
-) -> Result<(), Error> {
+) -> Result<()> {
     let asset_original_path =
         info.original_path.as_ref().expect("original path of TextAsset should exist");
     let mut output_dir = args.output.join(asset_original_path);
@@ -371,7 +377,7 @@ async fn extract_text_asset(
         && !info.entry.2.ends_with(".awb")
         && !info.entry.2.ends_with(".gtx")
     {
-        return Err(Error::Generic(format!("unknown text asset: {}", info.entry.2)));
+        return Err(anyhow!("unknown text asset: {}", info.entry.2));
     }
 
     let tmpdir = tempfile::tempdir()?;
@@ -431,10 +437,8 @@ async fn extract_text_asset(
                 })
                 .await?;
 
-                match result {
-                    Ok(()) => (),
-                    Err(Error::VGMStream(_)) | Err(Error::OutOfRange(..)) => break,
-                    Err(e) => return Err(e),
+                if result.is_err() {
+                    break;
                 }
             }
         }
@@ -447,7 +451,7 @@ async fn extract_text_asset(
             let buf = tokio::fs::read(&file_path).await?;
             tokio::fs::write(&output_path, decrypt_text(&buf)?).await?;
         }
-        _ => return Err(Error::Generic(String::from("this shouldn't happen"))),
+        _ => unreachable!("this shouldn't happen"),
     };
 
     Ok(())

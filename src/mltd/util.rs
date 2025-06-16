@@ -11,6 +11,10 @@ use pin_project::pin_project;
 use tokio::io::{AsyncRead, ReadBuf};
 
 /// Custom log formatter used in this crate.
+///
+/// # Errors
+///
+/// Returns [`std::io::Error`] if failed to write to [`std::io::Stdout`].
 pub fn log_formatter(buf: &mut Formatter, record: &Record) -> Result<()> {
     let color_code = match record.level() {
         log::Level::Error => 1, // red

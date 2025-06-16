@@ -297,11 +297,11 @@ impl VgmStream {
     ///
     /// # Errors
     ///
-    /// Returns `Error::InitializationFailed` if the initialization failed.
+    /// Returns [`Error::InitializationFailed`] if the initialization failed.
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```
     /// use vgmstream::VgmStream;
     ///
     /// let vgmstream = VgmStream::new().unwrap();
@@ -325,7 +325,7 @@ impl VgmStream {
     /// * pass [`None`] to clear current config
     /// * remember config may change format info like channels or output format
     ///   (recheck if calling after loading song)
-    pub fn setup(&mut self, config: Option<&Config>) -> () {
+    pub fn setup(&mut self, config: Option<&Config>) {
         match config {
             Some(cfg) => unsafe {
                 vgmstream_sys::libvgmstream_setup(
@@ -384,7 +384,7 @@ impl VgmStream {
     ///
     /// # Errors
     ///
-    /// Returns `Error::NullPointer` if `vgmstream->format` is null.
+    /// Returns [`Error::NullPointer`] if `vgmstream->format` is null.
     ///
     /// # Examples
     ///
@@ -399,8 +399,8 @@ impl VgmStream {
     /// ```
     pub fn format(&self) -> Result<Format, Error> {
         match unsafe { self.as_ref().format.as_ref() } {
-            Some(f) => f.clone().try_into(),
-            None => return Err(Error::NullPointer("vgmstream->format".to_string())),
+            Some(f) => (*f).try_into(),
+            None => Err(Error::NullPointer("vgmstream->format".to_string())),
         }
     }
 
@@ -410,9 +410,9 @@ impl VgmStream {
     ///
     /// # Errors
     ///
-    /// Returns `Error::VgmStream` if decoding failed.
+    /// Returns [`Error::VgmStream`] if decoding failed.
     ///
-    /// Returns `Error::NullPointer` if `vgmstream->decoder` is null.
+    /// Returns [`Error::NullPointer`] if `vgmstream->decoder` is null.
     ///
     /// # Examples
     ///
@@ -427,7 +427,7 @@ impl VgmStream {
     ///     println!("{}", buf.len());
     /// }
     /// ```
-    pub fn render<'a>(&'a mut self) -> Result<&'a [u8], Error> {
+    pub fn render(&mut self) -> Result<&[u8], Error> {
         if unsafe { vgmstream_sys::libvgmstream_render(self.inner.as_mut()) } < 0 {
             return Err(Error::VgmStream("libvgmstream_render".to_string()));
         }
@@ -565,7 +565,7 @@ pub fn extensions() -> &'static [&'static str] {
             let exts = vgmstream_sys::libvgmstream_get_extensions(&mut ext_count);
             std::slice::from_raw_parts(exts, ext_count as usize)
         }
-        .into_iter()
+        .iter()
         .map(|p| unsafe { CStr::from_ptr(*p) }.to_str().unwrap())
         .collect()
     });
@@ -584,7 +584,7 @@ pub fn common_extensions() -> &'static [&'static str] {
                 let exts = vgmstream_sys::libvgmstream_get_common_extensions(&mut ext_count);
                 std::slice::from_raw_parts(exts, ext_count as usize)
             }
-            .into_iter()
+            .iter()
             .map(|p| unsafe { CStr::from_ptr(*p) }.to_str().unwrap())
             .collect()
         });
