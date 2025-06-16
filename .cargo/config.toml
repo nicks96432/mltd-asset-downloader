@@ -1,3 +1,7 @@
 [alias]
 build-windows = "build --config .cargo/config-windows.toml"
+check-windows = "check --config .cargo/config-windows.toml"
 test-windows = "test --config .cargo/config-windows.toml"
+bw = "build-windows"
+cw = "check-windows"
+tw = "test-windows"

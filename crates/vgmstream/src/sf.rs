@@ -1,16 +1,14 @@
 use std::ffi::CString;
-use std::marker::PhantomData;
 use std::path::Path;
+use std::ptr::NonNull;
 
-use crate::{Error, VgmStream};
+use crate::Error;
 
-pub struct StreamFile<'a> {
-    pub(crate) inner: *mut vgmstream_sys::libstreamfile_t,
-
-    phantom: PhantomData<&'a VgmStream>,
+pub struct StreamFile {
+    pub(crate) inner: NonNull<vgmstream_sys::libstreamfile_t>,
 }
 
-impl StreamFile<'_> {
+impl StreamFile {
     /// Creates a new `libstreamfile_t`.
     ///
     /// # Errors
@@ -22,12 +20,11 @@ impl StreamFile<'_> {
     /// Initialize libvgmstream:
     ///
     /// ```no_run
-    /// use vgmstream::{StreamFile, VgmStream};
+    /// use vgmstream::StreamFile;
     ///
-    /// let vgmstream = VgmStream::new().unwrap();
     /// let stream = StreamFile::open(&vgmstream, "path/to/file").unwrap();
     /// ```
-    pub fn open<P>(_: &VgmStream, path: P) -> Result<Self, Error>
+    pub fn open<P>(path: P) -> Result<Self, Error>
     where
         P: AsRef<Path>,
     {
@@ -35,10 +32,27 @@ impl StreamFile<'_> {
         let inner = unsafe { vgmstream_sys::libstreamfile_open_from_stdio(path.as_ptr()) };
 
         if inner.is_null() {
-            return Err(Error::InitializationFailed);
+            return Err(Error::VgmStream("libstreamfile_open_from_stdio".to_string()));
         }
 
-        Ok(Self { inner, phantom: PhantomData })
+        Ok(Self { inner: unsafe { NonNull::new_unchecked(inner) } })
+    }
+
+    pub fn buffered(mut self) -> Result<Self, Error> {
+        let inner = unsafe { vgmstream_sys::libstreamfile_open_buffered(self.inner.as_ptr()) };
+        if inner.is_null() {
+            return Err(Error::VgmStream("libstreamfile_open_buffered".to_string()));
+        }
+
+        self.inner = unsafe { NonNull::new_unchecked(inner) };
+
+        Ok(self)
+    }
+}
+
+impl Drop for StreamFile {
+    fn drop(&mut self) {
+        unsafe { self.inner.as_ref().close.unwrap()(self.inner.as_ptr()) };
     }
 }
 
@@ -50,8 +64,6 @@ mod tests {
 
     #[test]
     fn test_streamfile() {
-        let vgmstream = VgmStream::new().unwrap();
-        let sf = StreamFile::open(&vgmstream, ACB_PATH).unwrap();
-        assert!(!sf.inner.is_null());
+        StreamFile::open(ACB_PATH).unwrap().buffered().unwrap();
     }
 }

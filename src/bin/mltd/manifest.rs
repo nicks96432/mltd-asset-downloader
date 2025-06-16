@@ -1,8 +1,8 @@
 use std::fs::read;
 use std::path::PathBuf;
 
+use anyhow::Result;
 use clap::{Args, Subcommand};
-use mltd::Error;
 use mltd::asset::{Asset, AssetInfo, Platform};
 use mltd::manifest::Manifest;
 use mltd::net::{get_all_asset_versions, get_asset_version, latest_asset_version};
@@ -54,7 +54,7 @@ pub struct ManifestDownloadArgs {
     pub output: Option<PathBuf>,
 }
 
-pub async fn download_manifest(args: &ManifestDownloadArgs) -> Result<(), Error> {
+pub async fn download_manifest(args: &ManifestDownloadArgs) -> Result<()> {
     let asset_version = match args.asset_version {
         None => latest_asset_version().await,
         Some(v) => get_asset_version(v).await,
@@ -73,7 +73,7 @@ pub async fn download_manifest(args: &ManifestDownloadArgs) -> Result<(), Error>
     Ok(())
 }
 
-pub fn diff_manifest(args: &ManifestDiffArgs) -> Result<(), Error> {
+pub fn diff_manifest(args: &ManifestDiffArgs) -> Result<()> {
     let first_manifest = Manifest::from_slice(&read(&args.first)?)?;
     let second_manifest = Manifest::from_slice(&read(&args.second)?)?;
 
@@ -94,7 +94,7 @@ pub fn diff_manifest(args: &ManifestDiffArgs) -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn list_manifests() -> Result<(), Error> {
+pub async fn list_manifests() -> Result<()> {
     let versions = get_all_asset_versions().await?;
 
     for version in versions {
@@ -107,7 +107,7 @@ pub async fn list_manifests() -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn manifest_main(args: &ManifestArgs) -> Result<(), Error> {
+pub async fn manifest_main(args: &ManifestArgs) -> Result<()> {
     match &args.command {
         ManifestCommand::Diff(args) => diff_manifest(args),
         ManifestCommand::Download(args) => download_manifest(args).await,

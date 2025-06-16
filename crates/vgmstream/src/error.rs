@@ -2,12 +2,15 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("vgmstream initialization failed")]
-    InitializationFailed,
+    #[error("{0} failed")]
+    VgmStream(String),
 
-    #[error("invalid channel mapping: {0}")]
-    InvalidChannelMapping(u32),
+    #[error("unknown channel mapping: {0}")]
+    UnknownChannelMapping(u32),
 
-    #[error("vgmstream generic error")]
-    Generic,
+    #[error("unknown sample format: {0}")]
+    UnknownSampleFormat(u32),
+
+    #[error("{0} is null")]
+    NullPointer(String),
 }

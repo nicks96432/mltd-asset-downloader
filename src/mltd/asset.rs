@@ -15,7 +15,8 @@ use tokio::io::BufWriter;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 
 use crate::Error;
-use crate::net::AssetVersion;
+use crate::error::{Repr, Result};
+use crate::net::{AssetVersion, Error as NetworkError, ErrorKind as NetworkErrorKind};
 use crate::util::ProgressReadAdapter;
 
 /// Base URL of MLTD asset server.
@@ -65,16 +66,32 @@ impl Asset<'_> {
     /// # Errors
     ///
     /// - [`Error::Request`]: if it cannot send request to MLTD asset server.
-    async fn send_request(asset_info: &AssetInfo) -> Result<reqwest::Response, Error> {
+    async fn send_request(asset_info: &AssetInfo) -> Result<reqwest::Response> {
         let client = reqwest::Client::new();
 
         let mut headers = HeaderMap::new();
-        headers.insert("X-Unity-Version", UNITY_VERSION.parse().unwrap());
-        headers.insert("User-Agent", asset_info.platform.user_agent().parse().unwrap());
+        headers.insert(
+            "X-Unity-Version",
+            UNITY_VERSION.parse().map_err(|_| Repr::bug("unity version should be valid"))?,
+        );
+        headers.insert(
+            "User-Agent",
+            asset_info
+                .platform
+                .user_agent()
+                .parse()
+                .map_err(|_| Repr::bug("user agent should be valid"))?,
+        );
 
         let req = client.get(asset_info.to_url()).headers(headers);
 
-        req.send().await.map_err(Error::Request)
+        let res = req.send().await.map_err(|e| NetworkError {
+            kind: NetworkErrorKind::Request,
+            url: asset_info.to_url(),
+            source: Some(e),
+        })?;
+
+        Ok(res)
     }
 
     /// Download the specified asset from MLTD asset server.
@@ -108,7 +125,7 @@ impl Asset<'_> {
     pub async fn download(
         asset_info: AssetInfo,
         progress_bar: Option<&mut ProgressBar>,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self> {
         let res = Self::send_request(&asset_info).await?;
 
         if let Some(ref pb) = progress_bar {
@@ -117,16 +134,14 @@ impl Asset<'_> {
 
         log::debug!("download {} to buf", asset_info.filename);
 
-        let stream_reader = res
-            .bytes_stream()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
-            .into_async_read()
-            .compat();
+        let stream_reader = res.bytes_stream().map_err(io::Error::other).into_async_read().compat();
 
         let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
 
         let mut buf = Cursor::new(Vec::new());
-        tokio::io::copy(&mut stream_reader, &mut buf).await?;
+        tokio::io::copy(&mut stream_reader, &mut buf)
+            .await
+            .map_err(|e| Repr::io("failed to download asset", Some(e)))?;
 
         Ok(Self { data: Cow::from(buf.into_inner()), info: asset_info })
     }
@@ -164,9 +179,13 @@ impl Asset<'_> {
         asset_info: &AssetInfo,
         output: Option<&Path>,
         progress_bar: Option<&mut ProgressBar>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let output = output.unwrap_or(asset_info.filename.as_ref());
-        let mut out = BufWriter::new(File::create(output).await?);
+        let mut out = BufWriter::new(
+            File::create(output)
+                .await
+                .map_err(|e| Repr::io("failed to create output file", Some(e)))?,
+        );
 
         let res = Self::send_request(asset_info).await?;
 
@@ -176,15 +195,13 @@ impl Asset<'_> {
 
         log::debug!("save asset to {}", output.display());
 
-        let stream_reader = res
-            .bytes_stream()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
-            .into_async_read()
-            .compat();
+        let stream_reader = res.bytes_stream().map_err(io::Error::other).into_async_read().compat();
 
         let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
 
-        tokio::io::copy(&mut stream_reader, &mut out).await?;
+        tokio::io::copy(&mut stream_reader, &mut out)
+            .await
+            .map_err(|e| Repr::io("failed to download asset", Some(e)))?;
 
         Ok(())
     }
@@ -205,6 +222,7 @@ pub enum Platform {
 
 impl Platform {
     /// Returns the string representation of the [`Platform`].
+    #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
             Self::Android => "Android",
@@ -213,6 +231,7 @@ impl Platform {
     }
 
     /// Returns the `User-Agent` string of the [`Platform`] in HTTP request.
+    #[must_use]
     pub fn user_agent(&self) -> &str {
         match self {
             Self::Android => "UnityPlayer/2020.3.32f1 (UnityWebRequest/1.0, libcurl/7.80.0-DEV)",
@@ -231,10 +250,10 @@ impl FromStr for Platform {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
+        Ok(match s.to_lowercase().as_str() {
             "android" => Ok(Self::Android),
             "ios" => Ok(Self::IOS),
-            s => Err(Error::UnknownPlatform(s.to_string())),
-        }
+            s => Err(Repr::UnknownPlatform(s.to_string())),
+        }?)
     }
 }

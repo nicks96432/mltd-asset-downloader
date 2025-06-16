@@ -1,22 +1,42 @@
 //! Puzzle handling.
 
 use image::{DynamicImage, GenericImageView, SubImage, imageops};
+use thiserror::Error as ThisError;
 
-use crate::Error;
+use crate::error::{Error, Repr, Result};
+
+#[derive(Debug, ThisError)]
+pub(crate) enum PuzzleError {
+    #[error("puzzle not found for texture {0}")]
+    PuzzleNotFound(String),
+
+    #[error("puzzle {0} is not implemented yet")]
+    NotImplemented(String),
+}
+
+impl From<PuzzleError> for Error {
+    fn from(value: PuzzleError) -> Self {
+        Repr::from(value).into()
+    }
+}
 
 /// Solves a puzzle.
+///
+/// # Errors
+///
+/// Returns [`crate::Error`] with [`crate::ErrorKind::Puzzle`] if the puzzle cannot be solved.
 pub fn solve_puzzle(
     texture_name: &str,
     img: &DynamicImage,
     pieces: &[SubImage<&DynamicImage>],
-) -> Result<Vec<DynamicImage>, Error> {
+) -> Result<Vec<DynamicImage>> {
     let (puzzle_name, _) = NAME_PUZZLE_MAP
         .iter()
-        .find(|(_, r)| regex::Regex::new(r).expect("regex error").is_match(texture_name))
-        .ok_or(Error::Puzzle(String::from("cannot find puzzle")))?;
+        .find(|(_, r)| regex::Regex::new(r).map_or_else(|_| false, |r| r.is_match(texture_name)))
+        .ok_or_else(|| PuzzleError::PuzzleNotFound(texture_name.to_string()))?;
 
-    let puzzle =
-        piece_map(puzzle_name).ok_or(Error::Puzzle(String::from("puzzle not implemented")))?;
+    let puzzle = piece_map(puzzle_name)
+        .ok_or_else(|| PuzzleError::NotImplemented((*puzzle_name).to_string()))?;
 
     let mut puzzle_imgs = Vec::new();
 
@@ -25,9 +45,8 @@ pub fn solve_puzzle(
         let mut puzzle_img = DynamicImage::new_rgba8(puzzle.width, puzzle.height);
 
         for j in 0..piece_count {
-            let piece = pieces
-                .get(i * piece_count + j)
-                .ok_or(Error::Puzzle(String::from("piece not found")))?;
+            let piece_idx = i * piece_count + j;
+            let piece = pieces.get(piece_idx).ok_or(Repr::OutOfRange(piece_idx, pieces.len()))?;
 
             let mut piece = img
                 .crop_imm(piece.offsets().0, piece.offsets().1, piece.width(), piece.height())

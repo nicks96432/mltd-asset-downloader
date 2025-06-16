@@ -5,9 +5,40 @@ use std::ops::Deref;
 
 use linked_hash_map::LinkedHashMap;
 use serde::{Deserialize, Serialize};
+use thiserror::Error as ThisError;
 
 use crate::asset::Asset;
-use crate::error::Error;
+use crate::error::{Error, Repr, Result};
+
+#[derive(Debug, ThisError)]
+#[error("manifest error: {kind}")]
+pub(crate) struct ManifestError {
+    pub kind: ManifestErrorKind,
+    pub manifest: Vec<u8>,
+}
+
+#[derive(Debug, ThisError)]
+pub(crate) enum ManifestErrorKind {
+    /// Manifest deserialization failed.
+    #[error("cannot deserialize manifest: {0}")]
+    Deserialize(#[from] rmp_serde::decode::Error),
+
+    /// Manifest serialization failed.
+    #[error("cannot serialize manifest: {0}")]
+    Serialize(#[from] rmp_serde::encode::Error),
+}
+
+impl ManifestError {
+    pub fn new(kind: ManifestErrorKind, manifest: Vec<u8>) -> Self {
+        Self { kind, manifest }
+    }
+}
+
+impl From<ManifestError> for Error {
+    fn from(value: ManifestError) -> Self {
+        Repr::from(value).into()
+    }
+}
 
 /// An entry in the manifest file.
 ///
@@ -24,24 +55,12 @@ pub struct ManifestEntry(pub String, pub String, pub usize);
 #[serde(transparent)]
 pub struct Manifest {
     /// The underlying raw manifest data.
-    pub data: [LinkedHashMap<String, ManifestEntry>; 1],
+    data: [LinkedHashMap<String, ManifestEntry>; 1],
 }
 
 impl Manifest {
-    /// Deserializes the specified bytes into a raw manifest.
-    ///
-    /// The bytes must be in message pack format.
-    ///
-    /// # Errors
-    ///
-    /// This function will return [`Error::ManifestDeserialize`] if
-    /// it cannot deserialize the message pack bytes.
-    #[inline]
-    pub fn from_slice(value: &[u8]) -> Result<Self, Error> {
-        Ok(Self { data: rmp_serde::from_slice(value)? })
-    }
-
     /// Computes the difference from `other` manifest.
+    #[must_use]
     pub fn diff<'a>(&'a self, other: &'a Manifest) -> ManifestDiff<'a> {
         let mut diff = ManifestDiff::new();
 
@@ -67,20 +86,33 @@ impl Manifest {
 
     /// Returns the number of entries in the manifest.
     #[inline]
+    #[must_use]
     pub fn len(&self) -> usize {
         self.data[0].len()
     }
 
     /// Returns `true` if the manifest is empty.
     #[inline]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
     /// Returns the total size of all assets in the manifest.
     #[inline]
+    #[must_use]
     pub fn asset_size(&self) -> usize {
         self.data[0].values().fold(0, |acc, v| acc + v.2)
+    }
+
+    /// Deserializes the raw manifest.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Manifest`] if the deserialization fails.
+    pub fn from_slice(value: &[u8]) -> Result<Self> {
+        rmp_serde::from_slice(value)
+            .map_err(|e| ManifestError::new(e.into(), value.to_vec()).into())
     }
 }
 
@@ -97,6 +129,22 @@ impl TryFrom<Asset<'_>> for Manifest {
 
     fn try_from(asset: Asset) -> Result<Self, Self::Error> {
         Self::from_slice(&asset.data)
+    }
+}
+
+impl TryFrom<&[u8]> for Manifest {
+    type Error = Error;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        Self::from_slice(value)
+    }
+}
+
+impl TryFrom<Manifest> for Vec<u8> {
+    type Error = Error;
+
+    fn try_from(value: Manifest) -> Result<Self, Self::Error> {
+        rmp_serde::to_vec(&value).map_err(|e| ManifestError::new(e.into(), Vec::new()).into())
     }
 }
 
@@ -127,14 +175,16 @@ fn init() {
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Deref;
+
     use super::Manifest;
 
     #[test]
     fn test_raw_manifest_from_slice() {
         let expected = include_bytes!("../../tests/test1.msgpack");
-        let manifest: Manifest = Manifest::from_slice(expected).unwrap();
+        let manifest: Manifest = Manifest::try_from(&expected[..]).unwrap();
 
-        assert_eq!(*expected, *rmp_serde::to_vec(&[&*manifest]).unwrap());
+        assert_eq!(*expected, *rmp_serde::to_vec(&[manifest.deref()]).unwrap());
     }
 
     #[test]

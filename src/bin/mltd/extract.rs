@@ -2,14 +2,15 @@ use std::collections::BTreeMap;
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 
+use anyhow::{Result, anyhow};
 use clap::{Args, value_parser};
 use futures::lock::Mutex;
 use futures::{StreamExt, TryStreamExt, stream};
 use image::GenericImageView;
-use mltd::Error;
+use mltd::ErrorKind;
 use mltd::extract::audio::{Encoder, EncoderOutputOptions, MLTD_HCA_KEY};
 use mltd::extract::puzzle::solve_puzzle;
-use mltd::extract::text::decrypt_text;
+use mltd::extract::text::{ENCRYPTED_FILE_EXTENSIONS, UNENCRYPTED_FILE_EXTENSIONS, decrypt_text};
 use mltd::net::{AssetInfo, AssetRipper};
 use tokio::fs::create_dir_all;
 use tokio::io::AsyncWriteExt;
@@ -64,21 +65,24 @@ pub struct ExtractorArgs {
 }
 
 /// Parses a single key-value pair
-fn parse_key_val(s: &str) -> Result<(String, String), Error> {
+fn parse_key_val(s: &str) -> Result<(String, String)> {
     if !s.starts_with('-') {
-        return Err(Error::Generic(format!("invalid -KEY=value: no `-` found in `{}`", s)));
+        return Err(anyhow!("invalid -KEY=value: no `-` found in `{}`", s));
     }
-    let pos = s
-        .find('=')
-        .ok_or_else(|| Error::Generic(format!("invalid -KEY=value: no `=` found in `{}`", s)))?;
+    let pos = match s.find('=') {
+        Some(p) => p,
+        None => return Err(anyhow!("invalid -KEY=value: no `=` found in `{}`", s))?,
+    };
 
     Ok((s[1..pos].to_owned(), s[pos + 1..].to_owned()))
 }
 
 /// Parses string to image format
-fn parse_image_format(s: &str) -> Result<image::ImageFormat, Error> {
-    let image_format = image::ImageFormat::from_extension(s)
-        .ok_or_else(|| Error::Generic(format!("invalid image format `{}`", s)))?;
+fn parse_image_format(s: &str) -> Result<image::ImageFormat> {
+    let image_format = match image::ImageFormat::from_extension(s) {
+        Some(f) => f,
+        None => return Err(anyhow!("invalid image format: {}", s)),
+    };
 
     Ok(image_format)
 }
@@ -97,7 +101,7 @@ fn default_asset_ripper_path() -> PathBuf {
     path
 }
 
-pub async fn extract_files(args: &ExtractorArgs) -> Result<(), Error> {
+pub async fn extract_files(args: &ExtractorArgs) -> Result<()> {
     ensure_asset_ripper_installed(&args.asset_ripper_path).await?;
 
     let files = args
@@ -132,16 +136,17 @@ pub async fn extract_files(args: &ExtractorArgs) -> Result<(), Error> {
         args.asset_ripper_path.display()
     );
 
-    let mut port_start = 50000;
+    let mut port = 50000;
     let mut asset_rippers = Vec::new();
     while asset_rippers.len() < args.parallel as usize {
-        match AssetRipper::new(&args.asset_ripper_path, port_start) {
+        match AssetRipper::new(&args.asset_ripper_path, port) {
             Ok(ripper) => {
+                log::trace!("created AssetRipper on port {}", port);
                 asset_rippers.push(Mutex::new(ripper));
-                port_start += 1;
+                port += 1;
             }
-            Err(Error::IO(e)) if e.kind() == std::io::ErrorKind::AddrInUse => port_start += 1,
-            Err(e) => return Err(e),
+            Err(e) if e.kind() == ErrorKind::Network => port += 1,
+            Err(e) => return Err(e.into()),
         };
     }
 
@@ -159,7 +164,7 @@ pub async fn extract_files(args: &ExtractorArgs) -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn ensure_asset_ripper_installed<P>(path: P) -> Result<(), Error>
+pub async fn ensure_asset_ripper_installed<P>(path: P) -> Result<()>
 where
     P: AsRef<Path>,
 {
@@ -169,12 +174,11 @@ where
 
     log::info!("AssetRipper is not found at {}", path.as_ref().display());
 
-    println!(
-        "Trying to download AssetRipper. This project is not affiliated with, sponsored, or endorsed by AssetRipper."
-    );
-    println!("By downloading, you agree to the terms of the license of AssetRipper.");
-
-    print!("Do you want to install it now? (y/N) ");
+    print!(concat!(
+        "Trying to download AssetRipper. This project is not affiliated with, sponsored, or endorsed by AssetRipper.\n",
+        "By downloading, you agree to the terms of the license of AssetRipper.\n",
+        "Do you want to install it now? (y/N) "
+    ));
     std::io::stdout().flush()?;
 
     let mut input = String::new();
@@ -182,7 +186,7 @@ where
 
     if !input.trim().eq_ignore_ascii_case("y") {
         log::error!("User refused to install AssetRipper");
-        return Err(Error::Generic("AssetRipper not installed".to_owned()));
+        return Err(anyhow!("AssetRipper not installed"));
     }
 
     let mut path = path.as_ref().to_path_buf();
@@ -200,7 +204,7 @@ async fn extract_file<P>(
     path: P,
     asset_ripper: &mut AssetRipper,
     args: &ExtractorArgs,
-) -> Result<(), Error>
+) -> Result<()>
 where
     P: AsRef<Path>,
 {
@@ -235,10 +239,31 @@ async fn extract_assets(
     infos: Vec<AssetInfo>,
     asset_ripper: &mut AssetRipper,
     args: &ExtractorArgs,
-) -> Result<(), Error> {
+) -> Result<()> {
     for info in &infos {
         match info.entry.1.as_str() {
-            "TextAsset" => extract_text_asset(info, asset_ripper, args).await?,
+            "TextAsset" => {
+                let file_name = PathBuf::from(
+                    info.original_path
+                        .as_ref()
+                        .ok_or_else(|| anyhow!("original path should exist"))?,
+                )
+                .file_stem()
+                .ok_or_else(|| anyhow!("file stem should exist"))?
+                .to_str()
+                .ok_or_else(|| anyhow!("file stem should be string"))?
+                .to_owned();
+
+                if ENCRYPTED_FILE_EXTENSIONS
+                    .iter()
+                    .chain(UNENCRYPTED_FILE_EXTENSIONS)
+                    .any(|ext| file_name.ends_with(ext))
+                {
+                    extract_binary_asset(info, asset_ripper, args).await?;
+                } else {
+                    extract_text_asset(bundle_no, collection_no, info, asset_ripper, args).await?;
+                }
+            }
 
             // Texture2D requires all relavent Sprite infos to be extracted
             "Texture2D" => {
@@ -255,7 +280,7 @@ async fn extract_assets(
                         asset_ripper,
                         args,
                     )
-                    .await?
+                    .await?;
                 }
             }
             "Sprite" => (),      // sprites should be handled in Texture2D extractor
@@ -274,7 +299,7 @@ async fn extract_texture2d_assets(
     sprite_infos: &[&AssetInfo],
     asset_ripper: &mut AssetRipper,
     args: &ExtractorArgs,
-) -> Result<(), Error> {
+) -> Result<()> {
     let asset_original_path =
         texture_info.original_path.as_ref().expect("original path of Texture2D should exist");
     let mut asset_output_dir = args.output.join(asset_original_path);
@@ -284,10 +309,12 @@ async fn extract_texture2d_assets(
     let mut async_reader = asset_ripper
         .asset_image(bundle_no, collection_no, texture_info.entry.0)
         .await?
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+        .map_err(std::io::Error::other)
         .into_async_read()
         .compat();
+
     tokio::io::copy(&mut async_reader, &mut image).await?;
+    drop(async_reader);
 
     let image = image::load_from_memory_with_format(
         image.into_inner().as_slice(),
@@ -314,7 +341,7 @@ async fn extract_texture2d_assets(
         let width = json.pointer("/m_Rect/m_Width").unwrap().as_u64().unwrap() as u32;
         let height = json.pointer("/m_Rect/m_Height").unwrap().as_u64().unwrap() as u32;
 
-        let sprite_id = info.entry.2.rsplit_once("_").unwrap().1.parse::<u32>().expect("");
+        let sprite_id = info.entry.2.rsplit_once("_").unwrap().1.parse::<u32>().unwrap();
         let piece = image.view(x, y, width, height);
         rects.insert(sprite_id, piece);
     }
@@ -352,26 +379,31 @@ async fn extract_texture2d_assets(
     Ok(())
 }
 
-/// Extracts a TextAsset.
+/// Extracts a TextAsset with binary content.
 ///
-/// Audio assets are binary TextAsset, so they are handled here as well.
-async fn extract_text_asset(
+/// # Panics
+///
+/// panics if the asset is not a TextAsset with binary content.
+async fn extract_binary_asset(
     info: &AssetInfo,
     asset_ripper: &mut AssetRipper,
     args: &ExtractorArgs,
-) -> Result<(), Error> {
-    let asset_original_path =
-        info.original_path.as_ref().expect("original path of TextAsset should exist");
+) -> Result<()> {
+    let asset_original_path = &PathBuf::from(
+        info.original_path.as_ref().expect("original path of TextAsset should exist"),
+    );
+
+    // remove .bytes extension
+    let asset_original_filename =
+        asset_original_path.with_extension("").file_name().unwrap().to_string_lossy().into_owned();
+    let asset_original_extension =
+        asset_original_path.with_extension("").extension().unwrap().to_string_lossy().into_owned();
+
     let mut output_dir = args.output.join(asset_original_path);
     output_dir.pop();
-    create_dir_all(&output_dir).await?;
+    let output_dir = output_dir;
 
-    if !info.entry.2.ends_with(".acb")
-        && !info.entry.2.ends_with(".awb")
-        && !info.entry.2.ends_with(".gtx")
-    {
-        return Err(Error::Generic(format!("unknown text asset: {}", info.entry.2)));
-    }
+    create_dir_all(&output_dir).await?;
 
     let tmpdir = tempfile::tempdir()?;
 
@@ -379,26 +411,28 @@ async fn extract_text_asset(
     // function to get the text data.
     asset_ripper.export_primary(tmpdir.path()).await?;
 
-    let file_path = tmpdir.path().join(asset_original_path);
-    match &info.entry.2 {
+    let extracted_file_path = tmpdir.path().join(asset_original_path);
+    match asset_original_extension {
         // CRI .acb and .awb audio
-        n if n.ends_with(".acb") || n.ends_with(".awb") => {
+        n if n == "acb" || n == "awb" => {
+            let input_file_path = extracted_file_path.with_extension("");
             // remove .bytes extension for vgmstream
-            tokio::fs::rename(&file_path, file_path.with_extension("")).await?;
+            tokio::fs::rename(&extracted_file_path, &input_file_path).await?;
 
             // According to https://github.com/vgmstream/vgmstream/blob/master/doc/USAGE.md#decryption-keys,
-            // we can specify the decryption key in the .hcakey file.
-            let mut key_file = tokio::fs::File::create(file_path.with_file_name(".hcakey")).await?;
+            // we can specify the decryption key in the .hcakey file so that vgmstream doesn't have
+            // to brute-force the key.
+            let mut key_file =
+                tokio::fs::File::create(extracted_file_path.with_file_name(".hcakey")).await?;
             key_file.write_all(MLTD_HCA_KEY.to_string().as_bytes()).await?;
 
-            let file_path = file_path.with_extension("");
             let output_prefix =
-                file_path.file_name().expect("file name should exist").to_os_string();
+                input_file_path.file_name().expect("file name should exist").to_os_string();
 
             log::info!("extracting audio to {}", output_dir.display());
 
             for subsong_index in 0.. {
-                let file_path = file_path.clone();
+                let input_file_path = input_file_path.clone();
                 let output_dir = output_dir.clone();
 
                 let output_prefix = output_prefix.clone();
@@ -416,9 +450,9 @@ async fn extract_text_asset(
                         log::trace!("audio options: {:#?}", options);
                     }
                     let mut encoder = Encoder::open(
-                        &file_path.clone(),
+                        &input_file_path,
                         subsong_index,
-                        &output_dir.clone(),
+                        &output_dir,
                         EncoderOutputOptions {
                             prefix: output_prefix.as_os_str().to_str().unwrap(),
                             codec: &audio_codec,
@@ -430,24 +464,57 @@ async fn extract_text_asset(
                 })
                 .await?;
 
-                match result {
-                    Ok(()) => (),
-                    Err(Error::VGMStream(_)) | Err(Error::OutOfRange(..)) => break,
-                    Err(e) => return Err(e),
+                if result.is_err() {
+                    break;
                 }
             }
         }
-        // AES-192-CBC encrypted plot text
-        n if n.ends_with(".gtx") => {
-            let output_path = output_dir.with_extension("").with_extension("txt");
+        // AES-192-CBC encrypted text
+        n if ENCRYPTED_FILE_EXTENSIONS.contains(&n.as_str()) => {
+            let output_path = output_dir.join(asset_original_filename);
 
             log::info!("extracting text to {}", output_path.display());
 
-            let buf = tokio::fs::read(&file_path).await?;
+            let buf = tokio::fs::read(&extracted_file_path).await?;
             tokio::fs::write(&output_path, decrypt_text(&buf)?).await?;
         }
-        _ => return Err(Error::Generic(String::from("this shouldn't happen"))),
+        // MP4 video
+        n if n.ends_with(".mp4") => {
+            let output_path = output_dir.join(asset_original_filename);
+
+            log::info!("extracting video to {}", output_path.display());
+
+            tokio::fs::copy(&extracted_file_path, &output_path).await?;
+        }
+        _ => panic!("this is not a TextAsset with binary content"),
     };
+
+    Ok(())
+}
+
+async fn extract_text_asset(
+    bundle_no: usize,
+    collection_no: usize,
+    info: &AssetInfo,
+    asset_ripper: &mut AssetRipper,
+    args: &ExtractorArgs,
+) -> Result<()> {
+    let asset_original_path = &PathBuf::from(
+        info.original_path.as_ref().expect("original path of TextAsset should exist"),
+    );
+
+    let output_path = args.output.join(asset_original_path);
+    let output_dir = output_path.parent().unwrap();
+
+    create_dir_all(output_dir).await?;
+    let mut f = tokio::fs::File::create(&output_path).await?;
+
+    log::info!("extracting text to {}", output_path.display());
+
+    let mut stream = asset_ripper.asset_text(bundle_no, collection_no, info.entry.0).await?;
+    while let Some(item) = stream.next().await {
+        f.write_all(item?.as_ref()).await?;
+    }
 
     Ok(())
 }
