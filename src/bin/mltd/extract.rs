@@ -373,10 +373,7 @@ async fn extract_text_asset(
     output_dir.pop();
     create_dir_all(&output_dir).await?;
 
-    if !info.entry.2.ends_with(".acb")
-        && !info.entry.2.ends_with(".awb")
-        && !info.entry.2.ends_with(".gtx")
-    {
+    if ["acb", "awb", "gtx"].iter().find(|ext| info.entry.2.ends_with(*ext)) == None {
         return Err(anyhow!("unknown text asset: {}", info.entry.2));
     }
 
@@ -394,7 +391,8 @@ async fn extract_text_asset(
             tokio::fs::rename(&file_path, file_path.with_extension("")).await?;
 
             // According to https://github.com/vgmstream/vgmstream/blob/master/doc/USAGE.md#decryption-keys,
-            // we can specify the decryption key in the .hcakey file.
+            // we can specify the decryption key in the .hcakey file so that vgmstream doesn't have
+            // to brute-force the key.
             let mut key_file = tokio::fs::File::create(file_path.with_file_name(".hcakey")).await?;
             key_file.write_all(MLTD_HCA_KEY.to_string().as_bytes()).await?;
 
@@ -444,7 +442,8 @@ async fn extract_text_asset(
         }
         // AES-192-CBC encrypted plot text
         n if n.ends_with(".gtx") => {
-            let output_path = output_dir.with_extension("").with_extension("txt");
+            let output_path =
+                output_dir.join(&info.entry.2).with_extension("txt");
 
             log::info!("extracting text to {}", output_path.display());
 
