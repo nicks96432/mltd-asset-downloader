@@ -81,6 +81,10 @@ impl AssetRipper {
     }
 
     /// Starts a new AssetRipper instance with the given executable path and port.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Io`] if the process fails to start.
     pub fn new<P>(path: P, port: u16) -> Result<Self>
     where
         P: AsRef<Path>,
@@ -115,13 +119,28 @@ impl AssetRipper {
         Ok(Self { base_url: format!("http://localhost:{port}"), process: Some(process) })
     }
 
-    /// Connects th an existing AssetRipper instance with the given host and port.
-    #[must_use]
-    pub fn connect(host: &str, port: u16) -> Self {
-        Self { base_url: format!("http://{host}:{port}"), process: None }
+    /// Connects to an existing AssetRipper instance with the given host and port.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Network`] if the request fails.
+    pub async fn connect(host: &str, port: u16) -> Result<Self> {
+        let client = reqwest::Client::new();
+        let this = Self { base_url: format!("http://{host}:{port}"), process: None };
+
+        let url = this.full_url("")?;
+        let req = client.head(url.clone());
+
+        let _ = req.send().await.map_err(|e| Error::request(url, Some(e)))?;
+
+        Ok(this)
     }
 
     /// Loads an asset or a folder into the AssetRipper.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Network`] if the request fails.
     pub async fn load<P>(&mut self, path: P) -> Result<()>
     where
         P: AsRef<Path>,
@@ -145,6 +164,10 @@ impl AssetRipper {
     }
 
     /// Returns a list of loaded bundles.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Network`] if the request fails.
     pub async fn bundles(&mut self) -> Result<Vec<String>> {
         let path = r#"{"P":[]}"#;
         let html = self.get_text("Bundles/View", path).await?;
@@ -161,6 +184,10 @@ impl AssetRipper {
     }
 
     /// Returns a list of collections in the specified bundle.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Network`] if the request fails.
     pub async fn collections(&mut self, bundle_no: usize) -> Result<Vec<String>> {
         let path = format!(r#"{{"P":[{bundle_no}]}}"#);
         let html = self.get_text("Bundles/View", &path).await?;
@@ -173,6 +200,10 @@ impl AssetRipper {
     }
 
     /// Returns the number of assets in the specified collection.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Network`] if the request fails.
     pub async fn assets(
         &mut self,
         bundle_no: usize,
@@ -222,6 +253,10 @@ impl AssetRipper {
     }
 
     /// Returns the number of assets in the specified collection.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Network`] if the request fails.
     pub async fn asset_count(&mut self, bundle_no: usize, collection_no: usize) -> Result<usize> {
         let path = format!(r#"{{"B":{{"P":[{bundle_no}]}},"I":{collection_no}}}"#);
         let text = self.get_text("Collections/Count", &path).await?;

@@ -1,6 +1,6 @@
 //! Encrypt and decrypt text assets in MLTD.
 
-use std::cell::LazyCell;
+use std::sync::LazyLock;
 
 use aes::Aes192;
 use cbc::{Decryptor, Encryptor};
@@ -47,7 +47,7 @@ pub const MLTD_TEXT_PBKDF2_HMAC_SHA1_SALT: &[u8; 9] = b"DAISUL___";
 /// [`MLTD_TEXT_DECRYPT_IV`].
 pub const MLTD_TEXT_PBKDF2_HMAC_SHA1_ROUNDS: u32 = 1_000;
 
-const MLTD_TEXT_DECRYPT_KEY_IV: LazyCell<[u8; 40]> = LazyCell::new(|| {
+static MLTD_TEXT_DECRYPT_KEY_IV: LazyLock<[u8; 40]> = LazyLock::new(|| {
     pbkdf2::pbkdf2_hmac_array::<sha1::Sha1, 40>(
         MLTD_TEXT_PBKDF2_HMAC_SHA1_KEY,
         MLTD_TEXT_PBKDF2_HMAC_SHA1_SALT,
@@ -60,8 +60,8 @@ const MLTD_TEXT_DECRYPT_KEY_IV: LazyCell<[u8; 40]> = LazyCell::new(|| {
 /// It is derived from [`MLTD_TEXT_PBKDF2_HMAC_SHA1_KEY`] and
 /// [`MLTD_TEXT_PBKDF2_HMAC_SHA1_SALT`] using PBKDF2-HMAC-SHA1, where
 /// the first 24 bytes of the derived key are used as the actual key.
-pub const MLTD_TEXT_DECRYPT_KEY: LazyCell<[u8; 24]> =
-    LazyCell::new(|| (&MLTD_TEXT_DECRYPT_KEY_IV[0..24]).try_into().unwrap());
+pub static MLTD_TEXT_DECRYPT_KEY: LazyLock<[u8; 24]> =
+    LazyLock::new(|| (&MLTD_TEXT_DECRYPT_KEY_IV[0..24]).try_into().unwrap());
 
 /// The AES-192-CBC initialization vector used to decrypt the text asset.
 /// 
@@ -69,8 +69,8 @@ pub const MLTD_TEXT_DECRYPT_KEY: LazyCell<[u8; 24]> =
 /// [`MLTD_TEXT_PBKDF2_HMAC_SHA1_SALT`] using PBKDF2-HMAC-SHA1, where
 /// the last 16 bytes of the derived key are used as the actual IV.
 #[rustfmt::skip]
-pub const MLTD_TEXT_DECRYPT_IV: LazyCell<[u8; 16]> =
-    LazyCell::new(|| (&MLTD_TEXT_DECRYPT_KEY_IV[24..40]).try_into().unwrap());
+pub static MLTD_TEXT_DECRYPT_IV: LazyLock<[u8; 16]> =
+    LazyLock::new(|| (&MLTD_TEXT_DECRYPT_KEY_IV[24..40]).try_into().unwrap());
 
 /// AES-192-CBC encryptor for text assets in MLTD.
 pub type MltdTextEncryptor = Encryptor<Aes192>;
@@ -84,7 +84,7 @@ pub type MltdTextDecryptor = Decryptor<Aes192>;
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```
 /// use mltd::extract::text::encrypt_text;
 ///
 /// let text = b"Hello, world!";
@@ -105,7 +105,7 @@ pub fn encrypt_text(plaintext: &[u8]) -> Vec<u8> {
 ///
 /// # Errors
 ///
-/// [`Error::Aes`]: if decryption failed.
+/// Returns [`crate::Error`] with [`crate::ErrorKind::Aes`] if decryption failed.
 ///
 /// # Example
 ///
@@ -125,7 +125,7 @@ pub fn decrypt_text(cipher: &[u8]) -> Result<Vec<u8>> {
         MLTD_TEXT_DECRYPT_IV.as_ref().into(),
     );
 
-    let plaintext = match decryptor.decrypt_padded_vec_mut::<Pkcs7>(&cipher) {
+    let plaintext = match decryptor.decrypt_padded_vec_mut::<Pkcs7>(cipher) {
         Ok(plaintext) => Ok(plaintext),
         Err(_) => Err(AesError::unpad(cipher.to_owned())),
     }?;

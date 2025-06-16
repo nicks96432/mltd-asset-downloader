@@ -105,6 +105,11 @@ impl Manifest {
         self.data[0].values().fold(0, |acc, v| acc + v.2)
     }
 
+    /// Deserializes the raw manifest.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error`] with [`crate::ErrorKind::Manifest`] if the deserialization fails.
     pub fn from_slice(value: &[u8]) -> Result<Self> {
         rmp_serde::from_slice(value)
             .map_err(|e| ManifestError::new(e.into(), value.to_vec()).into())

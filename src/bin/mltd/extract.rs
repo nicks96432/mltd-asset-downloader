@@ -321,7 +321,7 @@ async fn extract_texture2d_assets(
         let width = json.pointer("/m_Rect/m_Width").unwrap().as_u64().unwrap() as u32;
         let height = json.pointer("/m_Rect/m_Height").unwrap().as_u64().unwrap() as u32;
 
-        let sprite_id = info.entry.2.rsplit_once("_").unwrap().1.parse::<u32>().expect("");
+        let sprite_id = info.entry.2.rsplit_once("_").unwrap().1.parse::<u32>().unwrap();
         let piece = image.view(x, y, width, height);
         rects.insert(sprite_id, piece);
     }

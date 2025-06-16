@@ -3,7 +3,7 @@
 use image::{DynamicImage, GenericImageView, SubImage, imageops};
 use thiserror::Error as ThisError;
 
-use crate::error::{Error, Repr};
+use crate::error::{Error, Repr, Result};
 
 #[derive(Debug, ThisError)]
 pub(crate) enum PuzzleError {
@@ -21,11 +21,15 @@ impl From<PuzzleError> for Error {
 }
 
 /// Solves a puzzle.
+///
+/// # Errors
+///
+/// Returns [`crate::Error`] with [`crate::ErrorKind::Puzzle`] if the puzzle cannot be solved.
 pub fn solve_puzzle(
     texture_name: &str,
     img: &DynamicImage,
     pieces: &[SubImage<&DynamicImage>],
-) -> Result<Vec<DynamicImage>, Error> {
+) -> Result<Vec<DynamicImage>> {
     let (puzzle_name, _) = NAME_PUZZLE_MAP
         .iter()
         .find(|(_, r)| regex::Regex::new(r).map_or_else(|_| false, |r| r.is_match(texture_name)))
