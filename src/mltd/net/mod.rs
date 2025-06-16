@@ -5,10 +5,9 @@ mod matsuri_api;
 
 pub use thiserror::Error as ThisError;
 
-use crate::error::Repr;
-
 pub use self::asset_ripper::*;
 pub use self::matsuri_api::*;
+use crate::error::Repr;
 
 #[derive(Debug, ThisError)]
 #[error("network error: {kind}")]

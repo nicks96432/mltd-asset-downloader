@@ -97,10 +97,8 @@ pub const UNENCRYPTED_FILE_EXTENSIONS: &[&str; 3] = &["acb", "awb", "mp4"];
 /// let cipher = encrypt_text(text);
 /// ```
 pub fn encrypt_text(plaintext: &[u8]) -> Vec<u8> {
-    let encryptor = TextEncryptor::new(
-        TEXT_DECRYPT_KEY.as_ref().into(),
-        TEXT_DECRYPT_IV.as_ref().into(),
-    );
+    let encryptor =
+        TextEncryptor::new(TEXT_DECRYPT_KEY.as_ref().into(), TEXT_DECRYPT_IV.as_ref().into());
 
     encryptor.encrypt_padded_vec_mut::<Pkcs7>(plaintext)
 }
@@ -119,17 +117,15 @@ pub fn encrypt_text(plaintext: &[u8]) -> Vec<u8> {
 /// use mltd::extract::text::decrypt_text;
 ///
 /// let cipher = [
-///     0xca, 0x64, 0x14, 0x8e, 0x80, 0x9e, 0x50, 0xc9,
-///     0xe3, 0x4e, 0x18, 0x6f, 0x1e, 0x9c, 0x3e, 0xe2,
+///     0xca, 0x64, 0x14, 0x8e, 0x80, 0x9e, 0x50, 0xc9, 0xe3, 0x4e, 0x18, 0x6f, 0x1e, 0x9c, 0x3e,
+///     0xe2,
 /// ];
 /// let text = decrypt_text(&cipher).unwrap();
 /// assert_eq!(b"Hello, world!", text.as_slice());
 /// ```
 pub fn decrypt_text(cipher: &[u8]) -> Result<Vec<u8>> {
-    let decryptor = TextDecryptor::new(
-        TEXT_DECRYPT_KEY.as_ref().into(),
-        TEXT_DECRYPT_IV.as_ref().into(),
-    );
+    let decryptor =
+        TextDecryptor::new(TEXT_DECRYPT_KEY.as_ref().into(), TEXT_DECRYPT_IV.as_ref().into());
 
     let plaintext = match decryptor.decrypt_padded_vec_mut::<Pkcs7>(cipher) {
         Ok(plaintext) => Ok(plaintext),

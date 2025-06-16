@@ -7,11 +7,10 @@ use std::ffi::{CStr, c_int};
 use std::ptr::NonNull;
 
 use bitflags::bitflags;
+pub use vgmstream_sys;
 
 pub use crate::error::Error;
 pub use crate::sf::StreamFile;
-
-pub use vgmstream_sys;
 
 /// Rust version of [`vgmstream_sys::libvgmstream_sfmt_t`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -24,6 +23,7 @@ pub enum SampleFormat {
 
 impl TryFrom<vgmstream_sys::libvgmstream_sfmt_t> for SampleFormat {
     type Error = Error;
+
     fn try_from(value: vgmstream_sys::libvgmstream_sfmt_t) -> Result<Self, Self::Error> {
         match value {
             vgmstream_sys::libvgmstream_sfmt_t_LIBVGMSTREAM_SFMT_PCM16 => Ok(Self::Pcm16),
@@ -256,6 +256,7 @@ pub struct Format {
 
 impl TryFrom<vgmstream_sys::libvgmstream_format_t> for Format {
     type Error = Error;
+
     fn try_from(value: vgmstream_sys::libvgmstream_format_t) -> Result<Self, Error> {
         let codec_name =
             unsafe { CStr::from_ptr(value.codec_name.as_ptr()) }.to_string_lossy().to_string();
@@ -550,7 +551,6 @@ impl From<LogLevel> for vgmstream_sys::libvgmstream_loglevel_t {
 /// * Note that log is currently set globally rather than per [`VgmStream`].
 /// * Call with [`LogLevel::None`] to disable current callback.
 /// * Call with [`None`] callback to use default stdout callback.
-///
 pub fn set_log(level: LogLevel, callback: Option<unsafe extern "C" fn(c_int, *const i8)>) {
     unsafe { vgmstream_sys::libvgmstream_set_log(level.into(), callback) };
 }

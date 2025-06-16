@@ -55,7 +55,7 @@ macro_rules! matsuri_api_endpoint {
     };
 }
 
-pub const MATSURI_API_ENDPOINT: & str = matsuri_api_endpoint!();
+pub const MATSURI_API_ENDPOINT: &str = matsuri_api_endpoint!();
 
 async fn send_request<T: DeserializeOwned>(url: &str) -> Result<T> {
     let client = reqwest::Client::new();
