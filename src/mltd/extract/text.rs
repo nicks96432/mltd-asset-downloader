@@ -1,10 +1,11 @@
 //! Encrypt and decrypt text assets in MLTD.
 
+use std::cell::LazyCell;
+
 use aes::Aes192;
-use aes::cipher::block_padding::Pkcs7;
-use aes::cipher::inout::InOutBufReserved;
-use aes::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use cbc::{Decryptor, Encryptor};
+use cipher::block_padding::Pkcs7;
+use cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use thiserror::Error as ThisError;
 
 use crate::error::{Error, Repr, Result};
@@ -17,10 +18,6 @@ pub(crate) struct AesError {
 }
 
 impl AesError {
-    pub fn pad(input: Vec<u8>) -> Self {
-        Self { kind: AesErrorKind::Pad, input }
-    }
-
     pub fn unpad(input: Vec<u8>) -> Self {
         Self { kind: AesErrorKind::Unpad, input }
     }
@@ -34,9 +31,6 @@ impl From<AesError> for Error {
 
 #[derive(Debug, ThisError)]
 pub(crate) enum AesErrorKind {
-    #[error("failed to pad input")]
-    Pad,
-
     #[error("failed to unpad output")]
     Unpad,
 }
@@ -51,19 +45,23 @@ pub const MLTD_TEXT_PBKDF2_HMAC_SHA1_SALT: &[u8; 9] = b"DAISUL___";
 
 /// The number of iterations used to derive [`MLTD_TEXT_DECRYPT_KEY`] and
 /// [`MLTD_TEXT_DECRYPT_IV`].
-pub const MLTD_TEXT_PBKDF2_HMAC_SHA1_ROUNDS: u32 = 1000;
+pub const MLTD_TEXT_PBKDF2_HMAC_SHA1_ROUNDS: u32 = 1_000;
+
+const MLTD_TEXT_DECRYPT_KEY_IV: LazyCell<[u8; 40]> = LazyCell::new(|| {
+    pbkdf2::pbkdf2_hmac_array::<sha1::Sha1, 40>(
+        MLTD_TEXT_PBKDF2_HMAC_SHA1_KEY,
+        MLTD_TEXT_PBKDF2_HMAC_SHA1_SALT,
+        MLTD_TEXT_PBKDF2_HMAC_SHA1_ROUNDS,
+    )
+});
 
 /// The AES-192-CBC key used to decrypt the text asset.
-/// 
+///
 /// It is derived from [`MLTD_TEXT_PBKDF2_HMAC_SHA1_KEY`] and
 /// [`MLTD_TEXT_PBKDF2_HMAC_SHA1_SALT`] using PBKDF2-HMAC-SHA1, where
 /// the first 24 bytes of the derived key are used as the actual key.
-#[rustfmt::skip]
-pub const MLTD_TEXT_DECRYPT_KEY: &[u8; 24] = &[
-    0xad, 0x3f, 0x0f, 0x89, 0xee, 0x51, 0xc5, 0x37,
-    0x73, 0x1f, 0x17, 0x96, 0xf7, 0x5c, 0x71, 0x84,
-    0x01, 0x61, 0x75, 0x6d, 0xa0, 0xd4, 0x86, 0xc9,
-];
+pub const MLTD_TEXT_DECRYPT_KEY: LazyCell<[u8; 24]> =
+    LazyCell::new(|| (&MLTD_TEXT_DECRYPT_KEY_IV[0..24]).try_into().unwrap());
 
 /// The AES-192-CBC initialization vector used to decrypt the text asset.
 /// 
@@ -71,10 +69,8 @@ pub const MLTD_TEXT_DECRYPT_KEY: &[u8; 24] = &[
 /// [`MLTD_TEXT_PBKDF2_HMAC_SHA1_SALT`] using PBKDF2-HMAC-SHA1, where
 /// the last 16 bytes of the derived key are used as the actual IV.
 #[rustfmt::skip]
-pub const MLTD_TEXT_DECRYPT_IV: &[u8; 16] = &[
-    0x4e, 0x40, 0xb3, 0x8a, 0xeb, 0xf1, 0xa8, 0x53,
-    0x12, 0x2c, 0x5f, 0xad, 0xcc, 0xa3, 0x68, 0x5d,
-];
+pub const MLTD_TEXT_DECRYPT_IV: LazyCell<[u8; 16]> =
+    LazyCell::new(|| (&MLTD_TEXT_DECRYPT_KEY_IV[24..40]).try_into().unwrap());
 
 /// AES-192-CBC encryptor for text assets in MLTD.
 pub type MltdTextEncryptor = Encryptor<Aes192>;
@@ -86,32 +82,21 @@ pub type MltdTextDecryptor = Decryptor<Aes192>;
 ///
 /// The input text is padded with PKCS7 padding.
 ///
-/// # Errors
-///
-/// [`Error::Aes`]: if encryption failed.
-///
 /// # Example
 ///
 /// ```no_run
 /// use mltd::extract::text::encrypt_text;
 ///
 /// let text = b"Hello, world!";
-/// let cipher = encrypt_text(text).unwrap();
+/// let cipher = encrypt_text(text);
 /// ```
-pub fn encrypt_text(plaintext: &[u8]) -> Result<Vec<u8>> {
-    let encryptor =
-        MltdTextEncryptor::new(MLTD_TEXT_DECRYPT_KEY.into(), MLTD_TEXT_DECRYPT_IV.into());
-    let mut buf = plaintext.to_owned();
+pub fn encrypt_text(plaintext: &[u8]) -> Vec<u8> {
+    let encryptor = MltdTextEncryptor::new(
+        MLTD_TEXT_DECRYPT_KEY.as_ref().into(),
+        MLTD_TEXT_DECRYPT_IV.as_ref().into(),
+    );
 
-    debug_assert_eq!(buf.len(), plaintext.len());
-
-    let buf = InOutBufReserved::from_mut_slice(&mut buf, plaintext.len())
-        .map_err(|e| Repr::bug(&e.to_string()))?;
-    let cipher = encryptor
-        .encrypt_padded_inout_mut::<Pkcs7>(buf)
-        .map_err(|_| AesError::pad(plaintext.to_owned()))?;
-
-    Ok(cipher.to_owned())
+    encryptor.encrypt_padded_vec_mut::<Pkcs7>(plaintext)
 }
 
 /// Decrypts text using AES-192-CBC with MLTD's key and IV.
@@ -124,20 +109,57 @@ pub fn encrypt_text(plaintext: &[u8]) -> Result<Vec<u8>> {
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```
 /// use mltd::extract::text::decrypt_text;
 ///
-/// let cipher = b"Hello, world!";
-/// let text = decrypt_text(cipher).unwrap();
+/// let cipher = [
+///     0xca, 0x64, 0x14, 0x8e, 0x80, 0x9e, 0x50, 0xc9,
+///     0xe3, 0x4e, 0x18, 0x6f, 0x1e, 0x9c, 0x3e, 0xe2,
+/// ];
+/// let text = decrypt_text(&cipher).unwrap();
+/// assert_eq!(b"Hello, world!", text.as_slice());
 /// ```
 pub fn decrypt_text(cipher: &[u8]) -> Result<Vec<u8>> {
-    let decryptor =
-        MltdTextDecryptor::new(MLTD_TEXT_DECRYPT_KEY.into(), MLTD_TEXT_DECRYPT_IV.into());
+    let decryptor = MltdTextDecryptor::new(
+        MLTD_TEXT_DECRYPT_KEY.as_ref().into(),
+        MLTD_TEXT_DECRYPT_IV.as_ref().into(),
+    );
 
-    let mut buf = cipher.to_owned();
-    let plaintext = decryptor
-        .decrypt_padded_inout_mut::<Pkcs7>(buf.as_mut_slice().into())
-        .map_err(|_| AesError::unpad(cipher.to_owned()))?;
+    let plaintext = match decryptor.decrypt_padded_vec_mut::<Pkcs7>(&cipher) {
+        Ok(plaintext) => Ok(plaintext),
+        Err(_) => Err(AesError::unpad(cipher.to_owned())),
+    }?;
 
-    Ok(plaintext.to_owned())
+    Ok(plaintext)
+}
+
+#[cfg(test)]
+mod tests {
+    use cipher::BlockSizeUser;
+
+    use super::*;
+
+    #[test]
+    fn test_key_iv() {
+        #[rustfmt::skip]
+        let expected = [
+            0xad, 0x3f, 0x0f, 0x89, 0xee, 0x51, 0xc5, 0x37,
+            0x73, 0x1f, 0x17, 0x96, 0xf7, 0x5c, 0x71, 0x84,
+            0x01, 0x61, 0x75, 0x6d, 0xa0, 0xd4, 0x86, 0xc9,
+            0x4e, 0x40, 0xb3, 0x8a, 0xeb, 0xf1, 0xa8, 0x53,
+            0x12, 0x2c, 0x5f, 0xad, 0xcc, 0xa3, 0x68, 0x5d,
+        ];
+
+        assert_eq!(MLTD_TEXT_DECRYPT_KEY_IV.as_ref(), &expected);
+    }
+
+    #[test]
+    fn test_encrypt_decrypt() {
+        let expect = b"Hello, world!";
+        let cipher = encrypt_text(expect);
+        assert_eq!(cipher.len(), Aes192::block_size());
+
+        let got = decrypt_text(&cipher).unwrap();
+        assert_eq!(expect, got.as_slice());
+    }
 }
