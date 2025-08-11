@@ -67,10 +67,10 @@ impl<R: AsyncRead> AsyncRead for ProgressReadAdapter<'_, R> {
         let result = this.inner.poll_read(cx, buf);
         let after = buf.filled().len();
 
-        if result.is_ready() {
-            if let Some(pb) = this.progress_bar {
-                pb.inc((after - before) as u64);
-            }
+        if result.is_ready()
+            && let Some(pb) = this.progress_bar
+        {
+            pb.inc((after - before) as u64);
         }
 
         result

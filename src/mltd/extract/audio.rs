@@ -488,12 +488,11 @@ fn choose_format(
         return wanted_format;
     }
 
-    if let ffmpeg_next::format::Sample::F32(_) = wanted_format {
-        if let Some(fmt) =
+    if let ffmpeg_next::format::Sample::F32(_) = wanted_format
+        && let Some(fmt) =
             supported_formats.iter().find(|f| matches!(f, ffmpeg_next::format::Sample::I16(_)))
-        {
-            return *fmt;
-        }
+    {
+        return *fmt;
     }
 
     // Try to find the closest supported format
