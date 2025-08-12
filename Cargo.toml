@@ -23,11 +23,11 @@ version = "3.0.0-beta.1"
 
 [dependencies]
 aes = { optional = true, version = "0.8.4" }
-anyhow = { features = ["backtrace"], version = "1.0.98" }
+anyhow = { features = ["backtrace"], version = "1.0.99" }
 bytes = { optional = true, version = "1.10.1" }
 cbc = { optional = true, version = "0.1.2" }
 cipher = { features = ["alloc", "block-padding"], optional = true, version = "0.4.4" }
-clap = { features = ["color", "deprecated", "derive", "unicode", "wrap_help"], version = "4.5.43" }
+clap = { features = ["color", "deprecated", "derive", "unicode", "wrap_help"], version = "4.5.44" }
 clap-verbosity-flag = "3.0.3"
 env_logger = { default-features = false, features = ["humantime"], version = "0.11.8" }
 ffmpeg-next = { default-features = false, features = ["codec", "format", "software-resampling"], optional = true, version = "7.1.0" }
@@ -49,7 +49,7 @@ serde = { features = ["derive"], version = "1.0.219" }
 serde_json = { optional = true, version = "1.0.142" }
 sha1 = { optional = true, version = "0.10.6" }
 tempfile = { optional = true, version = "3.20.0" }
-thiserror = "2.0.12"
+thiserror = "2.0.14"
 tokio = { features = ["macros", "process", "rt-multi-thread"], version = "1.47.1" }
 tokio-util = { features = ["compat"], version = "0.7.16" }
 vgmstream = { optional = true, path = "crates/vgmstream" }
