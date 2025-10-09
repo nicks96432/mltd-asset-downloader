@@ -1,6 +1,5 @@
 //! Functions related to network requests.
 
-#[cfg(feature = "download")]
 pub mod matsuri_api;
 
 use thiserror::Error as ThisError;

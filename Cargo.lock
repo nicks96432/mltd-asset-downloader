@@ -1483,7 +1483,6 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "assert_fs",
- "bytes",
  "cbc",
  "clap",
  "clap-verbosity-flag",

@@ -14,10 +14,11 @@ mod error;
 
 #[cfg(feature = "extract")]
 pub mod extract;
+#[cfg(feature = "extract")]
+pub mod unity;
 
 pub mod manifest;
 pub mod net;
-pub mod unity;
 pub mod util;
 
 pub use self::error::{Error, ErrorKind};

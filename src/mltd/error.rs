@@ -63,6 +63,8 @@ impl From<&Repr> for ErrorKind {
             Repr::Manifest(_) => ErrorKind::Manifest,
             Repr::Network(_) => ErrorKind::Network,
             Repr::UnknownPlatform(_) => ErrorKind::UnknownPlatform,
+
+            #[cfg(feature = "extract")]
             Repr::JSONDeserialize(_) => ErrorKind::Deserialize,
 
             #[cfg(feature = "decode-audio")]
