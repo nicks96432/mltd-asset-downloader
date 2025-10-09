@@ -168,27 +168,25 @@ impl ManifestDiff<'_> {
 }
 
 #[cfg(test)]
-#[ctor::ctor]
-fn init() {
-    crate::util::init_test_logger!();
-}
-
-#[cfg(test)]
 mod tests {
-    use std::ops::Deref;
+    use crate::util::init_test_logger;
 
     use super::Manifest;
 
     #[test]
     fn test_raw_manifest_from_slice() {
+        init_test_logger();
+
         let expected = include_bytes!("../../tests/test1.msgpack");
         let manifest: Manifest = Manifest::try_from(&expected[..]).unwrap();
 
-        assert_eq!(*expected, *rmp_serde::to_vec(&[manifest.deref()]).unwrap());
+        assert_eq!(*expected, *rmp_serde::to_vec(&[&*manifest]).unwrap());
     }
 
     #[test]
     fn test_raw_manifest_diff() {
+        init_test_logger();
+
         let manifest1 = Manifest::from_slice(include_bytes!("../../tests/test1.msgpack")).unwrap();
         let manifest2 = Manifest::from_slice(include_bytes!("../../tests/test2.msgpack")).unwrap();
 

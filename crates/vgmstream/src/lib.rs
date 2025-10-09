@@ -573,7 +573,7 @@ pub fn extensions() -> &'static [&'static str] {
     &EXTENSIONS
 }
 
-/// Same as [`extensions`], buf returns a list what vgmstream considers "common" formats,
+/// Same as [`extensions`], but returns a list what vgmstream considers "common" formats,
 /// such as "wav", "ogg", which usually one doesn't want to associate to vgmstream.
 pub fn common_extensions() -> &'static [&'static str] {
     static COMMON_EXTENSIONS: std::sync::LazyLock<Vec<&'static str>> =
@@ -594,12 +594,12 @@ pub fn common_extensions() -> &'static [&'static str] {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::LazyCell;
+    use std::sync::LazyLock;
 
     use super::*;
 
-    const ACB_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/test.acb");
-    const ACB_FORMAT: LazyCell<Format> = LazyCell::new(|| Format {
+    const ACB_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/test_acb.acb");
+    static ACB_FORMAT: LazyLock<Format> = LazyLock::new(|| Format {
         channel_layout: ChannelMapping::STEREO,
         codec_name: "CRI HCA".to_string(),
         input_channels: 2,

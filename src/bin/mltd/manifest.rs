@@ -5,7 +5,7 @@ use anyhow::Result;
 use clap::{Args, Subcommand};
 use mltd::asset::{Asset, AssetInfo, Platform};
 use mltd::manifest::Manifest;
-use mltd::net::{get_all_asset_versions, get_asset_version, latest_asset_version};
+use mltd::net::MatsuriApiClient;
 
 use crate::util::create_progress_bar;
 
@@ -55,9 +55,11 @@ pub struct ManifestDownloadArgs {
 }
 
 pub async fn download_manifest(args: &ManifestDownloadArgs) -> Result<()> {
+    let matsuri_client = MatsuriApiClient::new();
+
     let asset_version = match args.asset_version {
-        None => latest_asset_version().await,
-        Some(v) => get_asset_version(v).await,
+        None => matsuri_client.latest_asset_version().await,
+        Some(v) => matsuri_client.get_asset_version(v).await,
     }?;
 
     let asset_info = AssetInfo {
@@ -95,7 +97,7 @@ pub fn diff_manifest(args: &ManifestDiffArgs) -> Result<()> {
 }
 
 pub async fn list_manifests() -> Result<()> {
-    let versions = get_all_asset_versions().await?;
+    let versions = MatsuriApiClient::new().get_all_asset_versions().await?;
 
     for version in versions {
         println!(

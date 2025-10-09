@@ -2,19 +2,18 @@
 members = ["crates/vgmstream", "crates/vgmstream-sys"]
 
 [workspace.package]
-authors = ["我可能很廢"]
 edition = "2024"
+homepage = "https://github.com/nicks96432/mltd-asset-downloader"
 license = "MIT"
 repository = "https://github.com/nicks96432/mltd-asset-downloader"
 
 [package]
-authors = { workspace = true }
 build = "build.rs"
 categories = ["command-line-utilities"]
 description = "A CLI made for assets in THE iDOLM@STER® MILLION LIVE! THEATER DAYS (MLTD)"
 edition = { workspace = true }
-homepage = "https://github.com/nicks96432/mltd-asset-downloader"
-keywords = ["downloader", "MLTD", "mirishita", "theaterdays", "unpack"]
+homepage = { workspace = true }
+keywords = ["downloader", "MLTD", "mirishita", "theaterdays", "unity", "unpack"]
 license = { workspace = true }
 name = "mltd"
 readme = "README.md"
@@ -25,42 +24,42 @@ version = "3.0.0-alpha.4"
 aes = { optional = true, version = "0.8.4" }
 anyhow = { features = ["backtrace"], version = "1.0.99" }
 bytes = { optional = true, version = "1.10.1" }
-cbc = { optional = true, version = "0.1.2" }
-cipher = { features = ["alloc", "block-padding"], optional = true, version = "0.4.4" }
-clap = { features = ["color", "deprecated", "derive", "unicode", "wrap_help"], version = "4.5.44" }
-clap-verbosity-flag = "3.0.3"
-env_logger = { default-features = false, features = ["humantime"], version = "0.11.8" }
-ffmpeg-next = { default-features = false, features = ["codec", "format", "software-resampling"], optional = true, version = "7.1.0" }
-futures = "0.3.31"
-glob = "0.3.2"
+cbc = { features = ["alloc"], optional = true, version = "0.1.2" }
+clap = { features = ["color", "deprecated", "derive", "unicode", "wrap_help"], version = "4.5.48" }
+clap-verbosity-flag = { default-features = false, features = ["tracing"], version = "3.0.4" }
+ffmpeg-next = { default-features = false, features = ["codec", "format", "software-resampling"], optional = true, version = "8.0.0" }
+futures-util = { default-features = false, version = "0.3.31" }
+glob = { optional = true, version = "0.3.3" }
 human_bytes = { default-features = false, optional = true, version = "0.4.3" }
-image = { default-features = false, features = ["jpeg", "png", "webp", "serde"], optional = true, version = "0.25.6" }
+image = { default-features = false, features = ["jpeg", "png", "webp", "serde"], optional = true, version = "0.25.8" }
 indicatif = { default-features = false, version = "0.18.0" }
 linked-hash-map = { features = ["serde_impl"], version = "0.5.6" }
-log = "0.4.27"
-num_cpus = { optional = true, version = "1.17.0" }
 pbkdf2 = { features = ["sha1"], optional = true, version = "0.12.2" }
-pin-project = "1.1.10"
-regex = { default-features = false, features = ["perf", "std"], optional = true, version = "1.11.1" }
-reqwest = { features = ["deflate", "gzip", "json", "stream", "zstd"], version = "0.12.20" }
+pin-project-lite = "0.2.16"
+rayon = { optional = true, version = "1.11.0" }
+regex = { default-features = false, features = ["perf", "std"], optional = true, version = "1.11.3" }
+reqwest = { default-features = false, features = ["blocking", "charset", "default-tls", "json", "stream", "zstd"], version = "0.12.23" }
 rmp-serde = "1.3.0"
-scraper = { optional = true, version = "0.23.1" }
-serde = { features = ["derive"], version = "1.0.219" }
-serde_json = { optional = true, version = "1.0.142" }
+scraper = { default-features = false, optional = true, version = "0.24.0" }
+serde = { features = ["derive"], version = "1.0.228" }
+serde_json = { optional = true, version = "1.0.145" }
 sha1 = { optional = true, version = "0.10.6" }
-tempfile = { optional = true, version = "3.20.0" }
-thiserror = "2.0.14"
+tempfile = { optional = true, version = "3.23.0" }
+thiserror = "2.0.17"
 tokio = { features = ["macros", "process", "rt-multi-thread"], version = "1.47.1" }
-tokio-util = { features = ["compat"], version = "0.7.16" }
+tokio-util = { version = "0.7.16", features = ["compat"] }
+tracing = { default-features = false, features = ["std"], version = "0.1.41" }
+tracing-subscriber = { default-features = false, features = ["ansi", "fmt", "smallvec", "std"], version = "0.3.20" }
 vgmstream = { optional = true, path = "crates/vgmstream" }
-zip = { default-features = false, features = ["deflate"], optional = true, version = "4.3.0" }
 
 [build-dependencies]
 vergen = { features = ["cargo", "emit_and_set", "rustc"], version = "9.0.6" }
-vergen-gitcl = { version = "1.0.8" }
+vergen-gitcl = "1.0.8"
 
 [dev-dependencies]
-ctor = "0.4.2"
+assert_cmd = "2.0.17"
+assert_fs = "1.1.3"
+predicates = { default-features = false, features = ["regex"], version = "3.1.3" }
 tokio-test = "0.4.4"
 
 [lib]
@@ -69,8 +68,6 @@ path = "src/mltd/lib.rs"
 
 [[bin]]
 name = "mltd"
-test = false
-doc = false
 
 [profile.release]
 codegen-units = 20
@@ -82,24 +79,37 @@ strip = true
 split-debuginfo = "unpacked"
 
 [features]
-default = ["download", "extract"]
+default = [
+    "download",
+    "extract",
+]
 debug = []
-download = ["dep:human_bytes", "dep:num_cpus"]
+download = ["dep:human_bytes"]
 extract = [
-    "dep:aes",
-    "dep:bytes",
-    "dep:cbc",
-    "dep:cipher",
+    "decode-audio",
+    "decrypt-text",
+    "process-image",
+    "asset-ripper",
+    "indicatif/rayon",
+    "dep:glob",
+    "dep:rayon",
+    "dep:serde_json",
+]
+decode-audio = [
     "dep:ffmpeg-next",
+    "dep:vgmstream",
+]
+process-image = [
     "dep:image",
     "dep:regex",
-    "dep:num_cpus",
-    "dep:pbkdf2",
-    "dep:scraper",
-    "dep:sha1",
-    "dep:serde_json",
-    "dep:tempfile",
-    "dep:vgmstream",
-    "dep:zip"
 ]
-cipher = []
+decrypt-text = [
+    "dep:aes",
+    "dep:cbc",
+    "dep:pbkdf2",
+    "dep:sha1",
+]
+asset-ripper = [
+    "dep:scraper",
+    "dep:tempfile",
+]

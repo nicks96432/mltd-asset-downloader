@@ -7,7 +7,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use clap::ValueEnum;
-use futures::TryStreamExt;
+use futures_util::TryStreamExt;
 use indicatif::ProgressBar;
 use reqwest::header::HeaderMap;
 use tokio::fs::File;
@@ -72,23 +72,19 @@ impl Asset<'_> {
         let mut headers = HeaderMap::new();
         headers.insert(
             "X-Unity-Version",
-            UNITY_VERSION.parse().map_err(|_| Repr::bug("unity version should be valid"))?,
+            UNITY_VERSION.parse().expect("unity version should be valid"),
         );
         headers.insert(
             "User-Agent",
-            asset_info
-                .platform
-                .user_agent()
-                .parse()
-                .map_err(|_| Repr::bug("user agent should be valid"))?,
+            asset_info.platform.user_agent().parse().expect("user agent should be valid"),
         );
 
-        let req = client.get(asset_info.to_url()).headers(headers);
-
-        let res = req.send().await.map_err(|e| NetworkError {
-            kind: NetworkErrorKind::Request,
-            url: asset_info.to_url(),
-            source: Some(e),
+        let res = client.get(asset_info.to_url()).headers(headers).send().await.map_err(|e| {
+            NetworkError {
+                kind: NetworkErrorKind::Request,
+                url: asset_info.to_url(),
+                source: Some(e),
+            }
         })?;
 
         Ok(res)
@@ -108,10 +104,10 @@ impl Asset<'_> {
     ///
     /// ```no_run
     /// use mltd::asset::{Asset, AssetInfo, Platform};
-    /// use mltd::net;
+    /// use mltd::net::MatsuriApiClient;
     ///
     /// tokio_test::block_on(async {
-    ///     let asset_version = net::latest_asset_version().await.unwrap();
+    ///     let asset_version = MatsuriApiClient::new().latest_asset_version().await.unwrap();
     ///     let asset_info = AssetInfo {
     ///         filename: asset_version.manifest_filename.clone(),
     ///         platform: Platform::Android,
@@ -132,7 +128,7 @@ impl Asset<'_> {
             pb.set_length(res.content_length().unwrap_or(0));
         }
 
-        log::debug!("download {} to buf", asset_info.filename);
+        tracing::debug!(filename = asset_info.filename, "download to buf");
 
         let stream_reader = res.bytes_stream().map_err(io::Error::other).into_async_read().compat();
 
@@ -162,10 +158,10 @@ impl Asset<'_> {
     /// use std::path::Path;
     ///
     /// use mltd::asset::{Asset, AssetInfo, Platform};
-    /// use mltd::net;
+    /// use mltd::net::MatsuriApiClient;
     ///
     /// tokio_test::block_on(async {
-    ///     let asset_version = net::latest_asset_version().await.unwrap();
+    ///     let asset_version = MatsuriApiClient::new().latest_asset_version().await.unwrap();
     ///     let asset_info = AssetInfo {
     ///         filename: asset_version.manifest_filename.clone(),
     ///         platform: Platform::Android,
@@ -193,10 +189,9 @@ impl Asset<'_> {
             pb.set_length(res.content_length().unwrap_or(0));
         }
 
-        log::debug!("save asset to {}", output.display());
+        tracing::debug!(output_path = ?output, "saving asset");
 
         let stream_reader = res.bytes_stream().map_err(io::Error::other).into_async_read().compat();
-
         let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
 
         tokio::io::copy(&mut stream_reader, &mut out)

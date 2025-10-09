@@ -3,9 +3,9 @@
 use std::sync::LazyLock;
 
 use aes::Aes192;
+use cbc::cipher::block_padding::Pkcs7;
+use cbc::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use cbc::{Decryptor, Encryptor};
-use cipher::block_padding::Pkcs7;
-use cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use thiserror::Error as ThisError;
 
 use crate::error::{Error, Repr, Result};
@@ -78,12 +78,6 @@ pub type TextEncryptor = Encryptor<Aes192>;
 /// AES-192-CBC decryptor for text assets in MLTD.
 pub type TextDecryptor = Decryptor<Aes192>;
 
-/// File extensions for encrypted binary TextAssets in MLTD.
-pub const ENCRYPTED_FILE_EXTENSIONS: &[&str; 2] = &["gtx", "mld"];
-
-/// File extensions for unencrypted binary TextAssets in MLTD.
-pub const UNENCRYPTED_FILE_EXTENSIONS: &[&str; 3] = &["acb", "awb", "mp4"];
-
 /// Encrypts text using AES-192-CBC with MLTD's key and IV.
 ///
 /// The input text is padded with PKCS7 padding.
@@ -103,13 +97,11 @@ pub fn encrypt_text(plaintext: &[u8]) -> Vec<u8> {
     encryptor.encrypt_padded_vec_mut::<Pkcs7>(plaintext)
 }
 
-/// Decrypts text using AES-192-CBC with MLTD's key and IV.
-///
-/// The output text is unpadded with PKCS7 padding.
+/// Decrypts text using AES-192-CBC with MLTD's key and IV, and unpad output with PKCS7 padding.
 ///
 /// # Errors
 ///
-/// Returns [`crate::Error`] with [`crate::ErrorKind::Aes`] if decryption failed.
+/// This function if unpadding decrypted text failed.
 ///
 /// # Example
 ///
@@ -137,7 +129,7 @@ pub fn decrypt_text(cipher: &[u8]) -> Result<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use cipher::BlockSizeUser;
+    use aes::cipher::BlockSizeUser;
 
     use super::*;
 
@@ -159,7 +151,7 @@ mod tests {
     fn test_encrypt_decrypt() {
         let expect = b"Hello, world!";
         let cipher = encrypt_text(expect);
-        assert_eq!(cipher.len(), Aes192::block_size());
+        assert_eq!(cipher.len(), TextEncryptor::block_size());
 
         let got = decrypt_text(&cipher).unwrap();
         assert_eq!(expect, got.as_slice());

@@ -60,7 +60,7 @@ impl Drop for StreamFile {
 mod tests {
     use super::*;
 
-    const ACB_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/test.acb");
+    const ACB_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/test_acb.acb");
 
     #[test]
     fn test_streamfile() {

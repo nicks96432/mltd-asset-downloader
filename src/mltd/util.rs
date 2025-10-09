@@ -1,50 +1,24 @@
 //! Utilities used in this crate.
 
-use std::io::{Result, Write};
+use std::io::Result;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use env_logger::fmt::Formatter;
 use indicatif::ProgressBar;
-use log::Record;
-use pin_project::pin_project;
+use pin_project_lite::pin_project;
 use tokio::io::{AsyncRead, ReadBuf};
 
-/// Custom log formatter used in this crate.
-///
-/// # Errors
-///
-/// Returns [`std::io::Error`] if failed to write to [`std::io::Stdout`].
-pub fn log_formatter(buf: &mut Formatter, record: &Record) -> Result<()> {
-    let color_code = match record.level() {
-        log::Level::Error => 1, // red
-        log::Level::Warn => 3,  // yellow
-        log::Level::Info => 4,  // blue
-        log::Level::Debug => 2, // green
-        log::Level::Trace => 7, // white
-    };
-    let space = match record.level().as_str().len() {
-        4 => " ",
-        _ => "",
-    };
-    let level = record.level().as_str();
-    let target = record.target();
-    let timestamp = buf.timestamp_micros();
-    let body = record.args();
-
-    writeln!(buf, "[\x1b[3{color_code}m{level}\x1b[0m]{space} {timestamp} {target} - {body}")
-}
-
-/// Adapter for [`tokio::io::AsyncRead`] to show progress.
-///
-/// From [this stackoverflow answer].
-///
-/// [this stackoverflow answer]: https://stackoverflow.com/a/73809326
-#[pin_project]
-pub struct ProgressReadAdapter<'bar, R: AsyncRead> {
-    #[pin]
-    inner: R,
-    progress_bar: Option<&'bar mut ProgressBar>,
+pin_project! {
+    /// Adapter for [`tokio::io::AsyncRead`] to show progress.
+    ///
+    /// From [this stackoverflow answer].
+    ///
+    /// [this stackoverflow answer]: https://stackoverflow.com/a/73809326
+    pub struct ProgressReadAdapter<'bar, R: AsyncRead> {
+        #[pin]
+        inner: R,
+        progress_bar: Option<&'bar mut ProgressBar>,
+    }
 }
 
 impl<'bar, R: AsyncRead> ProgressReadAdapter<'bar, R> {
@@ -77,16 +51,20 @@ impl<R: AsyncRead> AsyncRead for ProgressReadAdapter<'_, R> {
     }
 }
 
-#[cfg(test)]
-macro_rules! init_test_logger {
-    () => {
-        let _ = env_logger::builder()
-            .is_test(true)
-            .filter_module(env!("CARGO_PKG_NAME"), log::LevelFilter::Debug)
-            .format(crate::util::log_formatter)
-            .try_init();
-    };
-}
+static TEST_LOGGER_INIT: std::sync::Once = std::sync::Once::new();
 
-#[cfg(test)]
-pub(crate) use init_test_logger;
+pub fn init_test_logger() {
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+
+    TEST_LOGGER_INIT.call_once(|| {
+        tracing_subscriber::registry()
+            .with(tracing_subscriber::fmt::layer().compact().with_file(true).with_line_number(true))
+            .with(
+                tracing_subscriber::filter::Targets::new()
+                    .with_target("mltd", tracing::Level::DEBUG)
+                    .with_default(tracing::Level::INFO),
+            )
+            .init();
+    });
+}

@@ -1,14 +1,14 @@
 [package]
-authors.workspace = true
 edition.workspace = true
+homepage.workspace = true
 license.workspace = true
 links = "vgmstream"
 name = "vgmstream-sys"
 repository.workspace = true
-version = "0.2.0-vgmstream-r2023-101-g355ea228"
+version = "0.2.0-vgmstream-r2055-22-g354cb080"
 
 [build-dependencies]
-bindgen = "0.72.0"
+bindgen = "0.72.1"
 cmake = "0.1.54"
 
 [features]

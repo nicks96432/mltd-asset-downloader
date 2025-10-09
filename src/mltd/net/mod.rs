@@ -1,11 +1,10 @@
 //! Functions related to network requests.
 
-mod asset_ripper;
-mod matsuri_api;
+#[cfg(feature = "download")]
+pub mod matsuri_api;
 
-pub use thiserror::Error as ThisError;
+use thiserror::Error as ThisError;
 
-pub use self::asset_ripper::*;
 pub use self::matsuri_api::*;
 use crate::error::Repr;
 
@@ -27,11 +26,11 @@ pub(crate) enum ErrorKind {
 }
 
 impl Error {
-    pub fn request(url: reqwest::Url, source: Option<reqwest::Error>) -> Self {
+    pub const fn request(url: reqwest::Url, source: Option<reqwest::Error>) -> Self {
         Self { kind: ErrorKind::Request, url, source }
     }
 
-    pub fn decode(url: reqwest::Url, source: Option<reqwest::Error>) -> Self {
+    pub const fn decode(url: reqwest::Url, source: Option<reqwest::Error>) -> Self {
         Self { kind: ErrorKind::Decode, url, source }
     }
 }
