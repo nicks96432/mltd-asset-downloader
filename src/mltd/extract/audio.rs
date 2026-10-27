@@ -132,14 +132,16 @@ impl<'a> Encoder<'a> {
         tracing::trace!(?fmt);
 
         let codec = ffmpeg_next::encoder::find_by_name(output_options.codec)
-            .ok_or(AudioDecodeError::ffmpeg("codec not found", None))?;
+            .ok_or(AudioDecodeError::ffmpeg("codec not found", None))?
+            .audio()
+            .map_err(|e| AudioDecodeError::ffmpeg("codec is not audio", Some(e)))?;
 
-        let mut encoder = ffmpeg_next::codec::Context::new_with_codec(codec)
+        let mut encoder = ffmpeg_next::codec::Context::new_with_codec(*codec)
             .encoder()
             .audio()
             .map_err(|e| AudioDecodeError::ffmpeg("failed to create encoder", Some(e)))?;
 
-        let supported_formats = get_supported_sample_fmts(&encoder)?;
+        let supported_formats: Vec<_> = codec.formats().map_or_else(Vec::new, Iterator::collect);
         tracing::trace!(?supported_formats);
 
         let from_sample_format = to_ffmpeg_sample(fmt.sample_format);
@@ -370,14 +372,15 @@ impl<'a> Encoder<'a> {
     pub fn encode(&mut self) -> Result<()> {
         match self.options {
             Some(ref o) => {
-                let _ = self.output.write_header_with(o.clone()).map_err(|e| {
+                self.output.write_header_with(o.clone()).map_err(|e| {
                     AudioDecodeError::ffmpeg("failed to write audio header", Some(e))
                 })?;
             }
-            None => self
-                .output
-                .write_header()
-                .map_err(|e| AudioDecodeError::ffmpeg("failed to write audio header", Some(e)))?,
+            None => {
+                self.output.write_header().map_err(|e| {
+                    AudioDecodeError::ffmpeg("failed to write audio header", Some(e))
+                })?;
+            }
         }
 
         while self
@@ -427,37 +430,6 @@ fn to_ffmpeg_channel_layout(
     }
 }
 
-/// Returns a list of supported audio formats.
-fn get_supported_sample_fmts(
-    encoder: &ffmpeg_next::codec::encoder::Encoder,
-) -> Result<Vec<Sample>> {
-    let mut supported_formats = std::ptr::null();
-    let mut num_formats = 0;
-    unsafe {
-        ffmpeg_next::ffi::avcodec_get_supported_config(
-            encoder.as_ptr(),
-            std::ptr::null(),
-            ffmpeg_next::ffi::AVCodecConfig::AV_CODEC_CONFIG_SAMPLE_FORMAT,
-            0,
-            &raw mut supported_formats,
-            &raw mut num_formats,
-        )
-    };
-    if supported_formats.is_null() {
-        return Err(AudioDecodeError::ffmpeg("Failed to get supported configs", None).into());
-    }
-
-    Ok(unsafe {
-        std::slice::from_raw_parts(
-            supported_formats.cast::<ffmpeg_next::ffi::AVSampleFormat>(),
-            num_formats as usize,
-        )
-    }
-    .iter()
-    .map(|fmt| (*fmt).into())
-    .collect())
-}
-
 fn choose_sample_fmt(supported: &[Sample], wanted: Sample) -> Sample {
     if supported.contains(&wanted) {
         return wanted;
@@ -480,9 +452,8 @@ mod tests {
     use assert_fs::TempDir;
     use assert_fs::prelude::*;
 
-    use crate::util::init_test_logger;
-
     use super::*;
+    use crate::util::init_test_logger;
 
     #[test]
     fn test_encoder_encode() {

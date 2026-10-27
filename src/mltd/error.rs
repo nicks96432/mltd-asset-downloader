@@ -4,15 +4,14 @@ use std::io::Error as IoError;
 
 use thiserror::Error as ThisError;
 
-use crate::manifest::ManifestError;
-use crate::net::Error as NetworkError;
-
 #[cfg(feature = "decode-audio")]
 use crate::extract::audio::AudioDecodeError;
 #[cfg(feature = "process-image")]
 use crate::extract::puzzle::Error as PuzzleError;
 #[cfg(feature = "decrypt-text")]
 use crate::extract::text::AesError;
+use crate::manifest::ManifestError;
+use crate::net::Error as NetworkError;
 
 #[derive(Debug, ThisError)]
 #[error(transparent)]

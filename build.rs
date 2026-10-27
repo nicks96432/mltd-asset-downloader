@@ -1,13 +1,13 @@
 use std::env::var;
 use std::error::Error;
 
-use vergen::{CargoBuilder, Emitter, RustcBuilder};
-use vergen_gitcl::GitclBuilder;
+use vergen::{Cargo, Emitter, Rustc};
+use vergen_gitcl::Gitcl;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let cargo = CargoBuilder::default().features(true).build()?;
-    let git2 = GitclBuilder::default().describe(true, true, None).build()?;
-    let rustc = RustcBuilder::default().semver(true).build()?;
+    let cargo = Cargo::all_cargo();
+    let git2 = Gitcl::all_git();
+    let rustc = Rustc::all_rustc();
 
     Emitter::default()
         .idempotent()

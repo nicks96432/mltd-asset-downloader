@@ -11,10 +11,9 @@ use reqwest::Url;
 use reqwest::blocking::{Client, Response};
 use tempfile::tempdir;
 
+use super::{AssetInfo, Extractor};
 use crate::error::{Repr, Result};
 use crate::net::Error;
-
-use super::{AssetInfo, Extractor};
 
 /// Map of assets in the format of
 /// {`bundle_name`: (`bundle_no`, {`collection_name`: (`collection_no`, {`path_id`: `AssetInfo`})})}
@@ -41,7 +40,7 @@ pub struct AssetRipper {
 
 impl AssetRipper {
     fn full_url(&self, rel_url: &str) -> Url {
-        let url = format!("{}/{}", &self.base_url, rel_url);
+        let url = format!("{}/{}", self.base_url, rel_url);
         Url::parse(&url).expect("url suould be valid")
     }
 
@@ -141,9 +140,9 @@ impl AssetRipper {
     }
 
     fn load_bundles(&self) -> Result<Vec<String>> {
-        let html = match self.get_text("Bundles/View", r#"{"P":[]}"#) {
-            Ok(s) => scraper::Html::parse_document(&s),
-            Err(e) => return Err(e.into()),
+        let html = {
+            let s = self.get_text("Bundles/View", r#"{"P":[]}"#)?;
+            scraper::Html::parse_document(&s)
         };
 
         let selector =
@@ -455,10 +454,9 @@ mod tests {
     use std::io::{BufReader, Read};
     use std::path::Path;
 
+    use super::AssetRipper;
     use crate::unity::{AssetInfo, Extractor};
     use crate::util::init_test_logger;
-
-    use super::AssetRipper;
 
     const ASSET_RIPPER_PATH: &str = if cfg!(windows) {
         concat!(env!("CARGO_MANIFEST_DIR"), "/AssetRipper/AssetRipper.GUI.Free.exe")
@@ -618,7 +616,8 @@ mod tests {
         };
 
         let buf2 = {
-            let file = File::open(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_acb.acb")).unwrap();
+            let file =
+                File::open(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_acb.acb")).unwrap();
             let mut buf = vec![];
             BufReader::new(file).read_to_end(&mut buf).unwrap();
             buf
@@ -652,7 +651,7 @@ mod tests {
                 buf
             };
 
-            assert!(!buf.is_empty());
+            assert_ne!(buf, [] as [u8; 0]);
         }
     }
 

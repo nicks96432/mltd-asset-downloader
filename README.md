@@ -40,12 +40,12 @@ Options:
 1. Download executable
     - [Github latest release](https://github.com/nicks96432/mltd-asset-downloader/releases/latest)
     - [main branch CI build](https://nightly.link/nicks96432/mltd-asset-downloader/workflows/build.yaml/main)
-2. Install FFmpeg shared library >= 7.1 version
+2. Install FFmpeg shared library >= 9.0 version
     - [FFmpeg official link](https://www.ffmpeg.org/download.html)
     - Make sure FFmpeg shared library is in your `PATH`
     - On Windows, you can use `winget` to install FFmpeg so that it will be added
       to your `PATH` automatically. For example,
-      `winget install BtbN.FFmpeg.LGPL.Shared.7.1`. See `winget search ffmpeg`
+      `winget install BtbN.FFmpeg.LGPL.Shared.9.0`. See `winget search ffmpeg`
       for more options.
 3. Download [AssetRipper](https://github.com/AssetRipper/AssetRipper) to extract
    assets

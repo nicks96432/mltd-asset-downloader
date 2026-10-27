@@ -6,12 +6,11 @@ use clap::Args;
 use futures_util::StreamExt;
 use human_bytes::human_bytes;
 use indicatif::{MultiProgress, MultiProgressAlignment, ProgressDrawTarget};
-use tokio::fs::create_dir_all;
-
 use mltd::Error;
 use mltd::asset::{Asset, AssetInfo, Platform};
 use mltd::manifest::Manifest;
 use mltd::net::{AssetVersion, MatsuriApiClient};
+use tokio::fs::create_dir_all;
 
 use crate::util::create_progress_bar;
 

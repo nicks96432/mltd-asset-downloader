@@ -6,29 +6,24 @@ use std::sync::Mutex;
 
 use anyhow::{Result, anyhow};
 use clap::Args;
+use mltd::ErrorKind;
+use mltd::extract::ENCRYPTED_TEXT_EXTENSIONS;
+use mltd::unity::Extractor;
+#[cfg(feature = "asset-ripper")]
+use mltd::unity::asset_ripper::AssetRipper;
 use rayon::iter::{ParallelBridge, ParallelIterator};
-
-#[cfg(feature = "decode-audio")]
-use {
-    mltd::extract::audio::{Encoder, EncoderOutputOptions, MLTD_HCA_KEY},
-    std::collections::HashSet,
-};
-
-#[cfg(feature = "decrypt-text")]
-use {mltd::extract::text::decrypt_text, std::io::Read};
-
 #[cfg(feature = "process-image")]
 use {
     image::DynamicImage, image::GenericImageView, mltd::extract::puzzle::solve_puzzle,
     mltd::unity::AssetInfo, std::collections::BTreeMap,
 };
-
-#[cfg(feature = "asset-ripper")]
-use mltd::unity::asset_ripper::AssetRipper;
-
-use mltd::ErrorKind;
-use mltd::extract::ENCRYPTED_TEXT_EXTENSIONS;
-use mltd::unity::Extractor;
+#[cfg(feature = "decode-audio")]
+use {
+    mltd::extract::audio::{Encoder, EncoderOutputOptions, MLTD_HCA_KEY},
+    std::collections::HashSet,
+};
+#[cfg(feature = "decrypt-text")]
+use {mltd::extract::text::decrypt_text, std::io::Read};
 
 #[derive(Debug, Args)]
 #[cfg(feature = "decode-audio")]
@@ -426,10 +421,10 @@ mod tests {
     use std::path::Path;
 
     use assert_cmd::Command;
-    use assert_fs::{TempDir, prelude::*};
-    use predicates::prelude::*;
-
+    use assert_fs::TempDir;
+    use assert_fs::prelude::*;
     use mltd::util::init_test_logger;
+    use predicates::prelude::*;
 
     struct TestCase {
         pub bundle_path: &'static str,

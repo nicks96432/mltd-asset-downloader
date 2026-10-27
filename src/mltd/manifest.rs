@@ -169,9 +169,8 @@ impl ManifestDiff<'_> {
 
 #[cfg(test)]
 mod tests {
-    use crate::util::init_test_logger;
-
     use super::Manifest;
+    use crate::util::init_test_logger;
 
     #[test]
     fn test_raw_manifest_from_slice() {

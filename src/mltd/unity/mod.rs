@@ -1,10 +1,12 @@
 #[cfg(feature = "asset-ripper")]
 pub mod asset_ripper;
 
+use std::borrow::Cow;
+use std::fs::File;
+use std::path::Path;
+
 #[cfg(feature = "asset-ripper")]
 pub use asset_ripper::AssetRipper;
-
-use std::{borrow::Cow, fs::File, path::Path};
 
 use crate::error::Result;
 

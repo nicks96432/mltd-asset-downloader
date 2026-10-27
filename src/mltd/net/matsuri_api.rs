@@ -157,9 +157,8 @@ impl Default for MatsuriApiClient {
 mod tests {
     use predicates::prelude::*;
 
-    use crate::util::init_test_logger;
-
     use super::*;
+    use crate::util::init_test_logger;
 
     #[tokio::test]
     async fn test_get_asset_version() {
@@ -183,7 +182,7 @@ mod tests {
         let version = MatsuriApiClient::new().latest_asset_version().await.unwrap();
 
         assert!(version.version > 0);
-        assert!(!version.updated_at.is_empty());
+        assert_ne!(version.updated_at, "");
         assert!(
             predicates::str::is_match(r"^[0-9a-f]{40}.data$")
                 .unwrap()

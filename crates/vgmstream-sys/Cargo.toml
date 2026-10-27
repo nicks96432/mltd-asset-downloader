@@ -8,8 +8,8 @@ repository.workspace = true
 version = "0.2.0-vgmstream-r2055-22-g354cb080"
 
 [build-dependencies]
-bindgen = "0.72.1"
-cmake = "0.1.54"
+bindgen = "0.73.2"
+cmake = "0.1.58"
 
 [features]
 default = []
