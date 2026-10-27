@@ -1,14 +1,15 @@
 //! Manifest file handling.
 
-use std::collections::HashMap;
 use std::ops::Deref;
 
+use ahash::HashMapExt;
 use linked_hash_map::LinkedHashMap;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
 use crate::asset::Asset;
 use crate::error::{Error, Repr, Result};
+use crate::util::HashMap;
 
 #[derive(Debug, ThisError)]
 #[error("manifest error: {kind}")]

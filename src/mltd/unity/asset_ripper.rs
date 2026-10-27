@@ -1,12 +1,12 @@
 //! Asset Ripper client.
 
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 
+use ahash::{HashMapExt, HashSetExt};
 use reqwest::Url;
 use reqwest::blocking::{Client, Response};
 use tempfile::tempdir;
@@ -14,6 +14,7 @@ use tempfile::tempdir;
 use super::{AssetInfo, Extractor};
 use crate::error::{Repr, Result};
 use crate::net::Error;
+use crate::util::{HashMap, HashSet};
 
 /// Map of assets in the format of
 /// {`bundle_name`: (`bundle_no`, {`collection_name`: (`collection_no`, {`path_id`: `AssetInfo`})})}

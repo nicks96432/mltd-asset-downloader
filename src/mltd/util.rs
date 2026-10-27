@@ -4,9 +4,13 @@ use std::io::Result;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+use ahash::RandomState;
 use indicatif::ProgressBar;
 use pin_project_lite::pin_project;
 use tokio::io::{AsyncRead, ReadBuf};
+
+pub(crate) type HashMap<K, V> = std::collections::HashMap<K, V, RandomState>;
+pub(crate) type HashSet<T> = std::collections::HashSet<T, RandomState>;
 
 pin_project! {
     /// Adapter for [`tokio::io::AsyncRead`] to show progress.
