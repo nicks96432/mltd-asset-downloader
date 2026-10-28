@@ -82,6 +82,10 @@ impl MatsuriApiClient {
             Err(e) => Err(Error::request(url.clone(), Some(e))),
         }?;
 
+        if !res.status().is_success() {
+            return Err(Error::status(url, res.status().as_u16()).into());
+        }
+
         let value: T = match res.json().await {
             Ok(v) => Ok(v),
             Err(e) => Err(Error::decode(url, Some(e))),

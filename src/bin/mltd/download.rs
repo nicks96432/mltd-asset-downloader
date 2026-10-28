@@ -1,7 +1,8 @@
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use clap::Args;
 use futures_util::StreamExt;
 use human_bytes::human_bytes;
@@ -12,7 +13,7 @@ use mltd::manifest::Manifest;
 use mltd::net::{AssetVersion, MatsuriApiClient};
 use tokio::fs::create_dir_all;
 
-use crate::util::create_progress_bar;
+use crate::util::{create_progress_bar, safe_join};
 
 #[derive(Debug, Args)]
 #[command(about, arg_required_else_help = true, disable_help_flag = true)]
@@ -130,6 +131,8 @@ pub async fn download_assets(args: &DownloaderArgs) -> Result<()> {
     main_progress_bar.set_length(manifest.asset_size() as u64);
     main_progress_bar.tick();
 
+    let failed = &AtomicUsize::new(0);
+
     tracing::debug!("start downloading assets");
     let tasks = futures_util::stream::iter(&*manifest).for_each_concurrent(
         Some(args.parallel.get()),
@@ -138,22 +141,28 @@ pub async fn download_assets(args: &DownloaderArgs) -> Result<()> {
             let multi_progress = multi_progress.clone();
 
             let asset_info = AssetInfo { filename: entry.1.clone(), ..manifest_info.clone() };
-            let output_path = args.output_dir.join(name);
 
             async move {
-                let result =
-                    tokio::task::spawn(download_task(asset_info, output_path, multi_progress))
-                        .await;
-                match &result {
-                    Ok(r) => {
-                        if let Err(e) = r {
-                            tracing::warn!(name = entry.1, error = ?e, "failed to download asset");
+                let result = match safe_join(&args.output_dir, name) {
+                    Ok(output_path) => {
+                        match tokio::task::spawn(download_task(
+                            asset_info,
+                            output_path,
+                            multi_progress,
+                        ))
+                        .await
+                        {
+                            Ok(r) => r.map_err(anyhow::Error::from),
+                            Err(e) => Err(anyhow::Error::from(e)),
                         }
                     }
-                    Err(e) => {
-                        tracing::warn!(name = entry.1, error = ?e, "failed to download asset")
-                    }
+                    Err(e) => Err(e),
                 };
+
+                if let Err(e) = result {
+                    tracing::warn!(name = entry.1, error = ?e, "failed to download asset");
+                    failed.fetch_add(1, Ordering::Relaxed);
+                }
 
                 main_progress_bar.inc(entry.2 as u64);
                 main_progress_bar.tick();
@@ -165,6 +174,11 @@ pub async fn download_assets(args: &DownloaderArgs) -> Result<()> {
 
     if let Err(e) = multi_progress.clear() {
         tracing::debug!(error = ?e, "cannot clear multi_progress");
+    }
+
+    let failed = failed.load(Ordering::Relaxed);
+    if failed > 0 {
+        return Err(anyhow!("failed to download {failed} asset(s)"));
     }
 
     tracing::info!("download complete");

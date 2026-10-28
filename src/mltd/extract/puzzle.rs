@@ -1,5 +1,7 @@
 //! Puzzle handling.
 
+use std::sync::LazyLock;
+
 use image::{DynamicImage, GenericImageView, SubImage, imageops};
 use thiserror::Error as ThisError;
 
@@ -30,13 +32,21 @@ pub fn solve_puzzle(
     img: &DynamicImage,
     pieces: &[SubImage<&DynamicImage>],
 ) -> Result<Vec<DynamicImage>> {
-    let (puzzle_name, _) = NAME_PUZZLE_MAP
+    static PATTERNS: LazyLock<Vec<(&'static str, regex::Regex)>> = LazyLock::new(|| {
+        NAME_PUZZLE_MAP
+            .iter()
+            .map(|(name, pattern)| (*name, regex::Regex::new(pattern).expect("valid pattern")))
+            .collect()
+    });
+
+    let (puzzle_name, _) = PATTERNS
         .iter()
-        .find(|(_, r)| regex::Regex::new(r).map_or_else(|_| false, |r| r.is_match(texture_name)))
+        .find(|(_, r)| r.is_match(texture_name))
         .ok_or_else(|| Error::PuzzleNotFound(texture_name.to_string()))?;
 
     let puzzle =
         piece_map(puzzle_name).ok_or_else(|| Error::NotImplemented((*puzzle_name).to_string()))?;
+
 
     let mut puzzle_imgs = Vec::new();
 

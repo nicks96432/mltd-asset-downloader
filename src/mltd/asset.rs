@@ -3,15 +3,16 @@
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 use std::io::{self, Cursor};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::LazyLock;
 
 use clap::ValueEnum;
 use futures_util::TryStreamExt;
 use indicatif::ProgressBar;
 use reqwest::header::HeaderMap;
 use tokio::fs::File;
-use tokio::io::BufWriter;
+use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 
 use crate::Error;
@@ -67,7 +68,7 @@ impl Asset<'_> {
     ///
     /// - [`Error::Request`]: if it cannot send request to MLTD asset server.
     async fn send_request(asset_info: &AssetInfo) -> Result<reqwest::Response> {
-        let client = reqwest::Client::new();
+        static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -79,13 +80,14 @@ impl Asset<'_> {
             asset_info.platform.user_agent().parse().expect("user agent should be valid"),
         );
 
-        let res = client.get(asset_info.to_url()).headers(headers).send().await.map_err(|e| {
-            NetworkError {
-                kind: NetworkErrorKind::Request,
-                url: asset_info.to_url(),
-                source: Some(e),
-            }
+        let url = asset_info.to_url();
+        let res = CLIENT.get(url.clone()).headers(headers).send().await.map_err(|e| {
+            NetworkError { kind: NetworkErrorKind::Request, url: url.clone(), source: Some(e) }
         })?;
+
+        if !res.status().is_success() {
+            return Err(NetworkError::status(url, res.status().as_u16()).into());
+        }
 
         Ok(res)
     }
@@ -177,26 +179,45 @@ impl Asset<'_> {
         progress_bar: Option<&mut ProgressBar>,
     ) -> Result<()> {
         let output = output.unwrap_or(asset_info.filename.as_ref());
-        let mut out = BufWriter::new(
-            File::create(output)
-                .await
-                .map_err(|e| Repr::io("failed to create output file", Some(e)))?,
-        );
 
+        // send the request first so that a failed request does not leave an empty file behind
         let res = Self::send_request(asset_info).await?;
 
         if let Some(ref pb) = progress_bar {
             pb.set_length(res.content_length().unwrap_or(0));
         }
 
+        if let Some(parent) = output.parent().filter(|p| !p.as_os_str().is_empty()) {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| Repr::io("failed to create output directory", Some(e)))?;
+        }
+
+        let mut part_name = output.as_os_str().to_owned();
+        part_name.push(".part");
+        let part_path = PathBuf::from(part_name);
+
         tracing::debug!(output_path = ?output, "saving asset");
 
-        let stream_reader = res.bytes_stream().map_err(io::Error::other).into_async_read().compat();
-        let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
+        let result = async {
+            let mut out = BufWriter::new(File::create(&part_path).await?);
 
-        tokio::io::copy(&mut stream_reader, &mut out)
-            .await
-            .map_err(|e| Repr::io("failed to download asset", Some(e)))?;
+            let stream_reader =
+                res.bytes_stream().map_err(io::Error::other).into_async_read().compat();
+            let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
+
+            tokio::io::copy(&mut stream_reader, &mut out).await?;
+            out.shutdown().await?;
+            drop(out);
+
+            tokio::fs::rename(&part_path, output).await
+        }
+        .await;
+
+        if let Err(e) = result {
+            let _ = tokio::fs::remove_file(&part_path).await;
+            return Err(Repr::io("failed to download asset", Some(e)).into());
+        }
 
         Ok(())
     }

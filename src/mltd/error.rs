@@ -42,6 +42,9 @@ pub enum ErrorKind {
     Network,
     UnknownPlatform,
 
+    #[cfg(feature = "asset-ripper")]
+    Process,
+
     #[cfg(feature = "decode-audio")]
     AudioDecode,
 
@@ -62,6 +65,9 @@ impl From<&Repr> for ErrorKind {
             Repr::Manifest(_) => ErrorKind::Manifest,
             Repr::Network(_) => ErrorKind::Network,
             Repr::UnknownPlatform(_) => ErrorKind::UnknownPlatform,
+
+            #[cfg(feature = "asset-ripper")]
+            Repr::Process(_) => ErrorKind::Process,
 
             #[cfg(feature = "extract")]
             Repr::JSONDeserialize(_) => ErrorKind::Deserialize,
@@ -91,6 +97,11 @@ pub(crate) enum Repr {
     /// Unknown platform.
     #[error("unknown platform: {0}")]
     UnknownPlatform(String),
+
+    /// An external process failed to start or exited unexpectedly.
+    #[cfg(feature = "asset-ripper")]
+    #[error("{0}")]
+    Process(String),
 
     #[cfg(feature = "decode-audio")]
     #[error("failed to decode audio: {0}")]

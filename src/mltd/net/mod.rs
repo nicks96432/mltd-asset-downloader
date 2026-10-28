@@ -22,9 +22,16 @@ pub(crate) enum ErrorKind {
 
     #[error("failed to decode response body")]
     Decode,
+
+    #[error("server responded with status {0}")]
+    Status(u16),
 }
 
 impl Error {
+    pub const fn status(url: reqwest::Url, status: u16) -> Self {
+        Self { kind: ErrorKind::Status(status), url, source: None }
+    }
+
     pub const fn request(url: reqwest::Url, source: Option<reqwest::Error>) -> Self {
         Self { kind: ErrorKind::Request, url, source }
     }

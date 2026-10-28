@@ -5,6 +5,8 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
+use std::sync::mpsc;
+use std::time::Duration;
 
 use ahash::{HashMapExt, HashSetExt};
 use reqwest::Url;
@@ -19,6 +21,13 @@ use crate::util::{HashMap, HashSet};
 /// Map of assets in the format of
 /// {`bundle_name`: (`bundle_no`, {`collection_name`: (`collection_no`, {`path_id`: `AssetInfo`})})}
 type AssetsMap = HashMap<String, (usize, HashMap<String, (usize, HashMap<i64, AssetInfo>)>)>;
+
+/// How long to wait for a spawned Asset Ripper to start listening.
+const STARTUP_TIMEOUT: Duration = Duration::from_secs(60);
+
+fn unexpected_layout(what: &str) -> Repr {
+    Repr::io(&format!("unexpected AssetRipper page layout: cannot find {what}"), None)
+}
 
 /// Asset Ripper client.
 #[derive(Debug)]
@@ -81,7 +90,7 @@ impl AssetRipper {
     where
         P: AsRef<Path>,
     {
-        let process = match Command::new(path.as_ref())
+        let mut process = Command::new(path.as_ref())
             .args(["--port", &port.to_string()])
             .args(["--launch-browser", "false"])
             .args(["--log", "false"])
@@ -89,24 +98,38 @@ impl AssetRipper {
             .stdout(Stdio::piped())
             .stderr(std::io::stdout())
             .spawn()
-        {
-            Ok(mut process) => {
-                let reader = BufReader::new(
-                    process.stdout.take().ok_or_else(|| Repr::io("failed to get stdout", None))?,
-                );
-                for line in reader.lines() {
-                    let line = line.map_err(|e| {
-                        Repr::io("failed to read line from AssetRipper output", Some(e))
-                    })?;
-                    if line.contains("listening on: http://") {
-                        break;
-                    }
-                }
+            .map_err(|e| Repr::io("failed to start AssetRipper", Some(e)))?;
 
-                Ok(process)
+        let Some(stdout) = process.stdout.take() else {
+            let _ = process.kill();
+            let _ = process.wait();
+            return Err(Repr::io("failed to get stdout", None).into());
+        };
+
+        // The reader thread keeps draining the output after startup so that AssetRipper
+        // never blocks on a full pipe. It reports whether the server started listening.
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let mut listening = false;
+            for line in BufReader::new(stdout).lines().map_while(std::result::Result::ok) {
+                if !listening && line.contains("listening on: http://") {
+                    listening = true;
+                    let _ = tx.send(true);
+                }
             }
-            Err(err) => Err(Repr::io("failed to start AssetRipper", Some(err))),
-        }?;
+            if !listening {
+                let _ = tx.send(false);
+            }
+        });
+
+        if !matches!(rx.recv_timeout(STARTUP_TIMEOUT), Ok(true)) {
+            let _ = process.kill();
+            let _ = process.wait();
+            return Err(Repr::Process(format!(
+                "AssetRipper did not start listening on port {port}"
+            ))
+            .into());
+        }
 
         Ok(Self {
             base_url: format!("http://localhost:{port}"),
@@ -151,7 +174,7 @@ impl AssetRipper {
         let mut bundles: Vec<_> = html.select(&selector).map(|node| node.inner_html()).collect();
 
         // Remove the last two items (Generated Engine Collections, Generated Hierarchy Assets)
-        bundles.truncate(bundles.len() - 2);
+        bundles.truncate(bundles.len().saturating_sub(2));
 
         Ok(bundles)
     }
@@ -175,15 +198,13 @@ impl AssetRipper {
 
         let mut assets = Vec::new();
         for nodes in html.select(&selector) {
-            let children = nodes.children().collect::<Vec<_>>();
-            let path_id: i64 = children[0]
-                .first_child()
-                .expect("first child should exist")
-                .value()
-                .as_text()
-                .expect("inner text should exist")
-                .parse()
-                .expect("inner text should be integer");
+            let path_id = nodes
+                .children()
+                .next()
+                .and_then(|cell| cell.first_child())
+                .and_then(|text| text.value().as_text())
+                .and_then(|text| text.parse::<i64>().ok())
+                .ok_or_else(|| unexpected_layout("asset path id"))?;
 
             assets.push(path_id);
         }
@@ -208,19 +229,22 @@ impl AssetRipper {
         let info_selector =
             scraper::Selector::parse("#nav-information td").expect("selector should be valid");
 
-        let name =
-            html.select(&name_selector).next().expect("asset name should exist").inner_html();
+        let name = html
+            .select(&name_selector)
+            .next()
+            .ok_or_else(|| unexpected_layout("asset name"))?
+            .inner_html();
         let info_nodes = html.select(&info_selector).collect::<Vec<_>>();
+        if info_nodes.len() < 6 {
+            return Err(unexpected_layout("asset information").into());
+        }
 
         let class = info_nodes[3].inner_html();
         let collection_name = info_nodes[0]
             .first_child()
-            .expect("ancher tag should exist")
-            .first_child()
-            .expect("inner text should exist")
-            .value()
-            .as_text()
-            .expect("inner element should be text")
+            .and_then(|anchor| anchor.first_child())
+            .and_then(|text| text.value().as_text())
+            .ok_or_else(|| unexpected_layout("collection name"))?
             .to_string();
 
         if class == "AssetBundle" {
@@ -281,7 +305,11 @@ impl AssetRipper {
 impl Drop for AssetRipper {
     fn drop(&mut self) {
         if let Some(ref mut process) = self.process {
-            process.kill().expect("failed to kill AssetRipper process");
+            // the process may have exited already, and panicking in drop could abort
+            if let Err(e) = process.kill() {
+                tracing::debug!(error = ?e, "failed to kill AssetRipper process");
+            }
+            let _ = process.wait();
         }
     }
 }
@@ -398,10 +426,10 @@ impl Extractor for AssetRipper {
         let (bundle_no, collection) = self
             .assets
             .get(info.orig_bundle.as_ref())
-            .unwrap_or_else(|| panic!("bundle {} should exist", info.orig_bundle));
+            .ok_or_else(|| Repr::io("bundle is not loaded", None))?;
         let (collection_no, _) = collection
             .get(info.collection.as_ref())
-            .unwrap_or_else(|| panic!("collection {} should exist", info.collection));
+            .ok_or_else(|| Repr::io("collection is not loaded", None))?;
         let path_id = info.path_id;
 
         let path =

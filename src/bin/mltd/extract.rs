@@ -1,14 +1,18 @@
+use std::collections::BTreeSet;
 use std::fs::{File, create_dir_all};
 use std::io::{BufReader, BufWriter, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::{Result, anyhow};
 use clap::{Args, ValueEnum};
 use mltd::extract::ENCRYPTED_TEXT_EXTENSIONS;
 use mltd::unity::Extractor;
 use rayon::iter::{ParallelBridge, ParallelIterator};
+
+use crate::util::safe_join;
 #[cfg(feature = "decode-audio")]
 use {
     crate::util::HashSet,
@@ -171,7 +175,7 @@ pub fn extract_files(args: &ExtractorArgs) -> Result<()> {
 
     create_dir_all(&args.output)?;
 
-    match args.backend {
+    let failed = match args.backend {
         #[cfg(feature = "asset-ripper")]
         Backend::AssetRipper => {
             tracing::debug!(
@@ -180,43 +184,64 @@ pub fn extract_files(args: &ExtractorArgs) -> Result<()> {
                 "creating AssetRippers"
             );
 
-            let mut port = 50000;
+            // AssetRipper exits immediately when its port is in use, so try the next one
+            const MAX_PORT_FAILURES: usize = 100;
+
+            let mut port: u16 = 50000;
+            let mut port_failures = 0;
             let mut unity_extractors = Vec::new();
             while unity_extractors.len() < args.parallel.get() {
                 match mltd::unity::AssetRipper::new(&args.asset_ripper_path, port) {
                     Ok(ripper) => {
                         tracing::trace!(port, "created AssetRipper");
                         unity_extractors.push(ripper);
-                        port += 1;
                     }
-                    Err(e) if e.kind() == mltd::ErrorKind::Network => port += 1,
+                    Err(e) if e.kind() == mltd::ErrorKind::Process => {
+                        port_failures += 1;
+                        if port_failures > MAX_PORT_FAILURES {
+                            return Err(e.into());
+                        }
+                        tracing::debug!(port, error = ?e, "cannot start AssetRipper, trying next port");
+                    }
                     Err(e) => return Err(e.into()),
                 };
+                port = port.checked_add(1).ok_or_else(|| anyhow!("no available port"))?;
             }
 
-            extract_parallel(unity_extractors, files, args);
+            extract_parallel(unity_extractors, files, args)
         }
 
         #[cfg(feature = "rabex")]
         Backend::Rabex => {
             tracing::debug!(parallel = args.parallel, "creating rabex extractors");
-            extract_parallel(mltd::unity::RabexExtractor::pool(args.parallel.get()), files, args);
+            extract_parallel(mltd::unity::RabexExtractor::pool(args.parallel.get()), files, args)
         }
+    };
+
+    if failed > 0 {
+        return Err(anyhow!("failed to extract {failed} file(s)"));
     }
 
     Ok(())
 }
 
+/// Files used to pass the HCA decryption keys to vgmstream, which are shared by the workers.
+type KeyFiles = Mutex<BTreeSet<PathBuf>>;
+
 /// Extracts the files with the given extractors, each of them handles one file at a time.
+///
+/// Returns the number of files that failed to extract.
 fn extract_parallel<E>(
     unity_extractors: Vec<E>,
     files: impl Iterator<Item = PathBuf> + Send,
     args: &ExtractorArgs,
-) where
+) -> usize
+where
     E: Extractor + Send,
 {
-    let files = Mutex::new(files);
-    let files = &files;
+    let files = &Mutex::new(files);
+    let key_files = &KeyFiles::default();
+    let failed = &AtomicUsize::new(0);
 
     std::thread::scope(|scope| {
         for mut extractor in unity_extractors {
@@ -225,24 +250,37 @@ fn extract_parallel<E>(
                     let next = files.lock().unwrap().next();
                     let Some(path) = next else { break };
 
-                    let result = extract_file(&path, &mut extractor, args);
+                    let result = extract_file(&path, &mut extractor, args, key_files);
 
                     extractor.clear();
 
                     if let Err(e) = result {
-                        tracing::warn!(error = ?e, "failed to extract file");
+                        tracing::warn!(input_path = %path.display(), error = ?e, "failed to extract file");
+                        failed.fetch_add(1, Ordering::Relaxed);
                     };
                 }
             });
         }
     });
+
+    // the key files can only be removed after all workers have finished decoding
+    for key_path in key_files.lock().unwrap().iter() {
+        tracing::debug!(key_path = %key_path.display(), "removing temporary files");
+        if let Err(e) = std::fs::remove_file(key_path) {
+            tracing::warn!(error = ?e);
+        }
+    }
+
+    failed.load(Ordering::Relaxed)
 }
 
 /// Extracts a single .unity3d file.
+#[cfg_attr(not(feature = "decode-audio"), allow(unused_variables))]
 fn extract_file(
     path: &Path,
     unity_extractor: &mut impl Extractor,
     args: &ExtractorArgs,
+    key_files: &KeyFiles,
 ) -> Result<()> {
     tracing::debug!(input_path = %path.display(), "loading file");
     unity_extractor.load_file(path.as_ref())?;
@@ -257,12 +295,16 @@ fn extract_file(
             continue;
         }
 
-        let asset_original_path = &PathBuf::from(
-            info.orig_path.as_deref().expect("original path of TextAsset should exist"),
-        );
+        let Some(orig_path) = info.orig_path.as_deref() else {
+            tracing::warn!(name = &*info.name, class = &*info.class, "asset has no original path");
+            continue;
+        };
+        let asset_original_path = &PathBuf::from(orig_path);
 
-        let output_path = args.output.join(asset_original_path);
-        let output_dir = output_path.parent().unwrap();
+        let output_path = safe_join(&args.output, orig_path)?;
+        let output_dir = output_path
+            .parent()
+            .ok_or_else(|| anyhow!("output path has no parent: {}", output_path.display()))?;
 
         create_dir_all(output_dir)?;
 
@@ -329,23 +371,23 @@ fn extract_file(
                         unity_extractor,
                     )?;
 
-                    images.into_iter().enumerate().par_bridge().for_each(|(i, image)| {
-                        let path = output_dir.join(format!(
-                            "{}_{}.{}",
-                            texture_info.name,
-                            i,
-                            args.image_ext.extensions_str()[0]
-                        ));
-                        tracing::info!(output_path = %path.display(), "writing image");
+                    images.into_iter().enumerate().par_bridge().try_for_each(
+                        |(i, image)| -> Result<()> {
+                            let path = output_dir.join(format!(
+                                "{}_{}.{}",
+                                texture_info.name,
+                                i,
+                                args.image_ext.extensions_str()[0]
+                            ));
+                            tracing::info!(output_path = %path.display(), "writing image");
 
-                        let mut file = match std::fs::File::create(&path) {
-                            Ok(f) => f,
-                            Err(e) => return tracing::warn!(error = ?e),
-                        };
-                        if let Err(e) = image.write_to(&mut file, args.image_ext) {
-                            tracing::warn!(error = ?e);
-                        }
-                    });
+                            let mut file = BufWriter::new(File::create(&path)?);
+                            image.write_to(&mut file, args.image_ext)?;
+                            file.flush()?;
+
+                            Ok(())
+                        },
+                    )?;
                 }
 
                 #[cfg(not(feature = "process-image"))]
@@ -366,7 +408,7 @@ fn extract_file(
 
     #[cfg(feature = "decode-audio")]
     for output_path in audio_paths.into_iter() {
-        extract_audio(&output_path, &args.audio)?;
+        extract_audio(&output_path, &args.audio, key_files)?;
     }
 
     Ok(())
@@ -445,16 +487,24 @@ fn extract_image<'a>(
 }
 
 #[cfg(feature = "decode-audio")]
-fn extract_audio(path: &Path, args: &AudioArgs) -> Result<()> {
+fn extract_audio(path: &Path, args: &AudioArgs, key_files: &KeyFiles) -> Result<()> {
     use rayon::iter::IntoParallelIterator;
 
     // According to https://github.com/vgmstream/vgmstream/blob/master/doc/USAGE.md#decryption-keys,
     // we can specify the decryption key in the .hcakey file so that vgmstream doesn't have
     // to brute-force the key.
+    //
+    // All MLTD audio files use the same key, so the file is written once per directory and
+    // shared by all workers. It is removed after all of them have finished.
     let key_path = path.with_file_name(".hcakey");
-    let mut key_file = File::create(&key_path)?;
-    tracing::debug!(output_path = %key_path.display() ,"writing temporary .hcakey");
-    key_file.write_all(MLTD_HCA_KEY.to_string().as_bytes())?;
+    {
+        let mut key_files = key_files.lock().unwrap();
+        if !key_files.contains(&key_path) {
+            tracing::debug!(output_path = %key_path.display() ,"writing temporary .hcakey");
+            File::create(&key_path)?.write_all(MLTD_HCA_KEY.to_string().as_bytes())?;
+            key_files.insert(key_path);
+        }
+    }
 
     let output_dir = path.parent().expect("output dir should exist");
     tracing::info!(output_path = %output_dir.display(), "extracting audio");
@@ -465,36 +515,40 @@ fn extract_audio(path: &Path, args: &AudioArgs) -> Result<()> {
     let subsongs = vgmstream.format()?.subsong_count as usize;
     tracing::debug!(output_path = %output_dir.display(), subsongs);
 
-    (0..subsongs).into_par_iter().for_each(|i| {
-        let mut options = ffmpeg_next::Dictionary::new();
-        for (key, value) in &args.audio_args {
-            options.set(key, value);
-        }
-
-        let output_prefix = path.with_extension("");
-        let options = EncoderOutputOptions {
-            prefix: output_prefix.file_name().unwrap().to_str().unwrap(),
-            codec: &args.audio_codec,
-            format: &args.audio_format,
-            ffmpeg_options: Some(options),
-        };
-
-        let mut encoder = match Encoder::open(path, i, output_dir, &options) {
-            Ok(e) => e,
-            Err(e) => {
-                tracing::warn!(error = ?e);
-                return;
+    let results: Vec<Result<()>> = (0..subsongs)
+        .into_par_iter()
+        .map(|i| -> Result<()> {
+            let mut options = ffmpeg_next::Dictionary::new();
+            for (key, value) in &args.audio_args {
+                options.set(key, value);
             }
-        };
 
-        if let Err(e) = encoder.encode() {
-            tracing::warn!(error = ?e);
+            let output_prefix = path.with_extension("");
+            let options = EncoderOutputOptions {
+                prefix: output_prefix.file_name().unwrap().to_str().unwrap(),
+                codec: &args.audio_codec,
+                format: &args.audio_format,
+                ffmpeg_options: Some(options),
+            };
+
+            let mut encoder = Encoder::open(path, i, output_dir, &options)?;
+            encoder.encode()?;
+
+            Ok(())
+        })
+        .collect();
+
+    // report every failed subsong, but only fail once
+    let mut first_error = None;
+    for result in results {
+        if let Err(e) = result {
+            tracing::warn!(input_path = %path.display(), error = ?e, "failed to extract audio");
+            first_error.get_or_insert(e);
         }
-    });
+    }
 
-    tracing::debug!(key_path = %key_path.display(), "removing temporary files");
-    if let Err(e) = std::fs::remove_file(key_path) {
-        tracing::warn!(error = ?e);
+    if let Some(e) = first_error {
+        return Err(e);
     }
 
     Ok(())
