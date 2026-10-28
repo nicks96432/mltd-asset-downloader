@@ -26,26 +26,27 @@ path = "src/mltd/lib.rs"
 
 [[bin]]
 name = "mltd"
+required-features = ["cli"]
 
 [dependencies]
 aes = { version = "0.9.3", optional = true }
 ahash = { version = "0.8.12", features = ["serde"] }
-anyhow = { version = "1.0.104", features = ["backtrace"] }
+anyhow = { version = "1.0.104", features = ["backtrace"], optional = true }
 cbc = { version = "0.2.1", features = ["alloc"], optional = true }
-clap = { version = "4.6.7", features = ["color", "deprecated", "derive", "unicode", "wrap_help"] }
-clap-verbosity-flag = { version = "3.0.4", default-features = false, features = ["tracing"] }
+clap = { version = "4.6.7", features = ["color", "deprecated", "derive", "unicode", "wrap_help"], optional = true }
+clap-verbosity-flag = { version = "3.0.4", default-features = false, features = ["tracing"], optional = true }
 ffmpeg-next = { version = "9.0.0", default-features = false, features = ["codec", "format", "software-resampling"], optional = true }
-futures-util = { version = "0.3.34", default-features = false }
+futures-util = { version = "0.3.34", default-features = false, features = ["io"] }
 glob = { version = "0.3.4", optional = true }
 human_bytes = { version = "0.4.3", default-features = false, optional = true }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "serde", "webp"], optional = true }
-indicatif = { version = "0.18.6", default-features = false }
+indicatif = { version = "0.18.6", default-features = false, optional = true }
 linked-hash-map = { version = "0.5.6", features = ["serde_impl"] }
 pin-project-lite = "0.2.17"
 rabex = { version = "0.2.1", optional = true }
 rayon = { version = "1.12.0", optional = true }
 regex = { version = "1.13.1", default-features = false, features = ["perf", "std"], optional = true }
-reqwest = { version = "0.13.5", default-features = false, features = ["default-tls", "blocking", "charset", "form", "json", "query", "stream", "zstd"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["default-tls", "charset", "json", "query", "stream", "zstd"] }
 rmp-serde = "1.3.1"
 scraper = { version = "0.29.0", default-features = false, optional = true }
 serde = { version = "1.0.229", features = ["derive"] }
@@ -56,7 +57,7 @@ thiserror = "2.0.21"
 tokio = { version = "1.54.1", features = ["macros", "process", "rt-multi-thread"] }
 tokio-util = { version = "0.7.20", features = ["compat"] }
 tracing = { version = "0.1.44", default-features = false, features = ["std"] }
-tracing-subscriber = { version = "0.3.23", default-features = false, features = ["ansi", "fmt", "smallvec", "std"] }
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["ansi", "fmt", "smallvec", "std"], optional = true }
 vgmstream = { path = "crates/vgmstream", optional = true }
 
 [dev-dependencies]
@@ -66,6 +67,7 @@ pbkdf2 = "0.13.0"
 predicates = { version = "3.1.4", default-features = false, features = ["regex"] }
 sha1 = "0.11.0"
 tokio-test = "0.4.6"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["ansi", "fmt", "smallvec", "std"] }
 
 [build-dependencies]
 vergen = { version = "10.0.3", features = ["cargo", "emit_and_set", "rustc"] }
@@ -73,12 +75,25 @@ vergen-gitcl = "10.0.3"
 
 [features]
 default = [
+  "cli",
   "download",
   "extract",
 ]
 asset-ripper = [
   "dep:scraper",
+  "dep:serde_json",
   "dep:tempfile",
+  "reqwest/blocking",
+  "reqwest/form",
+]
+cli = [
+  "dep:anyhow",
+  "dep:clap",
+  "dep:clap-verbosity-flag",
+  "dep:glob",
+  "dep:human_bytes",
+  "dep:indicatif",
+  "dep:tracing-subscriber",
 ]
 debug = []
 decode-audio = [
@@ -89,14 +104,12 @@ decrypt-text = [
   "dep:aes",
   "dep:cbc",
 ]
-download = ["dep:human_bytes"]
+download = []
 extract = [
   "decode-audio",
   "decrypt-text",
-  "dep:glob",
   "dep:rayon",
   "dep:serde_json",
-  "indicatif/rayon",
   "process-image",
   "rabex",
 ]

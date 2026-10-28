@@ -3,8 +3,22 @@ use std::path::{Component, Path, PathBuf};
 use ahash::RandomState;
 use anyhow::{Result, anyhow};
 use indicatif::{ProgressBar, ProgressFinish, ProgressStyle};
+use mltd::util::Progress;
 
 pub(crate) type HashSet<T> = std::collections::HashSet<T, RandomState>;
+
+/// Reports the progress of a transfer to a [`ProgressBar`].
+pub(crate) struct BarProgress<'a>(pub &'a ProgressBar);
+
+impl Progress for BarProgress<'_> {
+    fn set_length(&mut self, len: u64) {
+        self.0.set_length(len);
+    }
+
+    fn advance(&mut self, delta: u64) {
+        self.0.inc(delta);
+    }
+}
 
 #[inline]
 pub(crate) fn create_progress_bar() -> ProgressBar {

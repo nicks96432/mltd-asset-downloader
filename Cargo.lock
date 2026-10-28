@@ -1277,7 +1277,6 @@ checksum = "9433806cd6b4ec1aba79c021c7e4c58fb4c3b9977c085062e611ac929998fb0c"
 dependencies = [
  "console",
  "portable-atomic",
- "rayon",
  "unit-prefix",
 ]
 

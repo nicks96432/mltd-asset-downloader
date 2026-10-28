@@ -7,9 +7,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::LazyLock;
 
-use clap::ValueEnum;
 use futures_util::TryStreamExt;
-use indicatif::ProgressBar;
 use reqwest::header::HeaderMap;
 use tokio::fs::File;
 use tokio::io::{AsyncWriteExt, BufWriter};
@@ -18,7 +16,7 @@ use tokio_util::compat::FuturesAsyncReadCompatExt;
 use crate::Error;
 use crate::error::{Repr, Result};
 use crate::net::{AssetVersion, Error as NetworkError, ErrorKind as NetworkErrorKind};
-use crate::util::ProgressReadAdapter;
+use crate::util::{Progress, ProgressReadAdapter};
 
 /// Base URL of MLTD asset server.
 pub const ASSET_URL_BASE: &str = "https://td-assets.bn765.com";
@@ -95,7 +93,7 @@ impl Asset<'_> {
     /// Download the specified asset from MLTD asset server.
     ///
     /// This will send GET request to MLTD asset server according to `asset_info`.
-    /// An optional `progress_bar` can be specified to track the download progress.
+    /// An optional `progress` receiver can be specified to track the download progress.
     ///
     /// # Errors
     ///
@@ -122,19 +120,19 @@ impl Asset<'_> {
     /// ```
     pub async fn download(
         asset_info: AssetInfo,
-        progress_bar: Option<&mut ProgressBar>,
+        mut progress: Option<&mut dyn Progress>,
     ) -> Result<Self> {
         let res = Self::send_request(&asset_info).await?;
 
-        if let Some(ref pb) = progress_bar {
-            pb.set_length(res.content_length().unwrap_or(0));
+        if let Some(progress) = progress.as_deref_mut() {
+            progress.set_length(res.content_length().unwrap_or(0));
         }
 
         tracing::debug!(filename = asset_info.filename, "download to buf");
 
         let stream_reader = res.bytes_stream().map_err(io::Error::other).into_async_read().compat();
 
-        let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
+        let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress);
 
         let mut buf = Cursor::new(Vec::new());
         tokio::io::copy(&mut stream_reader, &mut buf)
@@ -147,7 +145,7 @@ impl Asset<'_> {
     /// Download the specified asset from MLTD asset server and write it to disk.
     ///
     /// If `output` is not specified, it will be default to `asset_info.filename`.
-    /// An optional `progress_bar` can be specified to track the download progress.
+    /// An optional `progress` receiver can be specified to track the download progress.
     ///
     /// # Errors
     ///
@@ -176,15 +174,15 @@ impl Asset<'_> {
     pub async fn download_to_file(
         asset_info: &AssetInfo,
         output: Option<&Path>,
-        progress_bar: Option<&mut ProgressBar>,
+        mut progress: Option<&mut dyn Progress>,
     ) -> Result<()> {
         let output = output.unwrap_or(asset_info.filename.as_ref());
 
         // send the request first so that a failed request does not leave an empty file behind
         let res = Self::send_request(asset_info).await?;
 
-        if let Some(ref pb) = progress_bar {
-            pb.set_length(res.content_length().unwrap_or(0));
+        if let Some(progress) = progress.as_deref_mut() {
+            progress.set_length(res.content_length().unwrap_or(0));
         }
 
         if let Some(parent) = output.parent().filter(|p| !p.as_os_str().is_empty()) {
@@ -204,7 +202,7 @@ impl Asset<'_> {
 
             let stream_reader =
                 res.bytes_stream().map_err(io::Error::other).into_async_read().compat();
-            let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
+            let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress);
 
             tokio::io::copy(&mut stream_reader, &mut out).await?;
             out.shutdown().await?;
@@ -227,7 +225,7 @@ impl Asset<'_> {
 ///
 /// Although the game and the manifest name looks the same on both platforms,
 /// their manifests are different.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Platform {
     /// Android platform
     Android,

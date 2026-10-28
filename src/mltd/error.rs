@@ -69,7 +69,7 @@ impl From<&Repr> for ErrorKind {
             #[cfg(feature = "asset-ripper")]
             Repr::Process(_) => ErrorKind::Process,
 
-            #[cfg(feature = "extract")]
+            #[cfg(any(feature = "extract", feature = "rabex", feature = "asset-ripper"))]
             Repr::JSONDeserialize(_) => ErrorKind::Deserialize,
 
             #[cfg(feature = "decode-audio")]
@@ -126,7 +126,7 @@ pub(crate) enum Repr {
     Network(#[from] NetworkError),
 
     /// JSON deserialization error.
-    #[cfg(feature = "extract")]
+    #[cfg(any(feature = "extract", feature = "rabex", feature = "asset-ripper"))]
     #[error(transparent)]
     JSONDeserialize(#[from] serde_json::Error),
 

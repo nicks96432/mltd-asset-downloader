@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::{Result, anyhow};
-use clap::Args;
+use clap::{Args, ValueEnum};
 use futures_util::StreamExt;
 use human_bytes::human_bytes;
 use indicatif::{MultiProgress, MultiProgressAlignment, ProgressDrawTarget};
@@ -13,14 +13,14 @@ use mltd::manifest::Manifest;
 use mltd::net::{AssetVersion, MatsuriApiClient};
 use tokio::fs::create_dir_all;
 
-use crate::util::{create_progress_bar, safe_join};
+use crate::util::{BarProgress, create_progress_bar, safe_join};
 
 #[derive(Debug, Args)]
 #[command(about, arg_required_else_help = true, disable_help_flag = true)]
 pub struct DownloaderArgs {
     /// The platform variant to download
     #[arg(value_enum, value_name = "Platform")]
-    platform: Platform,
+    platform: PlatformArg,
 
     /// The asset version to download, defaults to the latest
     #[arg(long, value_name = "VERSION")]
@@ -46,6 +46,26 @@ pub struct DownloaderArgs {
     /// Print help
     #[arg(long, action = clap::ArgAction::HelpShort)]
     help: Option<bool>,
+}
+
+/// Platform variant accepted on the command line.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub(crate) enum PlatformArg {
+    /// Android platform
+    Android,
+
+    /// iOS platform
+    #[allow(clippy::upper_case_acronyms)]
+    IOS,
+}
+
+impl From<PlatformArg> for Platform {
+    fn from(value: PlatformArg) -> Self {
+        match value {
+            PlatformArg::Android => Self::Android,
+            PlatformArg::IOS => Self::IOS,
+        }
+    }
 }
 
 async fn download_manifest(
@@ -84,11 +104,15 @@ where
     P: AsRef<Path>,
 {
     let file_name = String::from(output_path.as_ref().file_name().unwrap().to_str().unwrap());
-    let mut progress_bar =
+    let progress_bar =
         multi_progress.insert_from_back(1, create_progress_bar().with_message(file_name));
 
-    Asset::download_to_file(&asset_info, Some(output_path.as_ref()), Some(&mut progress_bar))
-        .await?;
+    Asset::download_to_file(
+        &asset_info,
+        Some(output_path.as_ref()),
+        Some(&mut BarProgress(&progress_bar)),
+    )
+    .await?;
 
     multi_progress.remove(&progress_bar);
     multi_progress.insert(0, progress_bar);
@@ -109,7 +133,7 @@ pub async fn download_assets(args: &DownloaderArgs) -> Result<()> {
             let filename = path.to_string_lossy().to_string();
             let manifest_info = AssetInfo {
                 filename: filename.clone(),
-                platform: args.platform,
+                platform: args.platform.into(),
                 version: AssetVersion {
                     manifest_filename: filename,
                     updated_at: String::new(),
@@ -119,7 +143,7 @@ pub async fn download_assets(args: &DownloaderArgs) -> Result<()> {
 
             (manifest, manifest_info)
         }
-        None => download_manifest(args.asset_version, args.platform).await?,
+        None => download_manifest(args.asset_version, args.platform.into()).await?,
     };
 
     tracing::trace!("create MultiProgress");

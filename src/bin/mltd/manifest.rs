@@ -3,11 +3,12 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Args, Subcommand};
-use mltd::asset::{Asset, AssetInfo, Platform};
+use mltd::asset::{Asset, AssetInfo};
 use mltd::manifest::Manifest;
 use mltd::net::MatsuriApiClient;
 
-use crate::util::create_progress_bar;
+use crate::download::PlatformArg;
+use crate::util::{BarProgress, create_progress_bar};
 
 #[derive(Args)]
 #[command(about, arg_required_else_help(true))]
@@ -43,7 +44,7 @@ pub struct ManifestDiffArgs {
 pub struct ManifestDownloadArgs {
     /// The platform variant to download
     #[arg(value_enum, value_name = "VARIANT")]
-    pub platform: Platform,
+    pub platform: PlatformArg,
 
     /// The manifest version to download, defaults to the latest version
     #[arg(long, value_name = "VERSION")]
@@ -64,13 +65,18 @@ pub async fn download_manifest(args: &ManifestDownloadArgs) -> Result<()> {
 
     let asset_info = AssetInfo {
         filename: asset_version.manifest_filename.clone(),
-        platform: args.platform,
+        platform: args.platform.into(),
         version: asset_version,
     };
 
-    let mut progress_bar = create_progress_bar().with_message(asset_info.filename.clone());
+    let progress_bar = create_progress_bar().with_message(asset_info.filename.clone());
 
-    Asset::download_to_file(&asset_info, args.output.as_deref(), Some(&mut progress_bar)).await?;
+    Asset::download_to_file(
+        &asset_info,
+        args.output.as_deref(),
+        Some(&mut BarProgress(&progress_bar)),
+    )
+    .await?;
 
     Ok(())
 }

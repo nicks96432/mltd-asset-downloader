@@ -12,9 +12,9 @@
 pub mod asset;
 mod error;
 
-#[cfg(feature = "extract")]
+#[cfg(any(feature = "decode-audio", feature = "decrypt-text", feature = "process-image"))]
 pub mod extract;
-#[cfg(feature = "extract")]
+#[cfg(any(feature = "rabex", feature = "asset-ripper"))]
 pub mod unity;
 
 pub mod manifest;

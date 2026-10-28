@@ -47,7 +47,6 @@ pub fn solve_puzzle(
     let puzzle =
         piece_map(puzzle_name).ok_or_else(|| Error::NotImplemented((*puzzle_name).to_string()))?;
 
-
     let mut puzzle_imgs = Vec::new();
 
     for i in 0..puzzle.img_count {

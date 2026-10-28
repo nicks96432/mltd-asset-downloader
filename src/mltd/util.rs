@@ -5,7 +5,6 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use ahash::RandomState;
-use indicatif::ProgressBar;
 use pin_project_lite::pin_project;
 use tokio::io::{AsyncRead, ReadBuf};
 
@@ -14,24 +13,33 @@ pub(crate) type HashMap<K, V> = std::collections::HashMap<K, V, RandomState>;
 #[cfg(feature = "asset-ripper")]
 pub(crate) type HashSet<T> = std::collections::HashSet<T, RandomState>;
 
+/// Receiver of the progress of a transfer, e.g. a progress bar.
+pub trait Progress: Send {
+    /// Sets the total length of the transfer.
+    fn set_length(&mut self, len: u64);
+
+    /// Advances the progress by `delta` units.
+    fn advance(&mut self, delta: u64);
+}
+
 pin_project! {
-    /// Adapter for [`tokio::io::AsyncRead`] to show progress.
+    /// Adapter for [`tokio::io::AsyncRead`] to report progress.
     ///
     /// From [this stackoverflow answer].
     ///
     /// [this stackoverflow answer]: https://stackoverflow.com/a/73809326
-    pub struct ProgressReadAdapter<'bar, R: AsyncRead> {
+    pub struct ProgressReadAdapter<'p, R: AsyncRead> {
         #[pin]
         inner: R,
-        progress_bar: Option<&'bar mut ProgressBar>,
+        progress: Option<&'p mut dyn Progress>,
     }
 }
 
-impl<'bar, R: AsyncRead> ProgressReadAdapter<'bar, R> {
+impl<'p, R: AsyncRead> ProgressReadAdapter<'p, R> {
     /// Create a new [`ProgressReadAdapter`] from a [`tokio::io::AsyncRead`]
-    /// reader and an optional [`indicatif::ProgressBar`].
-    pub fn new(inner: R, progress_bar: Option<&'bar mut ProgressBar>) -> Self {
-        Self { inner, progress_bar }
+    /// reader and an optional [`Progress`] receiver.
+    pub fn new(inner: R, progress: Option<&'p mut dyn Progress>) -> Self {
+        Self { inner, progress }
     }
 }
 
@@ -48,18 +56,20 @@ impl<R: AsyncRead> AsyncRead for ProgressReadAdapter<'_, R> {
         let after = buf.filled().len();
 
         if result.is_ready()
-            && let Some(pb) = this.progress_bar
+            && let Some(progress) = this.progress
         {
-            pb.inc((after - before) as u64);
+            progress.advance((after - before) as u64);
         }
 
         result
     }
 }
 
+#[cfg(test)]
 static TEST_LOGGER_INIT: std::sync::Once = std::sync::Once::new();
 
-pub fn init_test_logger() {
+#[cfg(test)]
+pub(crate) fn init_test_logger() {
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
 
