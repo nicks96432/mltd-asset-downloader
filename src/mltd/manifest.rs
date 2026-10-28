@@ -15,7 +15,6 @@ use crate::util::HashMap;
 #[error("manifest error: {kind}")]
 pub(crate) struct ManifestError {
     pub kind: ManifestErrorKind,
-    pub manifest: Vec<u8>,
 }
 
 #[derive(Debug, ThisError)]
@@ -30,8 +29,8 @@ pub(crate) enum ManifestErrorKind {
 }
 
 impl ManifestError {
-    pub fn new(kind: ManifestErrorKind, manifest: Vec<u8>) -> Self {
-        Self { kind, manifest }
+    pub fn new(kind: ManifestErrorKind) -> Self {
+        Self { kind }
     }
 }
 
@@ -112,8 +111,7 @@ impl Manifest {
     ///
     /// Returns [`crate::Error`] with [`crate::ErrorKind::Manifest`] if the deserialization fails.
     pub fn from_slice(value: &[u8]) -> Result<Self> {
-        rmp_serde::from_slice(value)
-            .map_err(|e| ManifestError::new(e.into(), value.to_vec()).into())
+        rmp_serde::from_slice(value).map_err(|e| ManifestError::new(e.into()).into())
     }
 }
 
@@ -145,7 +143,7 @@ impl TryFrom<Manifest> for Vec<u8> {
     type Error = Error;
 
     fn try_from(value: Manifest) -> Result<Self, Self::Error> {
-        rmp_serde::to_vec(&value).map_err(|e| ManifestError::new(e.into(), Vec::new()).into())
+        rmp_serde::to_vec(&value).map_err(|e| ManifestError::new(e.into()).into())
     }
 }
 

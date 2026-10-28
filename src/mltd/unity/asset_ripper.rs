@@ -13,7 +13,7 @@ use reqwest::Url;
 use reqwest::blocking::{Client, Response};
 use tempfile::tempdir;
 
-use super::{AssetInfo, Extractor};
+use super::{AssetInfo, Extractor, UnityError};
 use crate::error::{Repr, Result};
 use crate::net::Error;
 use crate::util::{HashMap, HashSet};
@@ -25,8 +25,8 @@ type AssetsMap = HashMap<String, (usize, HashMap<String, (usize, HashMap<i64, As
 /// How long to wait for a spawned Asset Ripper to start listening.
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(60);
 
-fn unexpected_layout(what: &str) -> Repr {
-    Repr::io(&format!("unexpected AssetRipper page layout: cannot find {what}"), None)
+fn unexpected_layout(what: &'static str) -> UnityError {
+    UnityError::PageLayout(what)
 }
 
 /// Asset Ripper client.
@@ -98,12 +98,12 @@ impl AssetRipper {
             .stdout(Stdio::piped())
             .stderr(std::io::stdout())
             .spawn()
-            .map_err(|e| Repr::io("failed to start AssetRipper", Some(e)))?;
+            .map_err(|e| Repr::io("start AssetRipper", Some(path.as_ref()), e))?;
 
         let Some(stdout) = process.stdout.take() else {
             let _ = process.kill();
             let _ = process.wait();
-            return Err(Repr::io("failed to get stdout", None).into());
+            return Err(Repr::Process("cannot capture the output of AssetRipper".to_owned()).into());
         };
 
         // The reader thread keeps draining the output after startup so that AssetRipper
@@ -317,7 +317,7 @@ impl Drop for AssetRipper {
 impl Extractor for AssetRipper {
     fn load_file(&mut self, path: &Path) -> Result<()> {
         if path.is_dir() {
-            return Err(Repr::io("path is a directory, use load_folder instead", None).into());
+            return Err(UnityError::IsDirectory.into());
         }
 
         let path = path.to_string_lossy().to_string();
@@ -426,10 +426,10 @@ impl Extractor for AssetRipper {
         let (bundle_no, collection) = self
             .assets
             .get(info.orig_bundle.as_ref())
-            .ok_or_else(|| Repr::io("bundle is not loaded", None))?;
+            .ok_or_else(|| UnityError::BundleNotLoaded(info.orig_bundle.to_string()))?;
         let (collection_no, _) = collection
             .get(info.collection.as_ref())
-            .ok_or_else(|| Repr::io("collection is not loaded", None))?;
+            .ok_or_else(|| UnityError::CollectionNotLoaded(info.collection.to_string()))?;
         let path_id = info.path_id;
 
         let path =
@@ -449,17 +449,12 @@ impl Extractor for AssetRipper {
     }
 
     fn extract(&self, info: &AssetInfo) -> Result<File> {
-        let tempdir = tempdir().map_err(|e| Repr::io("cannot create tempdir", Some(e)))?;
+        let tempdir = tempdir().map_err(|e| Repr::io("create tempdir", None, e))?;
         self.export_primary(tempdir.path())?;
 
-        let file = File::open(
-            tempdir.path().join(
-                info.orig_path
-                    .as_deref()
-                    .ok_or_else(|| Repr::io("info does not have original path", None))?,
-            ),
-        )
-        .map_err(|e| Repr::io("cannot open file", Some(e)))?;
+        let path =
+            tempdir.path().join(info.orig_path.as_deref().ok_or(UnityError::NoOriginalPath)?);
+        let file = File::open(&path).map_err(|e| Repr::io("open file", Some(&path), e))?;
 
         Ok(file)
     }

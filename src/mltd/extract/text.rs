@@ -12,12 +12,11 @@ use crate::error::{Error, Repr, Result};
 #[error("AES error: {kind}")]
 pub(crate) struct AesError {
     pub kind: AesErrorKind,
-    pub input: Vec<u8>,
 }
 
 impl AesError {
-    pub fn unpad(input: Vec<u8>) -> Self {
-        Self { kind: AesErrorKind::Unpad, input }
+    pub fn unpad() -> Self {
+        Self { kind: AesErrorKind::Unpad }
     }
 }
 
@@ -116,7 +115,7 @@ pub fn decrypt_text(cipher: &[u8]) -> Result<Vec<u8>> {
 
     let plaintext = match decryptor.decrypt_padded_vec::<Pkcs7>(cipher) {
         Ok(plaintext) => Ok(plaintext),
-        Err(_) => Err(AesError::unpad(cipher.to_owned())),
+        Err(_) => Err(AesError::unpad()),
     }?;
 
     Ok(plaintext)

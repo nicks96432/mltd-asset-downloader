@@ -1,5 +1,6 @@
 #[cfg(feature = "asset-ripper")]
 pub mod asset_ripper;
+mod error;
 #[cfg(feature = "rabex")]
 pub mod rabex;
 #[cfg(feature = "rabex")]
@@ -13,6 +14,8 @@ use std::path::Path;
 pub use asset_ripper::AssetRipper;
 #[cfg(feature = "rabex")]
 pub use rabex::RabexExtractor;
+
+pub(crate) use self::error::UnityError;
 
 use crate::error::Result;
 

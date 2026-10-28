@@ -15,7 +15,7 @@ use tokio_util::compat::FuturesAsyncReadCompatExt;
 
 use crate::Error;
 use crate::error::{Repr, Result};
-use crate::net::{AssetVersion, Error as NetworkError, ErrorKind as NetworkErrorKind};
+use crate::net::{AssetVersion, Error as NetworkError};
 use crate::util::{Progress, ProgressReadAdapter};
 
 /// Base URL of MLTD asset server.
@@ -64,7 +64,7 @@ impl Asset<'_> {
     ///
     /// # Errors
     ///
-    /// - [`Error::Request`]: if it cannot send request to MLTD asset server.
+    /// - [`crate::ErrorKind::Network`]: if it cannot send request to MLTD asset server.
     async fn send_request(asset_info: &AssetInfo) -> Result<reqwest::Response> {
         static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
@@ -79,9 +79,12 @@ impl Asset<'_> {
         );
 
         let url = asset_info.to_url();
-        let res = CLIENT.get(url.clone()).headers(headers).send().await.map_err(|e| {
-            NetworkError { kind: NetworkErrorKind::Request, url: url.clone(), source: Some(e) }
-        })?;
+        let res = CLIENT
+            .get(url.clone())
+            .headers(headers)
+            .send()
+            .await
+            .map_err(|e| NetworkError::request(url.clone(), Some(e)))?;
 
         if !res.status().is_success() {
             return Err(NetworkError::status(url, res.status().as_u16()).into());
@@ -97,8 +100,8 @@ impl Asset<'_> {
     ///
     /// # Errors
     ///
-    /// - [`Error::IO`]: if it cannot write the downloaded data to file.
-    /// - [`Error::Request`]: if it cannot send request to MLTD asset server.
+    /// - [`crate::ErrorKind::Io`]: if it cannot write the downloaded data to file.
+    /// - [`crate::ErrorKind::Network`]: if it cannot send request to MLTD asset server.
     ///
     /// # Example
     ///
@@ -137,7 +140,7 @@ impl Asset<'_> {
         let mut buf = Cursor::new(Vec::new());
         tokio::io::copy(&mut stream_reader, &mut buf)
             .await
-            .map_err(|e| Repr::io("failed to download asset", Some(e)))?;
+            .map_err(|e| Repr::io("download asset", None, e))?;
 
         Ok(Self { data: Cow::from(buf.into_inner()), info: asset_info })
     }
@@ -149,8 +152,8 @@ impl Asset<'_> {
     ///
     /// # Errors
     ///
-    /// - [`Error::IO`]: if it cannot write the downloaded data to file.
-    /// - [`Error::Request`]: if it cannot send request to MLTD asset server.
+    /// - [`crate::ErrorKind::Io`]: if it cannot write the downloaded data to file.
+    /// - [`crate::ErrorKind::Network`]: if it cannot send request to MLTD asset server.
     ///
     /// # Example
     ///
@@ -188,7 +191,7 @@ impl Asset<'_> {
         if let Some(parent) = output.parent().filter(|p| !p.as_os_str().is_empty()) {
             tokio::fs::create_dir_all(parent)
                 .await
-                .map_err(|e| Repr::io("failed to create output directory", Some(e)))?;
+                .map_err(|e| Repr::io("create directory", Some(parent), e))?;
         }
 
         let mut part_name = output.as_os_str().to_owned();
@@ -214,7 +217,7 @@ impl Asset<'_> {
 
         if let Err(e) = result {
             let _ = tokio::fs::remove_file(&part_path).await;
-            return Err(Repr::io("failed to download asset", Some(e)).into());
+            return Err(Repr::io("download asset to", Some(output), e).into());
         }
 
         Ok(())

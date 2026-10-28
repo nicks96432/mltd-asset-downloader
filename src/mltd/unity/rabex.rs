@@ -17,9 +17,10 @@ use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use serde::Deserialize;
 
+use super::UnityError;
 use super::texture::{Bytes, Int, decode_texture};
 use super::{AssetInfo, Extractor};
-use crate::error::{Error, Repr, Result};
+use crate::error::{Repr, Result};
 use crate::util::HashMap;
 
 type TypeTrees = TypeTreeCache<TpkTypeTreeBlob>;
@@ -39,10 +40,6 @@ fn original_path(container_path: &str) -> String {
         Some(rest) => format!("Assets/{rest}"),
         None => path,
     }
-}
-
-fn io_error(reason: &str, source: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> Error {
-    Repr::io(reason, Some(std::io::Error::other(source))).into()
 }
 
 #[derive(Deserialize)]
@@ -122,16 +119,14 @@ impl Bundle {
     /// Reads `size` bytes at `offset` of a non-serialized file, decompressing only the blocks
     /// covering them.
     fn read_resource(&self, name: &str, offset: i64, size: i64) -> Result<Vec<u8>> {
-        let entry = self
-            .reader
-            .file(name)
-            .ok_or_else(|| Repr::io("streaming resource does not exist", None))?;
+        let entry =
+            self.reader.file(name).ok_or_else(|| UnityError::ResourceNotFound(name.to_owned()))?;
 
         if entry.flags & FileEntry::FLAG_SERIALIZEDFILE != 0 {
-            return Err(Repr::io("serialized file is not a resource", None).into());
+            return Err(UnityError::NotAResource(name.to_owned()).into());
         }
 
-        let out_of_range = || Repr::io("streaming data is out of range", None);
+        let out_of_range = || UnityError::ResourceOutOfRange;
         if offset < 0 || size < 0 || offset.checked_add(size).is_none_or(|end| end > entry.size) {
             return Err(out_of_range().into());
         }
@@ -141,9 +136,9 @@ impl Bundle {
         let data = self
             .reader
             .read_at_entry(&range)
-            .map_err(|e| Repr::io("failed to decompress bundle file", Some(e)))?;
+            .map_err(|e| Repr::io("decompress bundle file", None, e))?;
         if usize::try_from(size).ok() != Some(data.len()) {
-            return Err(Repr::io("streaming data is truncated", None).into());
+            return Err(UnityError::Truncated("streaming data").into());
         }
 
         Ok(data)
@@ -191,11 +186,11 @@ impl RabexExtractor {
         let bundle = self
             .bundles
             .get(info.orig_bundle.as_ref())
-            .ok_or_else(|| Repr::io("bundle is not loaded", None))?;
+            .ok_or_else(|| UnityError::BundleNotLoaded(info.orig_bundle.to_string()))?;
         let collection = bundle
             .collections
             .get(info.collection.as_ref())
-            .ok_or_else(|| Repr::io("collection is not loaded", None))?;
+            .ok_or_else(|| UnityError::CollectionNotLoaded(info.collection.to_string()))?;
 
         Ok((bundle, collection))
     }
@@ -296,32 +291,32 @@ impl Extractor for RabexExtractor {
         let file_name = path
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
-            .ok_or_else(|| Repr::io("path has no file name", None))?;
+            .ok_or(UnityError::NoFileName)?;
 
-        let bytes = std::fs::read(path).map_err(|e| Repr::io("cannot read bundle", Some(e)))?;
+        let bytes = std::fs::read(path).map_err(|e| Repr::io("read bundle", Some(path), e))?;
         // rabex panics on the other signatures (UnityWeb, UnityRaw, ...) instead of returning an error
         if !bytes.starts_with(b"UnityFS\0") {
-            return Err(Repr::io("not a UnityFS bundle", None).into());
+            return Err(UnityError::NotUnityFs.into());
         }
         let len = bytes.len() as u64;
         let config = ExtractionConfig::default().assume_recent_unity();
         let reader = BundleFileReader::from_reader(Cursor::new(bytes), &config)
-            .map_err(|e| io_error("failed to parse bundle", e))?;
+            .map_err(|e| UnityError::corrupted("parse bundle", e))?;
 
         // resources are decompressed on demand, so a truncated bundle has to be rejected here
         let compressed: u64 = reader.blocks().iter().map(|b| u64::from(b.compressed_size)).sum();
         if reader.reader.position().saturating_add(compressed) > len {
-            return Err(Repr::io("bundle is truncated", None).into());
+            return Err(UnityError::Truncated("bundle").into());
         }
 
         let mut serialized_files = Vec::new();
         for entry in reader.serialized_files() {
             let data = reader
                 .read_at_entry(entry)
-                .map_err(|e| Repr::io("failed to decompress bundle file", Some(e)))?;
+                .map_err(|e| Repr::io("decompress bundle file", None, e))?;
 
             let file = SerializedFile::from_reader(&mut Cursor::new(&data))
-                .map_err(|e| io_error("failed to parse serialized file", e))?;
+                .map_err(|e| UnityError::corrupted("parse serialized file", e))?;
             let asset_bundle = self.read_asset_bundle(&file, &data);
             serialized_files.push((entry.path.to_lowercase(), file, data, asset_bundle));
         }
@@ -334,7 +329,7 @@ impl Extractor for RabexExtractor {
             })
             .map_or(file_name, str::to_owned);
         if self.bundles.contains_key(&bundle_name) {
-            return Err(Repr::io("a bundle with the same name is already loaded", None).into());
+            return Err(UnityError::DuplicateBundle(bundle_name).into());
         }
         let mut bundle = Bundle { reader, collections: HashMap::new() };
         for (collection_name, file, data, asset_bundle) in serialized_files {
@@ -386,12 +381,12 @@ impl Extractor for RabexExtractor {
         let object = collection
             .file
             .get_object_info(info.path_id)
-            .ok_or_else(|| Repr::io("asset does not exist", None))?;
+            .ok_or(UnityError::AssetNotFound(info.path_id))?;
 
         collection
             .file
             .read(object, &*self.type_trees, &mut Cursor::new(&collection.data))
-            .map_err(|e| io_error("failed to deserialize asset", e))
+            .map_err(|e| UnityError::corrupted("deserialize asset", e).into())
     }
 
     fn extract(&self, info: &AssetInfo) -> Result<File> {
@@ -399,28 +394,27 @@ impl Extractor for RabexExtractor {
         let object = collection
             .file
             .get_object_info(info.path_id)
-            .ok_or_else(|| Repr::io("asset does not exist", None))?;
+            .ok_or(UnityError::AssetNotFound(info.path_id))?;
         let mut reader = Cursor::new(&collection.data);
 
-        let mut out =
-            tempfile::tempfile().map_err(|e| Repr::io("cannot create tempfile", Some(e)))?;
+        let mut out = tempfile::tempfile().map_err(|e| Repr::io("create tempfile", None, e))?;
 
         match &*info.class {
             "TextAsset" => {
                 let text: TextAssetData = collection
                     .file
                     .read(object, &*self.type_trees, &mut reader)
-                    .map_err(|e| io_error("failed to read TextAsset", e))?;
+                    .map_err(|e| UnityError::corrupted("read TextAsset", e))?;
 
                 std::io::Write::write_all(&mut out, &text.m_Script.0)
-                    .map_err(|e| Repr::io("cannot write tempfile", Some(e)))?;
+                    .map_err(|e| Repr::io("write tempfile", None, e))?;
             }
 
             "Texture2D" => {
                 let texture: Texture2DData = collection
                     .file
                     .read(object, &*self.type_trees, &mut reader)
-                    .map_err(|e| io_error("failed to read Texture2D", e))?;
+                    .map_err(|e| UnityError::corrupted("read Texture2D", e))?;
 
                 let stream = &texture.m_StreamData;
                 let streamed;
@@ -433,32 +427,31 @@ impl Extractor for RabexExtractor {
                 };
 
                 let dimension = |v: Int| {
-                    u32::try_from(v.0).map_err(|e| io_error("invalid texture dimension", e))
+                    u32::try_from(v.0)
+                        .map_err(|e| UnityError::corrupted("read texture dimension", e))
                 };
                 let mut image = decode_texture(
                     i32::try_from(texture.m_TextureFormat.0)
-                        .map_err(|e| io_error("invalid texture format", e))?,
+                        .map_err(|e| UnityError::corrupted("read texture format", e))?,
                     dimension(texture.m_Width)?,
                     dimension(texture.m_Height)?,
                     data,
                 )
-                .map_err(|e| io_error("failed to decode Texture2D", e))?;
+                .map_err(|e| UnityError::corrupted("decode Texture2D", e))?;
 
                 // Unity textures are bottom-up, flip them like AssetRipper does
                 image::imageops::flip_vertical_in_place(&mut image);
                 image
                     .write_to(&mut out, ImageFormat::Png)
-                    .map_err(|e| io_error("failed to encode png", e))?;
+                    .map_err(|e| UnityError::corrupted("encode png", e))?;
             }
 
             class => {
-                return Err(
-                    Repr::io(&format!("cannot extract asset of class {class}"), None).into()
-                );
+                return Err(UnityError::UnsupportedClass(class.to_owned()).into());
             }
         }
 
-        out.rewind().map_err(|e| Repr::io("cannot rewind tempfile", Some(e)))?;
+        out.rewind().map_err(|e| Repr::io("rewind tempfile", None, e))?;
 
         Ok(out)
     }

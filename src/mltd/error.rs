@@ -1,6 +1,7 @@
 //! Error type definitions.
 
 use std::io::Error as IoError;
+use std::path::{Path, PathBuf};
 
 use thiserror::Error as ThisError;
 
@@ -12,6 +13,8 @@ use crate::extract::puzzle::Error as PuzzleError;
 use crate::extract::text::AesError;
 use crate::manifest::ManifestError;
 use crate::net::Error as NetworkError;
+#[cfg(any(feature = "rabex", feature = "asset-ripper"))]
+use crate::unity::UnityError;
 
 #[derive(Debug, ThisError)]
 #[error(transparent)]
@@ -34,26 +37,48 @@ impl From<Repr> for Error {
     }
 }
 
+/// The category of an [`Error`].
+///
+/// New kinds may be added, and some of them only exist when the related feature is enabled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ErrorKind {
+    /// Deserialization of an asset failed.
     Deserialize,
+
+    /// A file system operation failed.
     Io,
+
+    /// The manifest cannot be (de)serialized.
     Manifest,
+
+    /// A network request failed.
     Network,
+
+    /// The platform name is unknown.
     UnknownPlatform,
 
+    /// An external process failed to start or exited unexpectedly.
     #[cfg(feature = "asset-ripper")]
     Process,
 
+    /// A Unity asset bundle is invalid, or an asset in it cannot be read.
+    #[cfg(any(feature = "rabex", feature = "asset-ripper"))]
+    Unity,
+
+    /// Audio decoding or encoding failed.
     #[cfg(feature = "decode-audio")]
     AudioDecode,
 
+    /// Text decryption failed.
     #[cfg(feature = "decrypt-text")]
     Aes,
 
+    /// Puzzle solving failed.
     #[cfg(feature = "process-image")]
     Puzzle,
 
+    /// An index is out of range.
     #[cfg(any(feature = "decode-audio", feature = "process-image"))]
     OutOfRange,
 }
@@ -61,13 +86,16 @@ pub enum ErrorKind {
 impl From<&Repr> for ErrorKind {
     fn from(value: &Repr) -> Self {
         match value {
-            Repr::Io { .. } => ErrorKind::Io,
+            Repr::Io(_) => ErrorKind::Io,
             Repr::Manifest(_) => ErrorKind::Manifest,
             Repr::Network(_) => ErrorKind::Network,
             Repr::UnknownPlatform(_) => ErrorKind::UnknownPlatform,
 
             #[cfg(feature = "asset-ripper")]
             Repr::Process(_) => ErrorKind::Process,
+
+            #[cfg(any(feature = "rabex", feature = "asset-ripper"))]
+            Repr::Unity(_) => ErrorKind::Unity,
 
             #[cfg(any(feature = "extract", feature = "rabex", feature = "asset-ripper"))]
             Repr::JSONDeserialize(_) => ErrorKind::Deserialize,
@@ -87,12 +115,38 @@ impl From<&Repr> for ErrorKind {
     }
 }
 
+/// A file system operation failed.
+#[derive(Debug, ThisError)]
+#[error("failed to {op}{}", PathDisplay(.path.as_deref()))]
+pub(crate) struct FsError {
+    /// What was being done, e.g. `"create directory"`.
+    op: &'static str,
+
+    /// The path the operation was applied to.
+    path: Option<PathBuf>,
+
+    #[source]
+    source: IoError,
+}
+
+/// Displays ` <path>` if the path is known.
+struct PathDisplay<'a>(Option<&'a Path>);
+
+impl std::fmt::Display for PathDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            Some(path) => write!(f, " `{}`", path.display()),
+            None => Ok(()),
+        }
+    }
+}
+
 /// Error type for this crate.
 #[derive(ThisError, Debug)]
 pub(crate) enum Repr {
-    /// IO operation failed.
-    #[error("{reason}, cause: {source:?}")]
-    Io { reason: String, source: Option<IoError> },
+    /// A file system operation failed.
+    #[error(transparent)]
+    Io(#[from] FsError),
 
     /// Unknown platform.
     #[error("unknown platform: {0}")]
@@ -102,6 +156,11 @@ pub(crate) enum Repr {
     #[cfg(feature = "asset-ripper")]
     #[error("{0}")]
     Process(String),
+
+    /// An Unity asset bundle is invalid, or an asset in it cannot be read.
+    #[cfg(any(feature = "rabex", feature = "asset-ripper"))]
+    #[error(transparent)]
+    Unity(#[from] UnityError),
 
     #[cfg(feature = "decode-audio")]
     #[error("failed to decode audio: {0}")]
@@ -137,8 +196,9 @@ pub(crate) enum Repr {
 }
 
 impl Repr {
-    pub fn io(reason: &str, source: Option<IoError>) -> Self {
-        Self::Io { reason: reason.to_string(), source }
+    /// Creates an error for the failed file system operation `op` on `path`.
+    pub fn io(op: &'static str, path: Option<&Path>, source: IoError) -> Self {
+        Self::Io(FsError { op, path: path.map(Path::to_path_buf), source })
     }
 }
 
@@ -155,5 +215,18 @@ mod tests {
     #[test]
     const fn test_error() {
         assert_send_sync::<Error>();
+    }
+
+    #[test]
+    fn test_io_error_message() {
+        let source = IoError::from(std::io::ErrorKind::NotFound);
+
+        let err: Error = Repr::io("open file", Some(Path::new("a.txt")), source).into();
+        assert_eq!(err.kind(), ErrorKind::Io);
+        assert_eq!(err.to_string(), "failed to open file `a.txt`");
+
+        let err: Error = Repr::io("create tempfile", None, IoError::other("x")).into();
+        assert_eq!(err.to_string(), "failed to create tempfile");
+        assert!(std::error::Error::source(&err).is_some());
     }
 }
