@@ -564,6 +564,27 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_corrupted_texture() {
+        init_test_logger();
+
+        let case = &test_cases()[1];
+        let info = &case.asset_info;
+        let mut bytes = std::fs::read(case.asset_path).unwrap();
+        // corrupts the streamed texture data, the decoder panics on it (also in release builds)
+        bytes[40080] ^= 0xff;
+        let path = std::env::temp_dir().join("mltd_test_corrupted_texture.unity3d");
+        std::fs::write(&path, bytes).unwrap();
+
+        let mut extractor = RabexExtractor::new();
+        let loaded = extractor.load_file(&path);
+        std::fs::remove_file(&path).unwrap();
+        loaded.unwrap();
+
+        let asset = extractor.asset_info(&info.orig_bundle, &info.collection, info.path_id);
+        assert!(extractor.extract(asset.unwrap()).is_err());
+    }
+
+    #[test]
     fn test_sanitize_path() {
         assert_eq!(super::original_path("assets/a/b.png"), "Assets/a/b.png");
         assert_eq!(super::original_path("assets/../../x"), "Assets/x");

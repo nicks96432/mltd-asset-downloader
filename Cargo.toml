@@ -118,7 +118,7 @@ split-debuginfo = "unpacked"
 [profile.release]
 strip = true
 lto = "thin"
-panic = "abort"
+panic = "unwind"
 codegen-units = 20
 
 # UnityFS v6 header fix (jakobhellermann/RustyAssetBundleEXtractor#1)

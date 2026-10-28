@@ -1,6 +1,7 @@
 //! Unity `Texture2D` pixel data decoding.
 
 use std::fmt::Formatter;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use image::RgbaImage;
 use serde::de::{Deserialize, Deserializer, SeqAccess, Visitor};
@@ -166,25 +167,30 @@ fn decode_compressed(
     h: usize,
     out: &mut [u32],
 ) -> Result<(), String> {
-    let result = match format {
-        10 => t2d::decode_bc1(data, w, h, out),
-        12 => t2d::decode_bc3(data, w, h, out),
-        25 => t2d::decode_bc7(data, w, h, out),
-        30 | 31 => t2d::decode_pvrtc_2bpp(data, w, h, out),
-        32 | 33 => t2d::decode_pvrtc_4bpp(data, w, h, out),
-        34 => t2d::decode_etc1(data, w, h, out),
-        41 => t2d::decode_eacr(data, w, h, out),
-        42 => t2d::decode_eacr_signed(data, w, h, out),
-        43 => t2d::decode_eacrg(data, w, h, out),
-        45 => t2d::decode_etc2_rgb(data, w, h, out),
-        46 => t2d::decode_etc2_rgba1(data, w, h, out),
-        47 => t2d::decode_etc2_rgba8(data, w, h, out),
-        48..=59 => {
-            let (bw, bh, _) = block_layout(format).ok_or("unsupported ASTC block size")?;
-            t2d::decode_astc(data, w, h, bw, bh, out)
-        }
-        _ => return Err(format!("unsupported texture format {format}")),
-    };
+    // the decoders index their lookup tables with values read from the data and panic on
+    // malformed blocks, which must not take the whole process down
+    catch_unwind(AssertUnwindSafe(|| {
+        let result = match format {
+            10 => t2d::decode_bc1(data, w, h, out),
+            12 => t2d::decode_bc3(data, w, h, out),
+            25 => t2d::decode_bc7(data, w, h, out),
+            30 | 31 => t2d::decode_pvrtc_2bpp(data, w, h, out),
+            32 | 33 => t2d::decode_pvrtc_4bpp(data, w, h, out),
+            34 => t2d::decode_etc1(data, w, h, out),
+            41 => t2d::decode_eacr(data, w, h, out),
+            42 => t2d::decode_eacr_signed(data, w, h, out),
+            43 => t2d::decode_eacrg(data, w, h, out),
+            45 => t2d::decode_etc2_rgb(data, w, h, out),
+            46 => t2d::decode_etc2_rgba1(data, w, h, out),
+            47 => t2d::decode_etc2_rgba8(data, w, h, out),
+            48..=59 => {
+                let (bw, bh, _) = block_layout(format).ok_or("unsupported ASTC block size")?;
+                t2d::decode_astc(data, w, h, bw, bh, out)
+            }
+            _ => return Err(format!("unsupported texture format {format}")),
+        };
 
-    result.map_err(str::to_owned)
+        result.map_err(str::to_owned)
+    }))
+    .unwrap_or_else(|_| Err("texture data is malformed".to_owned()))
 }
