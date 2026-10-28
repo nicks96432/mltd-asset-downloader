@@ -111,6 +111,7 @@ decrypt-text = [
 ]
 download = []
 extract = [
+  "asset-ripper",
   "decode-audio",
   "decrypt-text",
   "dep:rayon",
@@ -130,6 +131,10 @@ rabex = [
   "process-image",
 ]
 
+# UnityFS v6 header fix (jakobhellermann/RustyAssetBundleEXtractor#1)
+[patch.crates-io]
+rabex = { git = "https://github.com/jakobhellermann/RustyAssetBundleEXtractor", rev = "df11b296b6732fa4763422ddd1cb94746ac6ac62" }
+
 [profile.dev]
 split-debuginfo = "unpacked"
 
@@ -138,7 +143,3 @@ strip = true
 lto = "thin"
 panic = "unwind"
 codegen-units = 20
-
-# UnityFS v6 header fix (jakobhellermann/RustyAssetBundleEXtractor#1)
-[patch.crates-io]
-rabex = { git = "https://github.com/jakobhellermann/RustyAssetBundleEXtractor", rev = "df11b296b6732fa4763422ddd1cb94746ac6ac62" }

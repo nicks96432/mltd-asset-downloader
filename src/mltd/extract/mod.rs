@@ -3,6 +3,9 @@
 #[cfg(feature = "decode-audio")]
 pub mod audio;
 
+#[cfg(feature = "extract")]
+pub mod pipeline;
+
 #[cfg(feature = "process-image")]
 pub mod puzzle;
 

@@ -11,9 +11,10 @@ use mltd::Error;
 use mltd::asset::{Asset, AssetInfo, Platform};
 use mltd::manifest::Manifest;
 use mltd::net::{AssetVersion, MatsuriApiClient};
+use mltd::util::safe_join;
 use tokio::fs::create_dir_all;
 
-use crate::util::{BarProgress, PlatformArg, create_progress_bar, safe_join};
+use crate::util::{BarProgress, PlatformArg, create_progress_bar};
 
 #[derive(Debug, Args)]
 #[command(about, arg_required_else_help = true, disable_help_flag = true)]
@@ -160,7 +161,7 @@ pub async fn download_assets(args: &DownloaderArgs) -> Result<()> {
                             Err(e) => Err(anyhow::Error::from(e)),
                         }
                     }
-                    Err(e) => Err(e),
+                    Err(e) => Err(anyhow::Error::from(e)),
                 };
 
                 if let Err(e) = result {

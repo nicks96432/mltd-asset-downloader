@@ -1,12 +1,15 @@
 //! Utilities used in this crate.
 
 use std::io::Result;
+use std::path::{Component, Path, PathBuf};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use ahash::RandomState;
 use pin_project_lite::pin_project;
 use tokio::io::{AsyncRead, ReadBuf};
+
+use crate::error::Repr;
 
 pub(crate) type HashMap<K, V> = std::collections::HashMap<K, V, RandomState>;
 
@@ -62,6 +65,26 @@ impl<R: AsyncRead> AsyncRead for ProgressReadAdapter<'_, R> {
     }
 }
 
+/// Joins path that is read from a manifest or an asset bundle to `base`, and makes
+/// sure that the result stays inside `base`.
+///
+/// # Errors
+///
+/// Returns [`crate::Error`] with [`crate::ErrorKind::UnsafePath`] if `path` is absolute or
+/// contains `..`.
+pub fn safe_join(base: &Path, path: &str) -> crate::error::Result<PathBuf> {
+    let mut joined = base.to_path_buf();
+    for component in Path::new(path).components() {
+        match component {
+            Component::Normal(part) => joined.push(part),
+            Component::CurDir => (),
+            _ => return Err(Repr::UnsafePath(path.to_owned()).into()),
+        }
+    }
+
+    Ok(joined)
+}
+
 #[cfg(test)]
 static TEST_LOGGER_INIT: std::sync::Once = std::sync::Once::new();
 
@@ -80,4 +103,19 @@ pub(crate) fn init_test_logger() {
             )
             .init();
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_safe_join() {
+        let base = Path::new("out");
+
+        assert_eq!(safe_join(base, "a/./b.png").unwrap(), Path::new("out/a/b.png"));
+        assert!(safe_join(base, "../x").is_err());
+        assert!(safe_join(base, "a/../../x").is_err());
+        assert!(safe_join(base, "/etc/passwd").is_err());
+    }
 }

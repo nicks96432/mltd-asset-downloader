@@ -55,6 +55,9 @@ pub enum ErrorKind {
     /// A network request failed.
     Network,
 
+    /// The path read from an untrusted source escapes the directory it should stay in.
+    UnsafePath,
+
     /// The platform name is unknown.
     UnknownPlatform,
 
@@ -78,6 +81,10 @@ pub enum ErrorKind {
     #[cfg(feature = "process-image")]
     Puzzle,
 
+    /// An image cannot be encoded or decoded.
+    #[cfg(feature = "process-image")]
+    Image,
+
     /// An index is out of range.
     #[cfg(any(feature = "decode-audio", feature = "process-image"))]
     OutOfRange,
@@ -90,6 +97,7 @@ impl From<&Repr> for ErrorKind {
             Repr::Manifest(_) => ErrorKind::Manifest,
             Repr::Network(_) => ErrorKind::Network,
             Repr::UnknownPlatform(_) => ErrorKind::UnknownPlatform,
+            Repr::UnsafePath(_) => ErrorKind::UnsafePath,
 
             #[cfg(feature = "asset-ripper")]
             Repr::Process(_) => ErrorKind::Process,
@@ -108,6 +116,9 @@ impl From<&Repr> for ErrorKind {
 
             #[cfg(feature = "process-image")]
             Repr::Puzzle(_) => ErrorKind::Puzzle,
+
+            #[cfg(feature = "process-image")]
+            Repr::Image(_) => ErrorKind::Image,
 
             #[cfg(any(feature = "decode-audio", feature = "process-image"))]
             Repr::OutOfRange { .. } => ErrorKind::OutOfRange,
@@ -148,6 +159,10 @@ pub(crate) enum Repr {
     #[error(transparent)]
     Io(#[from] FsError),
 
+    /// A path escapes the directory it should stay in.
+    #[error("unsafe path: {0}")]
+    UnsafePath(String),
+
     /// Unknown platform.
     #[error("unknown platform: {0}")]
     UnknownPlatform(String),
@@ -170,6 +185,11 @@ pub(crate) enum Repr {
     #[cfg(feature = "process-image")]
     #[error("failed to solve puzzle: {0}")]
     Puzzle(#[from] PuzzleError),
+
+    /// An image cannot be encoded or decoded.
+    #[cfg(feature = "process-image")]
+    #[error("image error: {0}")]
+    Image(#[from] image::ImageError),
 
     /// AES related error for text assets.
     #[cfg(feature = "decrypt-text")]

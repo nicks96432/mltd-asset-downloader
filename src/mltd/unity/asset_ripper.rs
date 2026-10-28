@@ -15,6 +15,7 @@ use tempfile::{TempDir, tempdir};
 
 use super::float::Float;
 use super::{Bundle, Class, Error as UnityError, Extractor, Object, Rect, Sprite};
+use crate::ErrorKind;
 use crate::error::{Repr, Result};
 use crate::net::Error;
 use crate::util::HashMap;
@@ -36,6 +37,9 @@ pub struct AssetRipper {
 }
 
 impl AssetRipper {
+    /// The first port tried by [`Self::pool`].
+    pub const FIRST_PORT: u16 = 50000;
+
     fn full_url(&self, rel_url: &str) -> Url {
         let url = format!("{}/{}", self.base_url, rel_url);
         Url::parse(&url).expect("url suould be valid")
@@ -123,6 +127,47 @@ impl AssetRipper {
             client: Client::new(),
             process: Some(process),
         })
+    }
+
+    /// Starts `count` Asset Ripper instances with the given executable path.
+    ///
+    /// Asset Ripper exits immediately when its port is in use, so the instances are started on
+    /// the first free ports from [`Self::FIRST_PORT`].
+    ///
+    /// # Errors
+    ///
+    /// This method fails if the process cannot be started, or there are too many ports in use.
+    pub fn pool<P>(path: P, count: usize) -> Result<Vec<Self>>
+    where
+        P: AsRef<Path>,
+    {
+        const MAX_PORT_FAILURES: usize = 100;
+
+        let mut port = Self::FIRST_PORT;
+        let mut port_failures = 0;
+        let mut pool = Vec::with_capacity(count);
+        while pool.len() < count {
+            match Self::new(path.as_ref(), port) {
+                Ok(ripper) => {
+                    tracing::trace!(port, "created AssetRipper");
+                    pool.push(ripper);
+                }
+                Err(e) if e.kind() == ErrorKind::Process => {
+                    port_failures += 1;
+                    if port_failures > MAX_PORT_FAILURES {
+                        return Err(e);
+                    }
+                    tracing::debug!(port, error = ?e, "cannot start AssetRipper, trying next port");
+                }
+                Err(e) => return Err(e),
+            }
+
+            port = port.checked_add(1).ok_or_else(|| {
+                Repr::Process("there is no port left to start AssetRipper".to_owned())
+            })?;
+        }
+
+        Ok(pool)
     }
 
     /// Connects to an existing Asset Ripper instance with the given host and port.
