@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::{Result, anyhow};
-use clap::{Args, ValueEnum};
+use clap::Args;
 use futures_util::StreamExt;
 use human_bytes::human_bytes;
 use indicatif::{MultiProgress, MultiProgressAlignment, ProgressDrawTarget};
@@ -13,7 +13,7 @@ use mltd::manifest::Manifest;
 use mltd::net::{AssetVersion, MatsuriApiClient};
 use tokio::fs::create_dir_all;
 
-use crate::util::{BarProgress, create_progress_bar, safe_join};
+use crate::util::{BarProgress, PlatformArg, create_progress_bar, safe_join};
 
 #[derive(Debug, Args)]
 #[command(about, arg_required_else_help = true, disable_help_flag = true)]
@@ -46,26 +46,6 @@ pub struct DownloaderArgs {
     /// Print help
     #[arg(long, action = clap::ArgAction::HelpShort)]
     help: Option<bool>,
-}
-
-/// Platform variant accepted on the command line.
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub(crate) enum PlatformArg {
-    /// Android platform
-    Android,
-
-    /// iOS platform
-    #[allow(clippy::upper_case_acronyms)]
-    IOS,
-}
-
-impl From<PlatformArg> for Platform {
-    fn from(value: PlatformArg) -> Self {
-        match value {
-            PlatformArg::Android => Self::Android,
-            PlatformArg::IOS => Self::IOS,
-        }
-    }
 }
 
 async fn download_manifest(

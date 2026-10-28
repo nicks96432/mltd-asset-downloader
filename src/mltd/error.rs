@@ -14,7 +14,7 @@ use crate::extract::text::AesError;
 use crate::manifest::ManifestError;
 use crate::net::Error as NetworkError;
 #[cfg(any(feature = "rabex", feature = "asset-ripper"))]
-use crate::unity::UnityError;
+use crate::unity::Error as UnityError;
 
 #[derive(Debug, ThisError)]
 #[error(transparent)]

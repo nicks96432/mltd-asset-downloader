@@ -1,11 +1,37 @@
+#[cfg(any(feature = "download", feature = "extract"))]
 use std::path::{Component, Path, PathBuf};
 
+#[cfg(feature = "extract")]
 use ahash::RandomState;
+#[cfg(any(feature = "download", feature = "extract"))]
 use anyhow::{Result, anyhow};
+use clap::ValueEnum;
 use indicatif::{ProgressBar, ProgressFinish, ProgressStyle};
+use mltd::asset::Platform;
 use mltd::util::Progress;
 
+#[cfg(feature = "extract")]
 pub(crate) type HashSet<T> = std::collections::HashSet<T, RandomState>;
+
+/// Platform variant accepted on the command line.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub(crate) enum PlatformArg {
+    /// Android platform
+    Android,
+
+    /// iOS platform
+    #[allow(clippy::upper_case_acronyms)]
+    IOS,
+}
+
+impl From<PlatformArg> for Platform {
+    fn from(value: PlatformArg) -> Self {
+        match value {
+            PlatformArg::Android => Self::Android,
+            PlatformArg::IOS => Self::IOS,
+        }
+    }
+}
 
 /// Reports the progress of a transfer to a [`ProgressBar`].
 pub(crate) struct BarProgress<'a>(pub &'a ProgressBar);
@@ -31,6 +57,7 @@ pub(crate) fn create_progress_bar() -> ProgressBar {
 
 /// Joins path that is read from a manifest or an asset bundle to `base`, and makes
 /// sure that the result stays inside `base`.
+#[cfg(any(feature = "download", feature = "extract"))]
 pub(crate) fn safe_join(base: &Path, path: &str) -> Result<PathBuf> {
     let mut joined = base.to_path_buf();
     for component in Path::new(path).components() {
@@ -45,6 +72,7 @@ pub(crate) fn safe_join(base: &Path, path: &str) -> Result<PathBuf> {
 }
 
 #[cfg(test)]
+#[cfg(any(feature = "download", feature = "extract"))]
 mod tests {
     use super::*;
 

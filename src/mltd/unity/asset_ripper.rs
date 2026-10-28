@@ -1,33 +1,26 @@
 //! Asset Ripper client.
 
-use std::borrow::Cow;
-use std::fs::File;
+use std::cell::OnceCell;
 use std::io::{BufRead, BufReader};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::time::Duration;
 
-use ahash::{HashMapExt, HashSetExt};
+use image::{DynamicImage, ImageFormat};
 use reqwest::Url;
 use reqwest::blocking::{Client, Response};
-use tempfile::tempdir;
+use serde_json::Value;
+use tempfile::{TempDir, tempdir};
 
-use super::{AssetInfo, Extractor, UnityError};
+use super::float::Float;
+use super::{Bundle, Class, Error as UnityError, Extractor, Object, Rect, Sprite};
 use crate::error::{Repr, Result};
 use crate::net::Error;
-use crate::util::{HashMap, HashSet};
-
-/// Map of assets in the format of
-/// {`bundle_name`: (`bundle_no`, {`collection_name`: (`collection_no`, {`path_id`: `AssetInfo`})})}
-type AssetsMap = HashMap<String, (usize, HashMap<String, (usize, HashMap<i64, AssetInfo>)>)>;
+use crate::util::HashMap;
 
 /// How long to wait for a spawned Asset Ripper to start listening.
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(60);
-
-fn unexpected_layout(what: &'static str) -> UnityError {
-    UnityError::PageLayout(what)
-}
 
 /// Asset Ripper client.
 #[derive(Debug)]
@@ -40,12 +33,6 @@ pub struct AssetRipper {
 
     /// Asset Ripper child process.
     process: Option<Child>,
-
-    /// Map of loaded asset infos.
-    assets: AssetsMap,
-
-    /// Set of load paths.
-    loaded_paths: HashSet<String>,
 }
 
 impl AssetRipper {
@@ -135,8 +122,6 @@ impl AssetRipper {
             base_url: format!("http://localhost:{port}"),
             client: Client::new(),
             process: Some(process),
-            assets: HashMap::new(),
-            loaded_paths: HashSet::new(),
         })
     }
 
@@ -147,13 +132,7 @@ impl AssetRipper {
     /// This method fails if the network request to the host fails.
     pub fn connect(host: &str, port: u16) -> Result<Self> {
         let client = Client::new();
-        let this = Self {
-            base_url: format!("http://{host}:{port}"),
-            client,
-            process: None,
-            assets: HashMap::new(),
-            loaded_paths: HashSet::new(),
-        };
+        let this = Self { base_url: format!("http://{host}:{port}"), client, process: None };
 
         let url = this.full_url("");
         let req = this.client.head(url.clone());
@@ -204,7 +183,7 @@ impl AssetRipper {
                 .and_then(|cell| cell.first_child())
                 .and_then(|text| text.value().as_text())
                 .and_then(|text| text.parse::<i64>().ok())
-                .ok_or_else(|| unexpected_layout("asset path id"))?;
+                .ok_or(UnityError::PageLayout("asset path id"))?;
 
             assets.push(path_id);
         }
@@ -212,12 +191,15 @@ impl AssetRipper {
         Ok(assets)
     }
 
-    fn load_asset(
+    /// Reads the object `path_id` of the collection numbered `collection_no` of the bundle
+    /// numbered `bundle_no`, which is the `slot`-th collection of the loaded file.
+    fn load_object(
         &self,
+        slot: usize,
         bundle_no: usize,
         collection_no: usize,
         path_id: i64,
-    ) -> Result<AssetInfo> {
+    ) -> Result<Object> {
         let path = format!(
             r#"{{"C":{{"B":{{"P":[{}]}},"I":{}}},"D":{}}}"#,
             bundle_no, collection_no, path_id
@@ -232,40 +214,24 @@ impl AssetRipper {
         let name = html
             .select(&name_selector)
             .next()
-            .ok_or_else(|| unexpected_layout("asset name"))?
+            .ok_or(UnityError::PageLayout("asset name"))?
             .inner_html();
         let info_nodes = html.select(&info_selector).collect::<Vec<_>>();
-        if info_nodes.len() < 6 {
-            return Err(unexpected_layout("asset information").into());
+        // asset bundles do not have the original path and bundle name
+        let is_bundle = info_nodes.get(3).is_some_and(|n| n.inner_html() == "AssetBundle");
+        if info_nodes.len() < if is_bundle { 4 } else { 6 } {
+            return Err(UnityError::PageLayout("asset information").into());
         }
 
-        let class = info_nodes[3].inner_html();
-        let collection_name = info_nodes[0]
-            .first_child()
-            .and_then(|anchor| anchor.first_child())
-            .and_then(|text| text.value().as_text())
-            .ok_or_else(|| unexpected_layout("collection name"))?
-            .to_string();
+        let class = Class::from_name(&info_nodes[3].inner_html());
+        let orig_path = match class {
+            // asset bundles contains bundle information only
+            Class::AssetBundle => None,
+            // the Windows version of Asset Ripper uses backslashes
+            _ => Some(info_nodes[4].inner_html().replace('\\', "/")),
+        };
 
-        if class == "AssetBundle" {
-            return Ok(AssetInfo {
-                path_id,
-                class: Cow::Owned(class),
-                name: Cow::Owned(name.clone()),
-                orig_path: None,
-                orig_bundle: Cow::Owned(name),
-                collection: Cow::Owned(collection_name),
-            });
-        }
-
-        Ok(AssetInfo {
-            path_id,
-            class: Cow::Owned(class),
-            name: Cow::Owned(name),
-            orig_path: Some(Cow::Owned(info_nodes[4].inner_html())),
-            orig_bundle: Cow::Owned(info_nodes[5].inner_html()),
-            collection: Cow::Owned(collection_name),
-        })
+        Ok(Object::new(slot, path_id, class, name, orig_path))
     }
 
     /// Exports the primary contents in the Asset Ripper.
@@ -315,15 +281,11 @@ impl Drop for AssetRipper {
 }
 
 impl Extractor for AssetRipper {
-    fn load_file(&mut self, path: &Path) -> Result<()> {
+    type Bundle<'a> = AssetRipperBundle<'a>;
+
+    fn load(&mut self, path: &Path) -> Result<AssetRipperBundle<'_>> {
         if path.is_dir() {
             return Err(UnityError::IsDirectory.into());
-        }
-
-        let path = path.to_string_lossy().to_string();
-        if self.loaded_paths.contains(&path) {
-            tracing::debug!(?path, "asset already loaded, skipping");
-            return Ok(());
         }
 
         // Load file and folder actually do the same things currently. See [here][here1] and
@@ -332,20 +294,12 @@ impl Extractor for AssetRipper {
         // [here1]: https://github.com/AssetRipper/AssetRipper/blob/e70e206184e506dd0cc4153288f22a13c9c9f74c/Source/AssetRipper.GUI.Web/Pages/Commands.cs#L56
         // [here2]: https://github.com/AssetRipper/AssetRipper/blob/e70e206184e506dd0cc4153288f22a13c9c9f74c/Source/AssetRipper.GUI.Web/Pages/Commands.cs#L84
         let url = self.full_url("LoadFile");
-
-        // Asset Ripper cannot load new files after loading any files, so we need to
-        // load the old files again.
-        let form = self
-            .loaded_paths
-            .iter()
-            .chain(std::iter::once(&path))
-            .map(|p| ("Path", p))
-            .collect::<Vec<_>>();
+        let path = path.to_string_lossy().to_string();
 
         let req = self
             .client
             .post(url.clone())
-            .form(&form)
+            .form(&[("Path", &path)])
             .build()
             .map_err(|e| Error::request(url.clone(), Some(e)))?;
 
@@ -354,132 +308,177 @@ impl Extractor for AssetRipper {
         if let Err(e) = self.client.execute(req) {
             return Err(Error::request(url, Some(e)).into());
         }
-        drop(form);
 
-        let bundles = self.load_bundles()?;
+        // the file stays loaded in AssetRipper until the bundle is dropped, even if listing fails
+        let mut bundle = AssetRipperBundle {
+            ripper: self,
+            slots: Vec::new(),
+            objects: Vec::new(),
+            export: OnceCell::new(),
+        };
+        bundle.list_objects()?;
 
-        for (bundle_id, _) in bundles.into_iter().enumerate() {
-            let mut collections = HashMap::new();
+        Ok(bundle)
+    }
+}
 
-            let mut orig_bundle_name = String::new();
+/// A file loaded in [`AssetRipper`].
+///
+/// Asset Ripper cannot load new files after loading any files, so it is reset when the bundle
+/// is dropped.
+pub struct AssetRipperBundle<'a> {
+    ripper: &'a AssetRipper,
 
-            for (collection_id, collection) in
-                self.load_collection(bundle_id)?.into_iter().enumerate()
-            {
-                let mut assets = HashMap::new();
-                for asset in self
-                    .path_ids(bundle_id, collection_id)?
-                    .into_iter()
-                    .map(|path_id| self.load_asset(bundle_id, collection_id, path_id))
-                {
-                    let asset = asset?;
-                    let bundle_name = asset.orig_bundle.to_string();
-                    assets.insert(asset.path_id, asset);
+    /// `(bundle_no, collection_no)` of the collections in Asset Ripper, indexed by
+    /// [`Object::collection`].
+    slots: Vec<(usize, usize)>,
 
-                    if orig_bundle_name.is_empty() {
-                        orig_bundle_name = bundle_name;
-                    } else if orig_bundle_name != bundle_name {
-                        tracing::warn!(
-                            first_bundle_name = orig_bundle_name,
-                            cur_bundle_name = bundle_name,
-                            "bundle name mismatch, using the first one"
-                        );
-                    }
+    objects: Vec<Object>,
+
+    /// Primary contents exported by Asset Ripper, which is done at most once.
+    export: OnceCell<TempDir>,
+}
+
+impl AssetRipperBundle<'_> {
+    fn list_objects(&mut self) -> Result<()> {
+        let bundles = self.ripper.load_bundles()?;
+
+        for bundle_no in 0..bundles.len() {
+            for collection_no in 0..self.ripper.load_collection(bundle_no)?.len() {
+                let slot = self.slots.len();
+                self.slots.push((bundle_no, collection_no));
+
+                for path_id in self.ripper.path_ids(bundle_no, collection_no)? {
+                    let object =
+                        self.ripper.load_object(slot, bundle_no, collection_no, path_id)?;
+                    self.objects.push(object);
                 }
-                collections.insert(collection, (collection_id, assets));
             }
-
-            self.assets.insert(orig_bundle_name.clone(), (bundle_id, collections));
         }
-
-        self.loaded_paths.insert(path);
 
         Ok(())
     }
 
-    #[inline]
-    fn bundles(&self) -> Vec<&str> {
-        self.assets.keys().map(String::as_str).collect()
+    /// Makes sure that the object is of the `expected` class.
+    fn check_class(object: &Object, expected: &Class, as_: &'static str) -> Result<()> {
+        if object.class == *expected {
+            return Ok(());
+        }
+
+        Err(UnityError::UnsupportedClass(object.class.to_string(), as_).into())
     }
 
-    #[inline]
-    fn collections<'a>(&'a self, bundle: &str) -> Option<Vec<&'a str>> {
-        Some(self.assets.get(bundle)?.1.keys().map(String::as_str).collect())
+    /// Gets the directory the primary contents are exported to, and exports them on first use.
+    fn export_dir(&self) -> Result<&Path> {
+        if let Some(dir) = self.export.get() {
+            return Ok(dir.path());
+        }
+
+        let dir = tempdir().map_err(|e| Repr::io("create tempdir", None, e))?;
+        self.ripper.export_primary(dir.path())?;
+
+        Ok(self.export.get_or_init(|| dir).path())
     }
 
-    #[inline]
-    fn asset_infos<'a>(&'a self, bundle: &str, collection: &str) -> Option<Vec<&'a AssetInfo>> {
-        Some(self.assets.get(bundle)?.1.get(collection)?.1.values().collect())
+    /// Reads the exported file of the object.
+    fn read_exported(&self, object: &Object) -> Result<Vec<u8>> {
+        let orig_path = object.orig_path.as_deref().ok_or(UnityError::NoOriginalPath)?;
+        let path: PathBuf = self.export_dir()?.join(orig_path);
+
+        std::fs::read(&path).map_err(|e| Repr::io("read exported file", Some(&path), e).into())
     }
 
-    #[inline]
-    fn asset_info<'a>(
-        &'a self,
-        bundle: &str,
-        collection: &str,
-        path_id: i64,
-    ) -> Option<&'a AssetInfo> {
-        self.assets.get(bundle)?.1.get(collection)?.1.get(&path_id)
-    }
-
-    fn asset_serialized(&self, info: &AssetInfo) -> Result<serde_json::Value> {
-        let (bundle_no, collection) = self
-            .assets
-            .get(info.orig_bundle.as_ref())
-            .ok_or_else(|| UnityError::BundleNotLoaded(info.orig_bundle.to_string()))?;
-        let (collection_no, _) = collection
-            .get(info.collection.as_ref())
-            .ok_or_else(|| UnityError::CollectionNotLoaded(info.collection.to_string()))?;
-        let path_id = info.path_id;
+    /// Gets JSON serialized representation of the object. See [Unity documentation][doc]
+    /// for more details.
+    ///
+    /// Although the original serialization format is YAML, JSON is used here
+    /// for better compatibility with Rust ecosystem.
+    ///
+    /// [doc]: https://docs.unity3d.com/6000.2/Documentation/Manual/FormatDescription.html
+    fn serialized(&self, object: &Object) -> Result<Value> {
+        let &(bundle_no, collection_no) =
+            self.slots.get(object.collection).ok_or(UnityError::ObjectNotFound(object.path_id))?;
+        let path_id = object.path_id;
 
         let path =
             format!(r#"{{"C":{{"B":{{"P":[{bundle_no}]}},"I":{collection_no}}},"D":{path_id}}}"#);
-        let url = self.full_url("Assets/Json");
+        let url = self.ripper.full_url("Assets/Json");
         let value = self
+            .ripper
             .send_request(&url, &path)?
             .json()
             .map_err(|e| crate::net::Error::decode(url, Some(e)))?;
 
         Ok(value)
     }
+}
 
-    #[inline]
-    fn all_asset_infos(&self) -> Vec<&AssetInfo> {
-        self.assets.values().flat_map(|v| v.1.values().flat_map(|v| v.1.values())).collect()
+/// Reads a rectangle field of a serialized sprite.
+fn rect_field(json: &Value, pointer: &'static str) -> Result<u32> {
+    let value =
+        json.pointer(pointer).and_then(Value::as_f64).ok_or(UnityError::MissingField(pointer))?;
+
+    Float(value).to_u32()
+}
+
+impl Bundle for AssetRipperBundle<'_> {
+    fn objects(&self) -> &[Object] {
+        &self.objects
     }
 
-    fn extract(&self, info: &AssetInfo) -> Result<File> {
-        let tempdir = tempdir().map_err(|e| Repr::io("create tempdir", None, e))?;
-        self.export_primary(tempdir.path())?;
+    fn text(&self, object: &Object) -> Result<Vec<u8>> {
+        Self::check_class(object, &Class::TextAsset, "text")?;
 
-        let path =
-            tempdir.path().join(info.orig_path.as_deref().ok_or(UnityError::NoOriginalPath)?);
-        let file = File::open(&path).map_err(|e| Repr::io("open file", Some(&path), e))?;
-
-        Ok(file)
+        self.read_exported(object)
     }
 
-    fn clear(&mut self) {
-        let url = self.full_url("Reset");
+    fn texture(&self, object: &Object) -> Result<DynamicImage> {
+        Self::check_class(object, &Class::Texture2D, "texture")?;
 
-        if let Err(e) = self.client.post(url.clone()).send() {
+        let png = self.read_exported(object)?;
+
+        image::load_from_memory_with_format(&png, ImageFormat::Png)
+            .map_err(|e| UnityError::corrupted("decode exported texture", e).into())
+    }
+
+    fn sprite(&self, object: &Object) -> Result<Sprite> {
+        Self::check_class(object, &Class::Sprite, "sprite")?;
+
+        let json = self.serialized(object)?;
+        let texture = json
+            .pointer("/m_RD/m_Texture/m_PathID")
+            .and_then(Value::as_i64)
+            .ok_or(UnityError::MissingField("/m_RD/m_Texture/m_PathID"))?;
+
+        Ok(Sprite {
+            texture_id: texture,
+            rect: Rect {
+                x: rect_field(&json, "/m_Rect/m_X")?,
+                y: rect_field(&json, "/m_Rect/m_Y")?,
+                width: rect_field(&json, "/m_Rect/m_Width")?,
+                height: rect_field(&json, "/m_Rect/m_Height")?,
+            },
+        })
+    }
+}
+
+impl Drop for AssetRipperBundle<'_> {
+    fn drop(&mut self) {
+        let url = self.ripper.full_url("Reset");
+
+        if let Err(e) = self.ripper.client.post(url).send() {
             tracing::warn!("failed to reset asset ripper: {}", e);
         }
-
-        self.assets.clear();
-        self.loaded_paths.clear();
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::borrow::Cow;
     use std::fs::File;
-    use std::io::{BufReader, Read};
     use std::path::Path;
 
     use super::AssetRipper;
-    use crate::unity::{AssetInfo, Extractor};
+    use crate::unity::{Bundle, Class, Extractor, Object};
     use crate::util::init_test_logger;
 
     const ASSET_RIPPER_PATH: &str = if cfg!(windows) {
@@ -490,219 +489,130 @@ mod tests {
 
     #[derive(Debug)]
     struct TestCase {
-        pub asset_path: &'static str,
-        pub collection_count: usize,
-        pub asset_count: usize,
-        pub asset_info: AssetInfo,
+        path: &'static str,
+        object_count: usize,
+        path_id: i64,
+        class: Class,
+        name: &'static str,
+        orig_path: &'static str,
     }
 
-    const TEST_CASES: &[TestCase] = &[
-        TestCase {
-            asset_path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_acb.unity3d"),
-            collection_count: 1,
-            asset_count: 2,
-            asset_info: AssetInfo {
+    impl TestCase {
+        fn matches(&self, object: &Object) -> bool {
+            object.path_id == self.path_id
+                && object.class == self.class
+                && object.name == self.name
+                && object.orig_path.as_deref() == Some(self.orig_path)
+        }
+    }
+
+    fn test_cases() -> [TestCase; 3] {
+        [
+            TestCase {
+                path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_acb.unity3d"),
+                object_count: 2,
                 path_id: -0x6924_71bf_cbe7_e9c6,
-                class: Cow::Borrowed("TextAsset"),
-                name: Cow::Borrowed("song3_00test.acb"),
-                orig_path: Some(Cow::Borrowed(
-                    "Assets/imas/resources/adx2/song3/song3_00test.acb.bytes",
-                )),
-                orig_bundle: Cow::Borrowed("song3_00test.acb.unity3d"),
-                collection: Cow::Borrowed("cab-9f50c764e78a89007649817560896fbe"),
+                class: Class::TextAsset,
+                name: "song3_00test.acb",
+                orig_path: "Assets/imas/resources/adx2/song3/song3_00test.acb.bytes",
             },
-        },
-        TestCase {
-            asset_path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_image.unity3d"),
-            collection_count: 1,
-            asset_count: 14,
-            asset_info: AssetInfo {
+            TestCase {
+                path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_image.unity3d"),
+                object_count: 14,
                 path_id: 0x5c6b_8a21_bcbc_972e,
-                class: Cow::Borrowed("Texture2D"),
-                name: Cow::Borrowed("014mir0011_0"),
-                orig_path: Some(Cow::Borrowed("Assets/imas/resources/card/014mir0011_0.png")),
-                orig_bundle: Cow::Borrowed("014mir0011_0.unity3d"),
-                collection: Cow::Borrowed("cab-a374172171027544962fcca998dc31af"),
+                class: Class::Texture2D,
+                name: "014mir0011_0",
+                orig_path: "Assets/imas/resources/card/014mir0011_0.png",
             },
-        },
-        TestCase {
-            asset_path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_text.unity3d"),
-            collection_count: 1,
-            asset_count: 2,
-            asset_info: AssetInfo {
+            TestCase {
+                path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_text.unity3d"),
+                object_count: 2,
                 path_id: 0x7aa6_cd6c_f238_30a9,
-                class: Cow::Borrowed("TextAsset"),
-                name: Cow::Borrowed("card_blst_014mir0034_zh.gtx"),
-                orig_path: Some(Cow::Borrowed(
-                    "Assets/imas/resources/textassets/zh/commu/card/card_blst_014mir0034_zh.gtx.bytes",
-                )),
-                orig_bundle: Cow::Borrowed("card_blst_014mir0034_zh.gtx.unity3d"),
-                collection: Cow::Borrowed("cab-720fa4e99ecaab2adf961cebffd0edb6"),
+                class: Class::TextAsset,
+                name: "card_blst_014mir0034_zh.gtx",
+                orig_path: "Assets/imas/resources/textassets/zh/commu/card/card_blst_014mir0034_zh.gtx.bytes",
             },
-        },
-    ];
+        ]
+    }
 
     #[test]
-    fn test_load_file_bundles_clear() {
+    fn test_load_objects() {
         init_test_logger();
 
         let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56789).unwrap();
 
-        assert_eq!(asset_ripper.bundles().len(), 0);
+        // a bundle is unloaded when dropped, so the next file can be loaded
+        for case in test_cases() {
+            let bundle = asset_ripper.load(case.path.as_ref()).unwrap();
 
-        for (i, case) in TEST_CASES.iter().enumerate() {
-            asset_ripper.load_file(case.asset_path.as_ref()).unwrap();
-            assert_eq!(asset_ripper.bundles().len(), i + 1);
+            assert_eq!(bundle.objects().len(), case.object_count);
+            assert!(bundle.objects().iter().any(|o| case.matches(o)));
         }
-
-        asset_ripper.clear();
-        assert_eq!(asset_ripper.bundles().len(), 0);
     }
 
     #[test]
-    fn test_collections() {
+    fn test_text() {
         init_test_logger();
 
         let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56790).unwrap();
+        let case = &test_cases()[0];
+        let bundle = asset_ripper.load(case.path.as_ref()).unwrap();
+        let object = bundle.objects().iter().find(|o| case.matches(o)).unwrap();
 
-        for case in TEST_CASES {
-            asset_ripper.load_file(case.asset_path.as_ref()).unwrap();
-
-            let collections = asset_ripper.collections(&case.asset_info.orig_bundle);
-            assert_eq!(collections.unwrap().len(), case.collection_count);
-
-            asset_ripper.clear();
-        }
+        let expected = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_acb.acb"));
+        assert_eq!(bundle.text(object).unwrap(), expected.unwrap());
     }
 
     #[test]
-    fn test_asset_infos() {
+    fn test_texture_and_sprite() {
         init_test_logger();
 
         let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56791).unwrap();
+        let case = &test_cases()[1];
+        let bundle = asset_ripper.load(case.path.as_ref()).unwrap();
+        let texture = bundle.objects().iter().find(|o| case.matches(o)).unwrap();
 
-        for case in TEST_CASES {
-            asset_ripper.load_file(case.asset_path.as_ref()).unwrap();
+        let actual = bundle.texture(texture).unwrap();
+        let expected =
+            image::open(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_image.png")).unwrap();
+        assert_eq!(actual.to_rgba8(), expected.to_rgba8());
 
-            let infos = asset_ripper
-                .asset_infos(&case.asset_info.orig_bundle, &case.asset_info.collection)
-                .unwrap();
-
-            assert_eq!(infos.len(), case.asset_count);
-
-            asset_ripper.clear();
-        }
+        let object = bundle.objects().iter().find(|o| o.name == "014mir0011_0_6").unwrap();
+        let sprite = bundle.sprite(object).unwrap();
+        assert_eq!(sprite.texture_id, texture.path_id);
+        assert_eq!(sprite.rect.x, 1);
+        assert_eq!(sprite.rect.width, 640);
     }
 
     #[test]
-    fn test_asset_info() {
+    fn test_wrong_class() {
         init_test_logger();
 
         let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56792).unwrap();
+        let case = &test_cases()[1];
+        let bundle = asset_ripper.load(case.path.as_ref()).unwrap();
+        let sprite = bundle.objects().iter().find(|o| o.class == Class::Sprite).unwrap();
 
-        for case in TEST_CASES {
-            asset_ripper.load_file(case.asset_path.as_ref()).unwrap();
-
-            let info = asset_ripper.asset_info(
-                &case.asset_info.orig_bundle,
-                &case.asset_info.collection,
-                case.asset_info.path_id,
-            );
-            assert!(info.is_some());
-            assert_eq!(info.unwrap(), &case.asset_info);
-
-            asset_ripper.clear();
-        }
+        assert!(bundle.text(sprite).is_err());
+        assert!(bundle.texture(sprite).is_err());
     }
 
     #[test]
-    fn test_extract() {
+    fn test_serialized() {
         init_test_logger();
 
         let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56793).unwrap();
 
-        let case = &TEST_CASES[0];
-        asset_ripper.load_file(case.asset_path.as_ref()).unwrap();
-
-        let asset_info = asset_ripper
-            .asset_info(
-                &case.asset_info.orig_bundle,
-                &case.asset_info.collection,
-                case.asset_info.path_id,
-            )
-            .unwrap();
-
-        let buf1 = {
-            let file = asset_ripper.extract(asset_info).unwrap();
-            let mut buf = vec![];
-            BufReader::new(file).read_to_end(&mut buf).unwrap();
-            buf
-        };
-
-        let buf2 = {
-            let file =
-                File::open(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_acb.acb")).unwrap();
-            let mut buf = vec![];
-            BufReader::new(file).read_to_end(&mut buf).unwrap();
-            buf
-        };
-
-        assert_eq!(buf1, buf2);
-    }
-
-    #[test]
-    fn test_load_multiple_extract() {
-        init_test_logger();
-
-        let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56794).unwrap();
-        for case in TEST_CASES {
-            asset_ripper.load_file(case.asset_path.as_ref()).unwrap();
-        }
-
-        for case in TEST_CASES {
-            let asset_info = asset_ripper
-                .asset_info(
-                    &case.asset_info.orig_bundle,
-                    &case.asset_info.collection,
-                    case.asset_info.path_id,
-                )
-                .unwrap();
-
-            let buf = {
-                let file = asset_ripper.extract(asset_info).unwrap();
-                let mut buf = vec![];
-                BufReader::new(file).read_to_end(&mut buf).unwrap();
-                buf
-            };
-
-            assert_ne!(buf, [] as [u8; 0]);
-        }
-    }
-
-    #[test]
-    fn test_asset_serialized() {
-        init_test_logger();
-
-        let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56795).unwrap();
-
         // skipping acb and text assets because they are too large
-        let case = &TEST_CASES[1];
-        asset_ripper.load_file(case.asset_path.as_ref()).unwrap();
+        let case = &test_cases()[1];
+        let bundle = asset_ripper.load(case.path.as_ref()).unwrap();
+        let object = bundle.objects().iter().find(|o| case.matches(o)).unwrap();
 
-        let asset_info = asset_ripper
-            .asset_info(
-                &case.asset_info.orig_bundle,
-                &case.asset_info.collection,
-                case.asset_info.path_id,
-            )
-            .unwrap();
-
-        let value = asset_ripper.asset_serialized(asset_info).unwrap();
         let expected: serde_json::Value = serde_json::from_reader(
-            File::open(Path::new(case.asset_path).with_extension("json")).unwrap(),
+            File::open(Path::new(case.path).with_extension("json")).unwrap(),
         )
         .unwrap();
 
-        assert_eq!(value, expected);
+        assert_eq!(bundle.serialized(object).unwrap(), expected);
     }
 }

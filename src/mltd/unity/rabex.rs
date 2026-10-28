@@ -1,14 +1,12 @@
 //! Extractor backed by the pure Rust [`rabex`](rabex) crate.
 
-use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
-use std::fs::File;
-use std::io::{Cursor, Seek};
+use std::io::Cursor;
 use std::path::Path;
 use std::sync::Arc;
 
 use ahash::HashMapExt;
-use image::ImageFormat;
+use image::DynamicImage;
 use rabex::files::SerializedFile;
 use rabex::files::bundlefile::{BundleFileReader, ExtractionConfig};
 use rabex::files::unityfile::FileEntry;
@@ -16,10 +14,11 @@ use rabex::objects::ClassId;
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
 
-use super::UnityError;
+use super::float::Float;
 use super::texture::{Bytes, Int, decode_texture};
-use super::{AssetInfo, Extractor};
+use super::{Bundle, Class, Error as UnityError, Extractor, Object, Rect, Sprite};
 use crate::error::{Repr, Result};
 use crate::util::HashMap;
 
@@ -101,21 +100,233 @@ struct Texture2DData {
     m_StreamData: StreamingInfo,
 }
 
+#[derive(Deserialize)]
+struct RectData {
+    x: Float,
+    y: Float,
+    width: Float,
+    height: Float,
+}
+
+#[derive(Deserialize)]
+struct SpriteRenderData {
+    texture: PPtrData,
+}
+
+#[derive(Deserialize)]
+#[allow(non_snake_case)]
+struct SpriteData {
+    m_Rect: RectData,
+    m_RD: SpriteRenderData,
+}
+
+/// Reads the asset bundle object of a serialized file, if it has one.
+fn read_asset_bundle(
+    type_trees: &TypeTrees,
+    file: &SerializedFile,
+    data: &[u8],
+) -> Option<AssetBundleData> {
+    let info = file.objects().find(|o| o.m_ClassID == ClassId::AssetBundle)?;
+
+    match file.read(info, type_trees, &mut Cursor::new(data)) {
+        Ok(bundle) => Some(bundle),
+        Err(e) => {
+            tracing::warn!(error = ?e, "failed to read asset bundle container");
+            None
+        }
+    }
+}
+
+/// Maps path ids to the container (original) path of the asset bundle.
+fn container_paths(bundle: &AssetBundleData) -> HashMap<i64, String> {
+    let mut paths = HashMap::new();
+
+    // the asset the entry points to takes priority over assets that are only preloaded by it
+    for (path, entry) in &bundle.m_Container {
+        if entry.asset.m_FileID == 0 {
+            paths.entry(entry.asset.m_PathID).or_insert_with(|| original_path(path));
+        }
+    }
+    for (path, entry) in &bundle.m_Container {
+        let start = usize::try_from(entry.preloadIndex).unwrap_or(0);
+        let len = usize::try_from(entry.preloadSize).unwrap_or(0);
+        let range = bundle.m_PreloadTable.iter().skip(start).take(len);
+        for ptr in range.filter(|p| p.m_FileID == 0) {
+            paths.entry(ptr.m_PathID).or_insert_with(|| original_path(path));
+        }
+    }
+
+    paths
+}
+
+/// Lists the objects of the serialized file `collection`.
+fn list_objects(
+    type_trees: &TypeTrees,
+    collection: usize,
+    file: &SerializedFile,
+    data: &[u8],
+    asset_bundle: Option<&AssetBundleData>,
+) -> Vec<Object> {
+    let container = asset_bundle.map(container_paths).unwrap_or_default();
+
+    let mut objects = Vec::new();
+    for object in file.objects() {
+        let class = object.m_ClassID.name().unwrap_or_default();
+        let name = if object.m_ClassID == ClassId::AssetBundle {
+            asset_bundle.map(|b| b.m_Name.clone()).unwrap_or_default()
+        } else {
+            match file.read::<Named>(object, type_trees, &mut Cursor::new(data)) {
+                Ok(named) => named.m_Name,
+                Err(e) => {
+                    tracing::debug!(error = ?e, path_id = object.m_PathID, class, "cannot read name");
+                    String::new()
+                }
+            }
+        };
+
+        let orig_path = if object.m_ClassID == ClassId::AssetBundle {
+            None
+        } else {
+            Some(container.get(&object.m_PathID).cloned().unwrap_or_else(|| {
+                let safe_name = sanitize_path(&name);
+                match class {
+                    // the CLI strips the `.bytes` suffix of text assets
+                    "TextAsset" => format!("Assets/{class}/{safe_name}.bytes"),
+                    _ => format!("Assets/{class}/{safe_name}"),
+                }
+            }))
+        };
+
+        objects.push(Object::new(
+            collection,
+            object.m_PathID,
+            Class::from_name(class),
+            name,
+            orig_path,
+        ));
+    }
+
+    objects
+}
+
 /// A serialized file inside a bundle.
 struct Collection {
     /// Decompressed bytes of the serialized file.
     data: Vec<u8>,
     file: SerializedFile,
-    infos: HashMap<i64, AssetInfo>,
 }
 
-/// A loaded bundle file.
-struct Bundle {
+/// Extractor that reads bundles with the [`rabex`](rabex) crate.
+pub struct RabexExtractor {
+    type_trees: Arc<TypeTrees>,
+}
+
+impl Debug for RabexExtractor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RabexExtractor").finish_non_exhaustive()
+    }
+}
+
+impl Default for RabexExtractor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RabexExtractor {
+    /// Creates a new extractor with the embedded type tree database.
+    #[must_use]
+    pub fn new() -> Self {
+        Self { type_trees: Arc::new(TypeTreeCache::new(TpkTypeTreeBlob::embedded())) }
+    }
+
+    /// Creates `count` extractors sharing one type tree database.
+    #[must_use]
+    pub fn pool(count: usize) -> Vec<Self> {
+        let type_trees = Arc::new(TypeTreeCache::new(TpkTypeTreeBlob::embedded()));
+        (0..count).map(|_| Self { type_trees: Arc::clone(&type_trees) }).collect()
+    }
+}
+
+impl Extractor for RabexExtractor {
+    type Bundle<'a> = RabexBundle<'a>;
+
+    fn load(&mut self, path: &Path) -> Result<RabexBundle<'_>> {
+        RabexBundle::open(&self.type_trees, path)
+    }
+}
+
+/// A bundle loaded by [`RabexExtractor`].
+pub struct RabexBundle<'a> {
+    type_trees: &'a TypeTrees,
     reader: BundleFileReader<Cursor<Vec<u8>>>,
-    collections: HashMap<String, Collection>,
+    collections: Vec<Collection>,
+    objects: Vec<Object>,
 }
 
-impl Bundle {
+impl<'a> RabexBundle<'a> {
+    fn open(type_trees: &'a TypeTrees, path: &Path) -> Result<Self> {
+        let bytes = std::fs::read(path).map_err(|e| Repr::io("read bundle", Some(path), e))?;
+        // rabex panics on the other signatures (UnityWeb, UnityRaw, ...) instead of returning an error
+        if !bytes.starts_with(b"UnityFS\0") {
+            return Err(UnityError::NotUnityFs.into());
+        }
+        let len = bytes.len() as u64;
+        let config = ExtractionConfig::default().assume_recent_unity();
+        let reader = BundleFileReader::from_reader(Cursor::new(bytes), &config)
+            .map_err(|e| UnityError::corrupted("parse bundle", e))?;
+
+        // resources are decompressed on demand, so a truncated bundle has to be rejected here
+        let compressed: u64 = reader.blocks().iter().map(|b| u64::from(b.compressed_size)).sum();
+        if reader.reader.position().saturating_add(compressed) > len {
+            return Err(UnityError::Truncated("bundle").into());
+        }
+
+        let mut collections = Vec::new();
+        let mut objects = Vec::new();
+        for entry in reader.serialized_files() {
+            let data = reader
+                .read_at_entry(entry)
+                .map_err(|e| Repr::io("decompress bundle file", Some(path), e))?;
+
+            let file = SerializedFile::from_reader(&mut Cursor::new(&data))
+                .map_err(|e| UnityError::corrupted("parse serialized file", e))?;
+            let asset_bundle = read_asset_bundle(type_trees, &file, &data);
+
+            objects.extend(list_objects(
+                type_trees,
+                collections.len(),
+                &file,
+                &data,
+                asset_bundle.as_ref(),
+            ));
+            collections.push(Collection { data, file });
+        }
+
+        Ok(Self { type_trees, reader, collections, objects })
+    }
+
+    /// Reads and deserializes an object.
+    fn read<T: DeserializeOwned>(&self, object: &Object, what: &'static str) -> Result<T> {
+        let not_found = || UnityError::ObjectNotFound(object.path_id);
+        let collection = self.collections.get(object.collection).ok_or_else(not_found)?;
+        let info = collection.file.get_object_info(object.path_id).ok_or_else(not_found)?;
+
+        collection
+            .file
+            .read(info, self.type_trees, &mut Cursor::new(&collection.data))
+            .map_err(|e| UnityError::corrupted(what, e).into())
+    }
+
+    /// Makes sure that the object is of the `expected` class.
+    fn check_class(object: &Object, expected: &Class, as_: &'static str) -> Result<()> {
+        if object.class == *expected {
+            return Ok(());
+        }
+
+        Err(UnityError::UnsupportedClass(object.class.to_string(), as_).into())
+    }
+
     /// Reads `size` bytes at `offset` of a non-serialized file, decompressing only the blocks
     /// covering them.
     fn read_resource(&self, name: &str, offset: i64, size: i64) -> Result<Vec<u8>> {
@@ -145,464 +356,194 @@ impl Bundle {
     }
 }
 
-pub struct RabexExtractor {
-    type_trees: Arc<TypeTrees>,
-    bundles: HashMap<String, Bundle>,
-}
-
-impl Debug for RabexExtractor {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RabexExtractor")
-            .field("bundles", &self.bundles.keys())
-            .finish_non_exhaustive()
-    }
-}
-
-impl Default for RabexExtractor {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl RabexExtractor {
-    /// Creates a new extractor with the embedded type tree database.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::with_type_trees(Arc::new(TypeTreeCache::new(TpkTypeTreeBlob::embedded())))
+impl Bundle for RabexBundle<'_> {
+    fn objects(&self) -> &[Object] {
+        &self.objects
     }
 
-    /// Creates `count` extractors sharing one type tree database.
-    #[must_use]
-    pub fn pool(count: usize) -> Vec<Self> {
-        let type_trees = Arc::new(TypeTreeCache::new(TpkTypeTreeBlob::embedded()));
-        (0..count).map(|_| Self::with_type_trees(Arc::clone(&type_trees))).collect()
+    fn text(&self, object: &Object) -> Result<Vec<u8>> {
+        Self::check_class(object, &Class::TextAsset, "text")?;
+
+        let text: TextAssetData = self.read(object, "read TextAsset")?;
+
+        Ok(text.m_Script.0)
     }
 
-    fn with_type_trees(type_trees: Arc<TypeTrees>) -> Self {
-        Self { type_trees, bundles: HashMap::new() }
+    fn texture(&self, object: &Object) -> Result<DynamicImage> {
+        Self::check_class(object, &Class::Texture2D, "texture")?;
+
+        let texture: Texture2DData = self.read(object, "read Texture2D")?;
+
+        let stream = &texture.m_StreamData;
+        let streamed;
+        let data = if stream.size.0 > 0 {
+            let name = stream.path.rsplit('/').next().unwrap_or_default();
+            streamed = self.read_resource(name, stream.offset.0, stream.size.0)?;
+            &streamed
+        } else {
+            &texture.image_data.0
+        };
+
+        let dimension =
+            |v: Int| u32::try_from(v.0).map_err(|e| UnityError::corrupted("read texture size", e));
+        let mut image = decode_texture(
+            i32::try_from(texture.m_TextureFormat.0)
+                .map_err(|e| UnityError::corrupted("read texture format", e))?,
+            dimension(texture.m_Width)?,
+            dimension(texture.m_Height)?,
+            data,
+        )
+        .map_err(|e| UnityError::corrupted("decode Texture2D", e))?;
+
+        // Unity textures are bottom-up
+        image::imageops::flip_vertical_in_place(&mut image);
+
+        Ok(DynamicImage::ImageRgba8(image))
     }
 
-    fn locate(&self, info: &AssetInfo) -> Result<(&Bundle, &Collection)> {
-        let bundle = self
-            .bundles
-            .get(info.orig_bundle.as_ref())
-            .ok_or_else(|| UnityError::BundleNotLoaded(info.orig_bundle.to_string()))?;
-        let collection = bundle
-            .collections
-            .get(info.collection.as_ref())
-            .ok_or_else(|| UnityError::CollectionNotLoaded(info.collection.to_string()))?;
+    fn sprite(&self, object: &Object) -> Result<Sprite> {
+        Self::check_class(object, &Class::Sprite, "sprite")?;
 
-        Ok((bundle, collection))
-    }
+        let sprite: SpriteData = self.read(object, "read Sprite")?;
+        let rect = sprite.m_Rect;
 
-    /// Reads the asset bundle object of a serialized file, if it has one.
-    fn read_asset_bundle(&self, file: &SerializedFile, data: &[u8]) -> Option<AssetBundleData> {
-        let info = file.objects().find(|o| o.m_ClassID == ClassId::AssetBundle)?;
-
-        match file.read(info, &*self.type_trees, &mut Cursor::new(data)) {
-            Ok(bundle) => Some(bundle),
-            Err(e) => {
-                tracing::warn!(error = ?e, "failed to read asset bundle container");
-                None
-            }
-        }
-    }
-
-    /// Maps path ids to the container (original) path of the asset bundle.
-    fn container_paths(bundle: &AssetBundleData) -> HashMap<i64, String> {
-        let mut paths = HashMap::new();
-
-        // the asset the entry points to takes priority over assets that are only preloaded by it
-        for (path, entry) in &bundle.m_Container {
-            if entry.asset.m_FileID == 0 {
-                paths.entry(entry.asset.m_PathID).or_insert_with(|| original_path(path));
-            }
-        }
-        for (path, entry) in &bundle.m_Container {
-            let start = usize::try_from(entry.preloadIndex).unwrap_or(0);
-            let len = usize::try_from(entry.preloadSize).unwrap_or(0);
-            let range = bundle.m_PreloadTable.iter().skip(start).take(len);
-            for ptr in range.filter(|p| p.m_FileID == 0) {
-                paths.entry(ptr.m_PathID).or_insert_with(|| original_path(path));
-            }
-        }
-
-        paths
-    }
-
-    /// Builds the collection of a parsed serialized file in the bundle named `bundle_name`.
-    fn load_collection(
-        &self,
-        bundle_name: &str,
-        collection_name: &str,
-        file: SerializedFile,
-        data: Vec<u8>,
-        asset_bundle: Option<&AssetBundleData>,
-    ) -> Collection {
-        let container = asset_bundle.map(Self::container_paths).unwrap_or_default();
-
-        let mut infos = HashMap::new();
-        for object in file.objects() {
-            let class = object.m_ClassID.name().unwrap_or_default();
-            let name = if object.m_ClassID == ClassId::AssetBundle {
-                asset_bundle.map(|b| b.m_Name.clone()).unwrap_or_default()
-            } else {
-                match file.read::<Named>(object, &*self.type_trees, &mut Cursor::new(&data)) {
-                    Ok(named) => named.m_Name,
-                    Err(e) => {
-                        tracing::debug!(error = ?e, path_id = object.m_PathID, class, "cannot read name");
-                        String::new()
-                    }
-                }
-            };
-
-            let orig_path = if object.m_ClassID == ClassId::AssetBundle {
-                None
-            } else {
-                Some(Cow::Owned(container.get(&object.m_PathID).cloned().unwrap_or_else(|| {
-                    let safe_name = sanitize_path(&name);
-                    match class {
-                        // the CLI strips the `.bytes` suffix of text assets
-                        "TextAsset" => format!("Assets/{class}/{safe_name}.bytes"),
-                        _ => format!("Assets/{class}/{safe_name}"),
-                    }
-                })))
-            };
-
-            infos.insert(
-                object.m_PathID,
-                AssetInfo {
-                    path_id: object.m_PathID,
-                    class: Cow::Owned(class.to_owned()),
-                    orig_path,
-                    orig_bundle: Cow::Owned(bundle_name.to_owned()),
-                    collection: Cow::Owned(collection_name.to_owned()),
-                    name: Cow::Owned(name),
-                },
-            );
-        }
-
-        Collection { data, file, infos }
-    }
-}
-
-impl Extractor for RabexExtractor {
-    fn load_file(&mut self, path: &Path) -> Result<()> {
-        let file_name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .ok_or(UnityError::NoFileName)?;
-
-        let bytes = std::fs::read(path).map_err(|e| Repr::io("read bundle", Some(path), e))?;
-        // rabex panics on the other signatures (UnityWeb, UnityRaw, ...) instead of returning an error
-        if !bytes.starts_with(b"UnityFS\0") {
-            return Err(UnityError::NotUnityFs.into());
-        }
-        let len = bytes.len() as u64;
-        let config = ExtractionConfig::default().assume_recent_unity();
-        let reader = BundleFileReader::from_reader(Cursor::new(bytes), &config)
-            .map_err(|e| UnityError::corrupted("parse bundle", e))?;
-
-        // resources are decompressed on demand, so a truncated bundle has to be rejected here
-        let compressed: u64 = reader.blocks().iter().map(|b| u64::from(b.compressed_size)).sum();
-        if reader.reader.position().saturating_add(compressed) > len {
-            return Err(UnityError::Truncated("bundle").into());
-        }
-
-        let mut serialized_files = Vec::new();
-        for entry in reader.serialized_files() {
-            let data = reader
-                .read_at_entry(entry)
-                .map_err(|e| Repr::io("decompress bundle file", None, e))?;
-
-            let file = SerializedFile::from_reader(&mut Cursor::new(&data))
-                .map_err(|e| UnityError::corrupted("parse serialized file", e))?;
-            let asset_bundle = self.read_asset_bundle(&file, &data);
-            serialized_files.push((entry.path.to_lowercase(), file, data, asset_bundle));
-        }
-
-        // the bundle is named by the AssetBundle object
-        let bundle_name = serialized_files
-            .iter()
-            .find_map(|(.., asset_bundle)| {
-                asset_bundle.as_ref().map(|b| b.m_Name.as_str()).filter(|name| !name.is_empty())
-            })
-            .map_or(file_name, str::to_owned);
-        if self.bundles.contains_key(&bundle_name) {
-            return Err(UnityError::DuplicateBundle(bundle_name).into());
-        }
-        let mut bundle = Bundle { reader, collections: HashMap::new() };
-        for (collection_name, file, data, asset_bundle) in serialized_files {
-            let collection = self.load_collection(
-                &bundle_name,
-                &collection_name,
-                file,
-                data,
-                asset_bundle.as_ref(),
-            );
-            bundle.collections.insert(collection_name, collection);
-        }
-        self.bundles.insert(bundle_name, bundle);
-
-        Ok(())
-    }
-
-    fn bundles(&self) -> Vec<&str> {
-        let mut names: Vec<_> = self.bundles.keys().map(String::as_str).collect();
-        names.sort_unstable();
-        names
-    }
-
-    fn collections<'a>(&'a self, bundle: &str) -> Option<Vec<&'a str>> {
-        let mut names: Vec<_> =
-            self.bundles.get(bundle)?.collections.keys().map(String::as_str).collect();
-        names.sort_unstable();
-        Some(names)
-    }
-
-    fn asset_infos<'a>(&'a self, bundle: &str, collection: &str) -> Option<Vec<&'a AssetInfo>> {
-        let mut infos: Vec<_> =
-            self.bundles.get(bundle)?.collections.get(collection)?.infos.values().collect();
-        infos.sort_unstable_by_key(|info| info.path_id);
-        Some(infos)
-    }
-
-    fn asset_info<'a>(
-        &'a self,
-        bundle: &str,
-        collection: &str,
-        path_id: i64,
-    ) -> Option<&'a AssetInfo> {
-        self.bundles.get(bundle)?.collections.get(collection)?.infos.get(&path_id)
-    }
-
-    fn asset_serialized(&self, info: &AssetInfo) -> Result<serde_json::Value> {
-        let (_, collection) = self.locate(info)?;
-        let object = collection
-            .file
-            .get_object_info(info.path_id)
-            .ok_or(UnityError::AssetNotFound(info.path_id))?;
-
-        collection
-            .file
-            .read(object, &*self.type_trees, &mut Cursor::new(&collection.data))
-            .map_err(|e| UnityError::corrupted("deserialize asset", e).into())
-    }
-
-    fn extract(&self, info: &AssetInfo) -> Result<File> {
-        let (bundle, collection) = self.locate(info)?;
-        let object = collection
-            .file
-            .get_object_info(info.path_id)
-            .ok_or(UnityError::AssetNotFound(info.path_id))?;
-        let mut reader = Cursor::new(&collection.data);
-
-        let mut out = tempfile::tempfile().map_err(|e| Repr::io("create tempfile", None, e))?;
-
-        match &*info.class {
-            "TextAsset" => {
-                let text: TextAssetData = collection
-                    .file
-                    .read(object, &*self.type_trees, &mut reader)
-                    .map_err(|e| UnityError::corrupted("read TextAsset", e))?;
-
-                std::io::Write::write_all(&mut out, &text.m_Script.0)
-                    .map_err(|e| Repr::io("write tempfile", None, e))?;
-            }
-
-            "Texture2D" => {
-                let texture: Texture2DData = collection
-                    .file
-                    .read(object, &*self.type_trees, &mut reader)
-                    .map_err(|e| UnityError::corrupted("read Texture2D", e))?;
-
-                let stream = &texture.m_StreamData;
-                let streamed;
-                let data = if stream.size.0 > 0 {
-                    let name = stream.path.rsplit('/').next().unwrap_or_default();
-                    streamed = bundle.read_resource(name, stream.offset.0, stream.size.0)?;
-                    &streamed
-                } else {
-                    &texture.image_data.0
-                };
-
-                let dimension = |v: Int| {
-                    u32::try_from(v.0)
-                        .map_err(|e| UnityError::corrupted("read texture dimension", e))
-                };
-                let mut image = decode_texture(
-                    i32::try_from(texture.m_TextureFormat.0)
-                        .map_err(|e| UnityError::corrupted("read texture format", e))?,
-                    dimension(texture.m_Width)?,
-                    dimension(texture.m_Height)?,
-                    data,
-                )
-                .map_err(|e| UnityError::corrupted("decode Texture2D", e))?;
-
-                // Unity textures are bottom-up, flip them like AssetRipper does
-                image::imageops::flip_vertical_in_place(&mut image);
-                image
-                    .write_to(&mut out, ImageFormat::Png)
-                    .map_err(|e| UnityError::corrupted("encode png", e))?;
-            }
-
-            class => {
-                return Err(UnityError::UnsupportedClass(class.to_owned()).into());
-            }
-        }
-
-        out.rewind().map_err(|e| Repr::io("rewind tempfile", None, e))?;
-
-        Ok(out)
-    }
-
-    fn clear(&mut self) {
-        self.bundles.clear();
+        Ok(Sprite {
+            texture_id: sprite.m_RD.texture.m_PathID,
+            rect: Rect {
+                x: rect.x.to_u32()?,
+                y: rect.y.to_u32()?,
+                width: rect.width.to_u32()?,
+                height: rect.height.to_u32()?,
+            },
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::borrow::Cow;
-    use std::io::Read;
-
     use rabex::files::unityfile::FileEntry;
 
-    use super::RabexExtractor;
-    use crate::unity::{AssetInfo, Extractor};
+    use super::{RabexBundle, RabexExtractor};
+    use crate::unity::{Bundle, Class, Extractor, Object};
     use crate::util::init_test_logger;
 
     struct TestCase {
-        asset_path: &'static str,
-        collection_count: usize,
-        asset_count: usize,
-        asset_info: AssetInfo,
+        path: &'static str,
+        object_count: usize,
+        object: Object,
     }
 
     fn test_cases() -> [TestCase; 3] {
+        let object = |path_id, class, name: &str, orig_path: &str| {
+            Object::new(0, path_id, class, name.to_owned(), Some(orig_path.to_owned()))
+        };
+
         [
             TestCase {
-                asset_path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_acb.unity3d"),
-                collection_count: 1,
-                asset_count: 2,
-                asset_info: AssetInfo {
-                    path_id: -0x6924_71bf_cbe7_e9c6,
-                    class: Cow::Borrowed("TextAsset"),
-                    name: Cow::Borrowed("song3_00test.acb"),
-                    orig_path: Some(Cow::Borrowed(
-                        "Assets/imas/resources/adx2/song3/song3_00test.acb.bytes",
-                    )),
-                    orig_bundle: Cow::Borrowed("song3_00test.acb.unity3d"),
-                    collection: Cow::Borrowed("cab-9f50c764e78a89007649817560896fbe"),
-                },
+                path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_acb.unity3d"),
+                object_count: 2,
+                object: object(
+                    -0x6924_71bf_cbe7_e9c6,
+                    Class::TextAsset,
+                    "song3_00test.acb",
+                    "Assets/imas/resources/adx2/song3/song3_00test.acb.bytes",
+                ),
             },
             TestCase {
-                asset_path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_image.unity3d"),
-                collection_count: 1,
-                asset_count: 14,
-                asset_info: AssetInfo {
-                    path_id: 0x5c6b_8a21_bcbc_972e,
-                    class: Cow::Borrowed("Texture2D"),
-                    name: Cow::Borrowed("014mir0011_0"),
-                    orig_path: Some(Cow::Borrowed("Assets/imas/resources/card/014mir0011_0.png")),
-                    orig_bundle: Cow::Borrowed("014mir0011_0.unity3d"),
-                    collection: Cow::Borrowed("cab-a374172171027544962fcca998dc31af"),
-                },
+                path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_image.unity3d"),
+                object_count: 14,
+                object: object(
+                    0x5c6b_8a21_bcbc_972e,
+                    Class::Texture2D,
+                    "014mir0011_0",
+                    "Assets/imas/resources/card/014mir0011_0.png",
+                ),
             },
             TestCase {
-                asset_path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_text.unity3d"),
-                collection_count: 1,
-                asset_count: 2,
-                asset_info: AssetInfo {
-                    path_id: 0x7aa6_cd6c_f238_30a9,
-                    class: Cow::Borrowed("TextAsset"),
-                    name: Cow::Borrowed("card_blst_014mir0034_zh.gtx"),
-                    orig_path: Some(Cow::Borrowed(
-                        "Assets/imas/resources/textassets/zh/commu/card/card_blst_014mir0034_zh.gtx.bytes",
-                    )),
-                    orig_bundle: Cow::Borrowed("card_blst_014mir0034_zh.gtx.unity3d"),
-                    collection: Cow::Borrowed("cab-720fa4e99ecaab2adf961cebffd0edb6"),
-                },
+                path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_text.unity3d"),
+                object_count: 2,
+                object: object(
+                    0x7aa6_cd6c_f238_30a9,
+                    Class::TextAsset,
+                    "card_blst_014mir0034_zh.gtx",
+                    "Assets/imas/resources/textassets/zh/commu/card/card_blst_014mir0034_zh.gtx.bytes",
+                ),
             },
         ]
     }
 
-    fn read_all(mut file: impl Read) -> Vec<u8> {
-        let mut buf = vec![];
-        file.read_to_end(&mut buf).unwrap();
-        buf
+    fn texture_bundle(extractor: &mut RabexExtractor) -> (RabexBundle<'_>, Object) {
+        let case = &test_cases()[1];
+        (extractor.load(case.path.as_ref()).unwrap(), case.object.clone())
     }
 
     #[test]
-    fn test_load_file_bundles_clear() {
+    fn test_load_multiple_times() {
         init_test_logger();
 
+        // a bundle is unloaded when dropped, so the extractor can load the same file again
         let mut extractor = RabexExtractor::new();
-        assert_eq!(extractor.bundles().len(), 0);
-
-        for (i, case) in test_cases().iter().enumerate() {
-            extractor.load_file(case.asset_path.as_ref()).unwrap();
-            assert_eq!(extractor.bundles().len(), i + 1);
+        for case in test_cases().iter().chain(test_cases().iter()) {
+            let bundle = extractor.load(case.path.as_ref()).unwrap();
+            assert_eq!(bundle.objects().len(), case.object_count);
         }
-
-        extractor.clear();
-        assert_eq!(extractor.bundles().len(), 0);
     }
 
     #[test]
-    fn test_load_file_truncated() {
+    fn test_load_truncated() {
         init_test_logger();
 
-        let bytes = std::fs::read(test_cases()[1].asset_path).unwrap();
+        let bytes = std::fs::read(test_cases()[1].path).unwrap();
         let path = std::env::temp_dir().join("mltd_test_truncated.unity3d");
 
         // inside the streaming resource, which is not decompressed when loading
         for len in [100_000, bytes.len() - 1] {
             std::fs::write(&path, &bytes[..len]).unwrap();
 
-            let mut extractor = RabexExtractor::new();
-            assert!(extractor.load_file(&path).is_err());
-            assert_eq!(extractor.bundles().len(), 0);
+            assert!(RabexExtractor::new().load(&path).is_err());
         }
         std::fs::remove_file(&path).unwrap();
     }
 
     #[test]
-    fn test_load_file_not_unityfs() {
+    fn test_load_not_unityfs() {
         init_test_logger();
 
-        let mut bytes = std::fs::read(test_cases()[1].asset_path).unwrap();
+        let mut bytes = std::fs::read(test_cases()[1].path).unwrap();
         bytes[..8].copy_from_slice(b"UnityWeb");
         let path = std::env::temp_dir().join("mltd_test_not_unityfs.unity3d");
         std::fs::write(&path, bytes).unwrap();
 
         let mut extractor = RabexExtractor::new();
-        let result = extractor.load_file(&path);
+        let result = extractor.load(&path).is_err();
         std::fs::remove_file(&path).unwrap();
 
-        assert!(result.is_err());
-        assert_eq!(extractor.bundles().len(), 0);
+        assert!(result);
     }
 
     #[test]
-    fn test_extract_corrupted_texture() {
+    fn test_load_missing() {
+        init_test_logger();
+
+        assert!(RabexExtractor::new().load("tests/does_not_exist.unity3d".as_ref()).is_err());
+    }
+
+    #[test]
+    fn test_texture_corrupted() {
         init_test_logger();
 
         let case = &test_cases()[1];
-        let info = &case.asset_info;
-        let mut bytes = std::fs::read(case.asset_path).unwrap();
+        let mut bytes = std::fs::read(case.path).unwrap();
         // corrupts the streamed texture data, the decoder panics on it (also in release builds)
         bytes[40080] ^= 0xff;
         let path = std::env::temp_dir().join("mltd_test_corrupted_texture.unity3d");
         std::fs::write(&path, bytes).unwrap();
 
         let mut extractor = RabexExtractor::new();
-        let loaded = extractor.load_file(&path);
+        let bundle = extractor.load(&path);
         std::fs::remove_file(&path).unwrap();
-        loaded.unwrap();
 
-        let asset = extractor.asset_info(&info.orig_bundle, &info.collection, info.path_id);
-        assert!(extractor.extract(asset.unwrap()).is_err());
+        assert!(bundle.unwrap().texture(&case.object).is_err());
     }
 
     #[test]
@@ -613,71 +554,43 @@ mod tests {
     }
 
     #[test]
-    fn test_load_file_missing() {
-        init_test_logger();
-
-        let mut extractor = RabexExtractor::new();
-        assert!(extractor.load_file("tests/does_not_exist.unity3d".as_ref()).is_err());
-        assert_eq!(extractor.bundles().len(), 0);
-    }
-
-    #[test]
-    fn test_collections_and_infos() {
+    fn test_objects() {
         init_test_logger();
 
         let mut extractor = RabexExtractor::new();
         for case in test_cases() {
-            extractor.load_file(case.asset_path.as_ref()).unwrap();
-            let info = &case.asset_info;
+            let bundle = extractor.load(case.path.as_ref()).unwrap();
 
-            let collections = extractor.collections(&info.orig_bundle).unwrap();
-            assert_eq!(collections.len(), case.collection_count);
-
-            let infos = extractor.asset_infos(&info.orig_bundle, &info.collection).unwrap();
-            assert_eq!(infos.len(), case.asset_count);
-
-            let found = extractor.asset_info(&info.orig_bundle, &info.collection, info.path_id);
-            assert_eq!(found, Some(info));
-
-            extractor.clear();
+            assert!(bundle.objects().contains(&case.object));
         }
     }
 
     #[test]
-    fn test_extract_text_asset() {
+    fn test_text() {
         init_test_logger();
 
         let mut extractor = RabexExtractor::new();
+        let cases = test_cases();
         let expected = [
             (0, concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_acb.acb")),
             (2, concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_text.gtx")),
         ];
 
-        let cases = test_cases();
         for (i, path) in expected {
-            let info = &cases[i].asset_info;
-            extractor.load_file(cases[i].asset_path.as_ref()).unwrap();
+            let bundle = extractor.load(cases[i].path.as_ref()).unwrap();
 
-            let asset = extractor.asset_info(&info.orig_bundle, &info.collection, info.path_id);
-            let buf = read_all(extractor.extract(asset.unwrap()).unwrap());
-
-            assert_eq!(buf, std::fs::read(path).unwrap());
+            assert_eq!(bundle.text(&cases[i].object).unwrap(), std::fs::read(path).unwrap());
         }
     }
 
     #[test]
-    fn test_extract_texture_2d() {
+    fn test_texture() {
         init_test_logger();
 
         let mut extractor = RabexExtractor::new();
-        let case = &test_cases()[1];
-        let info = &case.asset_info;
-        extractor.load_file(case.asset_path.as_ref()).unwrap();
+        let (bundle, object) = texture_bundle(&mut extractor);
 
-        let asset = extractor.asset_info(&info.orig_bundle, &info.collection, info.path_id);
-        let png = read_all(extractor.extract(asset.unwrap()).unwrap());
-
-        let actual = image::load_from_memory_with_format(&png, image::ImageFormat::Png).unwrap();
+        let actual = bundle.texture(&object).unwrap();
         let expected =
             image::open(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_image.png")).unwrap();
 
@@ -685,14 +598,56 @@ mod tests {
     }
 
     #[test]
+    fn test_sprite() {
+        init_test_logger();
+
+        let mut extractor = RabexExtractor::new();
+        let (bundle, texture) = texture_bundle(&mut extractor);
+
+        let object = bundle.objects().iter().find(|o| o.name == "014mir0011_0_6").unwrap();
+        let sprite = bundle.sprite(object).unwrap();
+
+        assert_eq!(sprite.texture_id, texture.path_id);
+        assert_eq!(sprite.rect.x, 1);
+        assert_eq!(sprite.rect.width, 640);
+    }
+
+    #[test]
+    fn test_wrong_class() {
+        init_test_logger();
+
+        let mut extractor = RabexExtractor::new();
+        let (bundle, texture) = texture_bundle(&mut extractor);
+        let sprite = bundle.objects().iter().find(|o| o.class == Class::Sprite).unwrap();
+
+        assert!(bundle.text(sprite).is_err());
+        assert!(bundle.texture(sprite).is_err());
+        assert!(bundle.sprite(&texture).is_err());
+    }
+
+    #[test]
+    fn test_foreign_object() {
+        init_test_logger();
+
+        let mut extractor = RabexExtractor::new();
+        let (bundle, texture) = texture_bundle(&mut extractor);
+
+        let mut foreign = texture.clone();
+        foreign.collection = 99;
+        assert!(bundle.texture(&foreign).is_err());
+
+        foreign.collection = 0;
+        foreign.path_id += 1;
+        assert!(bundle.texture(&foreign).is_err());
+    }
+
+    #[test]
     fn test_read_resource() {
         init_test_logger();
 
         let mut extractor = RabexExtractor::new();
-        let case = &test_cases()[1];
-        extractor.load_file(case.asset_path.as_ref()).unwrap();
+        let (bundle, _) = texture_bundle(&mut extractor);
 
-        let bundle = &extractor.bundles[case.asset_info.orig_bundle.as_ref()];
         let resource = bundle
             .reader
             .files()
@@ -716,48 +671,5 @@ mod tests {
         // serialized files are not resources
         let serialized = &bundle.reader.serialized_files().next().unwrap().path;
         assert!(bundle.read_resource(serialized, 0, 1).is_err());
-    }
-
-    #[test]
-    fn test_extract_unsupported_class() {
-        init_test_logger();
-
-        let mut extractor = RabexExtractor::new();
-        let case = &test_cases()[1];
-        let info = &case.asset_info;
-        extractor.load_file(case.asset_path.as_ref()).unwrap();
-
-        let sprite = extractor
-            .asset_infos(&info.orig_bundle, &info.collection)
-            .unwrap()
-            .into_iter()
-            .find(|i| i.class == "Sprite")
-            .unwrap();
-
-        assert!(extractor.extract(sprite).is_err());
-    }
-
-    #[test]
-    fn test_asset_serialized() {
-        init_test_logger();
-
-        let mut extractor = RabexExtractor::new();
-        let case = &test_cases()[1];
-        let info = &case.asset_info;
-        extractor.load_file(case.asset_path.as_ref()).unwrap();
-
-        let texture = extractor.asset_info(&info.orig_bundle, &info.collection, info.path_id);
-        let value = extractor.asset_serialized(texture.unwrap()).unwrap();
-        assert_eq!(value["m_Name"], "014mir0011_0");
-        assert_eq!(value["m_Width"], 1024);
-        assert_eq!(value["m_Height"], 1024);
-        assert_eq!(value["m_TextureFormat"], 54);
-
-        let sprites = extractor.asset_infos(&info.orig_bundle, &info.collection).unwrap();
-        let sprite = sprites.into_iter().find(|i| i.name == "014mir0011_0_6").unwrap();
-        let value = extractor.asset_serialized(sprite).unwrap();
-        assert_eq!(value["m_Rect"]["x"], 1.0);
-        assert_eq!(value["m_Rect"]["width"], 640.0);
-        assert_eq!(value["m_RD"]["texture"]["m_PathID"], info.path_id);
     }
 }

@@ -45,18 +45,17 @@ const TEST_CASES: &[TestCase] = &[
         expected_path: "tests/test_acb.acb",
         got_relpath: "Assets/imas/resources/adx2/song3/song3_00test.acb",
         predicate: |dir, case| {
-            if cfg!(feature = "decode-audio") {
-                let got =
-                    dir.child(Path::new(case.got_relpath).with_file_name("song3_00test_bgm.wav"));
-                let expected = Path::new(case.expected_path).with_extension("wav");
-                assert!(
-                    wav_audio(got.path()) == wav_audio(&expected),
-                    "decoded audio differs from {}",
-                    expected.display()
-                );
-            } else {
-                dir.child(case.got_relpath).assert(predicate::path::eq_file(case.expected_path));
-            }
+            let got = dir.child(Path::new(case.got_relpath).with_file_name("song3_00test_bgm.wav"));
+            let expected = Path::new(case.expected_path).with_extension("wav");
+            assert!(
+                wav_audio(got.path()) == wav_audio(&expected),
+                "decoded audio differs from {}",
+                expected.display()
+            );
+
+            // the temporary key file of vgmstream is removed after decoding
+            dir.child(Path::new(case.got_relpath).with_file_name(".hcakey"))
+                .assert(predicate::path::missing());
         },
     },
     TestCase {
@@ -64,14 +63,9 @@ const TEST_CASES: &[TestCase] = &[
         expected_path: "tests/test_text.gtx",
         got_relpath: "Assets/imas/resources/textassets/zh/commu/card/card_blst_014mir0034_zh.gtx",
         predicate: |dir, case| {
-            let got_path = dir.child(case.got_relpath);
-            if cfg!(feature = "decrypt-text") {
-                got_path.assert(predicate::path::eq_file(
-                    Path::new(case.expected_path).with_file_name("test_text_decrypted.gtx"),
-                ));
-            } else {
-                got_path.assert(predicates::path::eq_file(case.expected_path));
-            }
+            dir.child(case.got_relpath).assert(predicate::path::eq_file(
+                Path::new(case.expected_path).with_file_name("test_text_decrypted.gtx"),
+            ));
         },
     },
     TestCase {
@@ -79,15 +73,11 @@ const TEST_CASES: &[TestCase] = &[
         expected_path: "tests/test_image.png",
         got_relpath: "Assets/imas/resources/card/014mir0011_0.png",
         predicate: |dir, case| {
-            if cfg!(feature = "process-image") {
-                let expected_path =
-                    Path::new(case.expected_path).with_file_name("test_image_processed.png");
-                let got_path =
-                    dir.child(Path::new(case.got_relpath).with_file_name("014mir0011_0_0.png"));
-                got_path.assert(predicates::path::eq_file(expected_path));
-            } else {
-                dir.child(case.got_relpath).assert(predicates::path::eq_file(case.expected_path));
-            }
+            let expected_path =
+                Path::new(case.expected_path).with_file_name("test_image_processed.png");
+            let got_path =
+                dir.child(Path::new(case.got_relpath).with_file_name("014mir0011_0_0.png"));
+            got_path.assert(predicate::path::eq_file(expected_path));
         },
     },
 ];

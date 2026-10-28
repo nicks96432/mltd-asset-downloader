@@ -10,9 +10,6 @@ use tokio::io::{AsyncRead, ReadBuf};
 
 pub(crate) type HashMap<K, V> = std::collections::HashMap<K, V, RandomState>;
 
-#[cfg(feature = "asset-ripper")]
-pub(crate) type HashSet<T> = std::collections::HashSet<T, RandomState>;
-
 /// Receiver of the progress of a transfer, e.g. a progress bar.
 pub trait Progress: Send {
     /// Sets the total length of the transfer.

@@ -28,6 +28,10 @@ path = "src/mltd/lib.rs"
 name = "mltd"
 required-features = ["cli"]
 
+[[test]]
+name = "extract"
+required-features = ["cli", "extract"]
+
 [dependencies]
 aes = { version = "0.9.3", optional = true }
 ahash = { version = "0.8.12", features = ["serde"] }
@@ -83,6 +87,7 @@ asset-ripper = [
   "dep:scraper",
   "dep:serde_json",
   "dep:tempfile",
+  "process-image",
   "reqwest/blocking",
   "reqwest/form",
 ]

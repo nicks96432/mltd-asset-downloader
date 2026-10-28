@@ -7,8 +7,7 @@ use mltd::asset::{Asset, AssetInfo};
 use mltd::manifest::Manifest;
 use mltd::net::MatsuriApiClient;
 
-use crate::download::PlatformArg;
-use crate::util::{BarProgress, create_progress_bar};
+use crate::util::{BarProgress, PlatformArg, create_progress_bar};
 
 #[derive(Args)]
 #[command(about, arg_required_else_help(true))]

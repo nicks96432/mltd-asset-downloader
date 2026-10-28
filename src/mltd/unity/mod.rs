@@ -1,118 +1,178 @@
+//! Reading Unity asset bundles.
+//!
+//! An [`Extractor`] loads a bundle file into a [`Bundle`], which lists the [`Object`]s in the
+//! bundle and reads their contents. A bundle borrows the extractor, so an extractor holds one
+//! bundle at a time, and the bundle is unloaded when it is dropped.
+
 #[cfg(feature = "asset-ripper")]
 pub mod asset_ripper;
 mod error;
+mod float;
 #[cfg(feature = "rabex")]
 pub mod rabex;
 #[cfg(feature = "rabex")]
 mod texture;
 
-use std::borrow::Cow;
-use std::fs::File;
+use std::fmt::{Display, Formatter};
 use std::path::Path;
 
 #[cfg(feature = "asset-ripper")]
 pub use asset_ripper::AssetRipper;
+use image::DynamicImage;
 #[cfg(feature = "rabex")]
 pub use rabex::RabexExtractor;
 
-pub(crate) use self::error::UnityError;
-
+pub(crate) use self::error::Error;
 use crate::error::Result;
 
-/// Information about an unity asset.
+/// Class of an [`Object`].
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum Class {
+    /// Container information of a bundle.
+    AssetBundle,
+
+    /// Text or binary data.
+    TextAsset,
+
+    /// A texture.
+    Texture2D,
+
+    /// A region of a texture.
+    Sprite,
+
+    /// Any other class with its name.
+    Other(String),
+}
+
+impl Class {
+    /// Gets the class from the name used by Unity, e.g. `Texture2D`.
+    #[must_use]
+    pub fn from_name(name: &str) -> Self {
+        match name {
+            "AssetBundle" => Self::AssetBundle,
+            "TextAsset" => Self::TextAsset,
+            "Texture2D" => Self::Texture2D,
+            "Sprite" => Self::Sprite,
+            other => Self::Other(other.to_owned()),
+        }
+    }
+
+    /// Gets the name used by Unity.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        match self {
+            Self::AssetBundle => "AssetBundle",
+            Self::TextAsset => "TextAsset",
+            Self::Texture2D => "Texture2D",
+            Self::Sprite => "Sprite",
+            Self::Other(name) => name,
+        }
+    }
+}
+
+impl Display for Class {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// An object (asset) in a [`Bundle`].
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 // prevent user from constructing this struct directly
 #[non_exhaustive]
-pub struct AssetInfo {
-    /// Path ID of the asset.
+pub struct Object {
+    /// Path ID of the object, which is unique in a serialized file.
     pub path_id: i64,
 
-    /// Type of the asset, e.g. `Texture2D`, `MonoBehaviour`.
-    pub class: Cow<'static, str>,
+    /// Class of the object.
+    pub class: Class,
 
-    /// Name of the asset.
-    pub name: Cow<'static, str>,
+    /// Name of the object.
+    pub name: String,
 
-    /// Original path of the asset before bundled.
-    pub orig_path: Option<Cow<'static, str>>,
+    /// Original path of the object before bundled.
+    pub orig_path: Option<String>,
 
-    /// Name of the original bundle file the asset belongs.
-    pub orig_bundle: Cow<'static, str>,
-
-    /// Name of the collection.
-    pub collection: Cow<'static, str>,
+    /// Index of the serialized file the object belongs to, which is meaningful to the bundle only.
+    pub(crate) collection: usize,
 }
 
-/// A trait for extracting assets from Unity asset bundles.
+impl Object {
+    pub(crate) fn new(
+        collection: usize,
+        path_id: i64,
+        class: Class,
+        name: String,
+        orig_path: Option<String>,
+    ) -> Self {
+        Self { path_id, class, name, orig_path, collection }
+    }
+}
+
+/// A rectangle in a texture, whose origin is the bottom left corner.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct Rect {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+/// A [`Class::Sprite`], which is a region of a [`Class::Texture2D`] in the same serialized file.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct Sprite {
+    /// Path ID of the texture.
+    pub texture_id: i64,
+
+    /// Region of the sprite in the texture.
+    pub rect: Rect,
+}
+
+/// A trait for loading Unity asset bundles.
 pub trait Extractor {
+    /// The loaded bundle, which unloads the file when dropped.
+    type Bundle<'a>: Bundle
+    where
+        Self: 'a;
+
     /// Loads an Unity asset bundle file from the specified path.
     ///
     /// # Errors
     ///
     /// This method fails if the path does not exist or is not a valid Unity
     /// asset bundle.
-    fn load_file(&mut self, path: &Path) -> Result<()>;
+    fn load(&mut self, path: &Path) -> Result<Self::Bundle<'_>>;
+}
 
-    /// Gets a list of loaded bundle names.
-    fn bundles(&self) -> Vec<&str>;
+/// Abstraction of a loaded Unity asset bundle.
+///
+/// The methods that read an object fail if the object is not from this bundle, or if its class
+/// is not the one the method reads.
+pub trait Bundle {
+    /// Gets all objects across all serialized files in the bundle.
+    fn objects(&self) -> &[Object];
 
-    /// Gets a list of collections in the specified bundle.
-    ///
-    /// Returns [`None`] if the bundle does not exist.
-    fn collections<'a>(&'a self, bundle: &str) -> Option<Vec<&'a str>>;
-
-    /// Gets a list of asset infos in the specified bundle and collection.
-    ///
-    /// Returns [`None`] if the bundle or collection does not exist.
-    fn asset_infos<'a>(&'a self, bundle: &str, collection: &str) -> Option<Vec<&'a AssetInfo>>;
-
-    /// Gets information about a specific asset by its path ID in the specified
-    /// bundle and collection.
-    ///
-    /// Returns [`None`] if the bundle or collection does not exist, or if the
-    /// asset with the given path ID is not found.
-    fn asset_info<'a>(
-        &'a self,
-        bundle: &str,
-        collection: &str,
-        path_id: i64,
-    ) -> Option<&'a AssetInfo>;
-
-    /// Gets JSON serialized representation of the asset. See [Unity documentation][doc]
-    /// for more details.
-    ///
-    /// Although the original serialization format is YAML, JSON is used here
-    /// for better compatibility with Rust ecosystem.
+    /// Reads the content of a [`Class::TextAsset`].
     ///
     /// # Errors
     ///
-    /// This method fails if the asset is not found in the extractor, or the asset
-    /// cannot be serialized.
+    /// This method fails if the object cannot be read.
+    fn text(&self, object: &Object) -> Result<Vec<u8>>;
+
+    /// Reads the image of a [`Class::Texture2D`].
     ///
-    /// [doc]: https://docs.unity3d.com/6000.2/Documentation/Manual/FormatDescription.html
-    fn asset_serialized<'a>(&'a self, info: &'a AssetInfo) -> Result<serde_json::Value>;
-
-    /// Gets all asset infos across all loaded bundles and collections.
-    fn all_asset_infos(&self) -> Vec<&AssetInfo> {
-        let mut assets = vec![];
-
-        for bundle in self.bundles() {
-            for collection in self.collections(bundle).unwrap_or_default() {
-                assets.extend(self.asset_infos(bundle, collection).unwrap_or_default());
-            }
-        }
-
-        assets
-    }
-
-    /// Extracts the raw bytes of the specified asset.
+    /// The image is upright, i.e. the same as the one exported by the Unity editor.
     ///
     /// # Errors
     ///
-    /// This method fails if info is not found in the extractor, or the file
-    /// cannot be accessed or extracted.
-    fn extract(&self, info: &AssetInfo) -> Result<File>;
+    /// This method fails if the object cannot be read or the texture cannot be decoded.
+    fn texture(&self, object: &Object) -> Result<DynamicImage>;
 
-    /// Clears all loaded bundles and cached data.
-    fn clear(&mut self);
+    /// Reads the texture reference and the region of a [`Class::Sprite`].
+    ///
+    /// # Errors
+    ///
+    /// This method fails if the object cannot be read.
+    fn sprite(&self, object: &Object) -> Result<Sprite>;
 }

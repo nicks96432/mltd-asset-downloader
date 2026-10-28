@@ -1,34 +1,25 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{File, create_dir_all};
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufWriter, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use ahash::HashSetExt;
 use anyhow::{Result, anyhow};
 use clap::{Args, ValueEnum};
+use image::{DynamicImage, GenericImageView};
 use mltd::extract::ENCRYPTED_TEXT_EXTENSIONS;
-use mltd::unity::Extractor;
+use mltd::extract::audio::{Encoder, EncoderOutputOptions, MLTD_HCA_KEY};
+use mltd::extract::puzzle::solve_puzzle;
+use mltd::extract::text::decrypt_text;
+use mltd::unity::{Bundle, Class, Extractor, Object, Rect};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 
-use crate::util::safe_join;
-#[cfg(feature = "decode-audio")]
-use {
-    crate::util::HashSet,
-    ahash::HashSetExt,
-    mltd::extract::audio::{Encoder, EncoderOutputOptions, MLTD_HCA_KEY},
-};
-#[cfg(feature = "process-image")]
-use {
-    image::DynamicImage, image::GenericImageView, mltd::extract::puzzle::solve_puzzle,
-    mltd::unity::AssetInfo, std::collections::BTreeMap,
-};
-#[cfg(feature = "decrypt-text")]
-use {mltd::extract::text::decrypt_text, std::io::Read};
+use crate::util::{HashSet, safe_join};
 
 #[derive(Debug, Args)]
-#[cfg(feature = "decode-audio")]
 pub struct AudioArgs {
     /// Audio output format extension
     #[arg(long, value_name = "FORMAT", display_order = 2)]
@@ -62,11 +53,11 @@ pub enum Backend {
 
 impl Default for Backend {
     fn default() -> Self {
-        #[cfg(feature = "asset-ripper")]
-        return Self::AssetRipper;
-
-        #[cfg(all(feature = "rabex", not(feature = "asset-ripper")))]
+        #[cfg(feature = "rabex")]
         return Self::Rabex;
+
+        #[cfg(all(feature = "asset-ripper", not(feature = "rabex")))]
+        return Self::AssetRipper;
     }
 }
 
@@ -87,11 +78,9 @@ pub struct ExtractorArgs {
     pub output: PathBuf,
 
     #[clap(flatten)]
-    #[cfg(feature = "decode-audio")]
     pub audio: AudioArgs,
 
     /// Extension for image output
-    #[cfg(feature = "process-image")]
     #[arg(long, value_name = "EXT", display_order = 2)]
     #[arg(value_parser = parse_image_format, default_value = "png")]
     pub image_ext: image::ImageFormat,
@@ -109,7 +98,6 @@ pub struct ExtractorArgs {
 }
 
 /// Parses a single key-value pair
-#[cfg(feature = "decode-audio")]
 fn parse_key_val(s: &str) -> Result<(String, String)> {
     if !s.starts_with('-') {
         return Err(anyhow!("invalid -KEY=value: no `-` found in `{}`", s));
@@ -123,7 +111,6 @@ fn parse_key_val(s: &str) -> Result<(String, String)> {
 }
 
 /// Parses string to image format
-#[cfg(feature = "process-image")]
 fn parse_image_format(s: &str) -> Result<image::ImageFormat> {
     let image_format = match image::ImageFormat::from_extension(s) {
         Some(f) => f,
@@ -252,8 +239,6 @@ where
 
                     let result = extract_file(&path, &mut extractor, args, key_files);
 
-                    extractor.clear();
-
                     if let Err(e) = result {
                         tracing::warn!(input_path = %path.display(), error = ?e, "failed to extract file");
                         failed.fetch_add(1, Ordering::Relaxed);
@@ -275,7 +260,6 @@ where
 }
 
 /// Extracts a single .unity3d file.
-#[cfg_attr(not(feature = "decode-audio"), allow(unused_variables))]
 fn extract_file(
     path: &Path,
     unity_extractor: &mut impl Extractor,
@@ -283,23 +267,20 @@ fn extract_file(
     key_files: &KeyFiles,
 ) -> Result<()> {
     tracing::debug!(input_path = %path.display(), "loading file");
-    unity_extractor.load_file(path.as_ref())?;
+    let bundle = unity_extractor.load(path)?;
 
-    #[cfg(feature = "decode-audio")]
     let mut audio_paths = HashSet::new();
 
-    let infos = unity_extractor.all_asset_infos();
-    for info in infos.iter() {
-        if info.class == "AssetBundle" {
+    for object in bundle.objects() {
+        if object.class == Class::AssetBundle {
             // asset bundles contains bundle information only
             continue;
         }
 
-        let Some(orig_path) = info.orig_path.as_deref() else {
-            tracing::warn!(name = &*info.name, class = &*info.class, "asset has no original path");
+        let Some(orig_path) = object.orig_path.as_deref() else {
+            tracing::warn!(name = object.name, class = %object.class, "asset has no original path");
             continue;
         };
-        let asset_original_path = &PathBuf::from(orig_path);
 
         let output_path = safe_join(&args.output, orig_path)?;
         let output_dir = output_path
@@ -308,185 +289,117 @@ fn extract_file(
 
         create_dir_all(output_dir)?;
 
-        match &*info.class {
-            "TextAsset" => {
+        match &object.class {
+            Class::TextAsset => {
                 // remove .bytes
                 let output_path = output_path.with_extension("");
                 let file_ext =
                     output_path.extension().and_then(|s| s.to_str()).unwrap_or_default().to_owned();
 
-                let mut file = BufReader::new(unity_extractor.extract(info)?);
-                let mut out_file = BufWriter::new(File::create(&output_path)?);
+                let mut data = bundle.text(object)?;
 
                 if ENCRYPTED_TEXT_EXTENSIONS.contains(&file_ext.as_str()) {
-                    #[cfg(feature = "decrypt-text")]
-                    {
-                        tracing::info!(filename = %asset_original_path.file_name().unwrap().display(), "decrypting text");
-                        let mut buf = vec![];
-                        file.read_to_end(&mut buf)?;
-                        let buf = decrypt_text(&buf)?;
-                        tracing::trace!(decrypted = %String::from_utf8_lossy(&buf).as_ref());
-
-                        tracing::info!(
-                            output_path = %output_path.display(),
-                            "extracting decrypted text"
-                        );
-                        std::io::copy(&mut std::io::Cursor::new(buf), &mut out_file)?;
-                    }
-
-                    #[cfg(not(feature = "decrypt-text"))]
-                    {
-                        tracing::info!(
-                            output_path = %output_path.display(),
-                            "extracting encrypted text"
-                        );
-                        std::io::copy(&mut file, &mut out_file)?;
-                    }
+                    tracing::info!(output_path = %output_path.display(), "decrypting text");
+                    data = decrypt_text(&data)?;
+                    tracing::trace!(decrypted = %String::from_utf8_lossy(&data));
                 } else {
                     if ["acb", "awb"].contains(&file_ext.as_str()) {
                         // we should handle audio files after all of them are extracted because
                         // some files may contain informations (Ex: filename) about others
-                        #[cfg(feature = "decode-audio")]
                         audio_paths.insert(output_path.clone());
-
-                        #[cfg(not(feature = "decode-audio"))]
-                        tracing::info!(
-                            "feature `decode-audio` is not enabled, saving acb directly"
-                        );
                     }
 
-                    tracing::info!(output_path = %output_path.display(), "extracting audio");
-                    std::io::copy(&mut file, &mut out_file)?;
+                    tracing::info!(output_path = %output_path.display(), "extracting text");
                 }
+
+                std::fs::write(&output_path, data)?;
             }
 
-            "Texture2D" => {
-                #[cfg(feature = "process-image")]
-                // Texture2D requires all relavent Sprite infos to be extracted
-                {
-                    let texture_info = info;
-                    let images = extract_image(
-                        texture_info,
-                        infos.iter().cloned().filter(|info| info.class == "Sprite"),
-                        unity_extractor,
-                    )?;
+            Class::Texture2D => {
+                // Texture2D requires all relavent Sprites to be extracted
+                let sprites = bundle.objects().iter().filter(|o| o.class == Class::Sprite);
+                let images = extract_image(&bundle, object, sprites)?;
 
-                    images.into_iter().enumerate().par_bridge().try_for_each(
-                        |(i, image)| -> Result<()> {
-                            let path = output_dir.join(format!(
-                                "{}_{}.{}",
-                                texture_info.name,
-                                i,
-                                args.image_ext.extensions_str()[0]
-                            ));
-                            tracing::info!(output_path = %path.display(), "writing image");
+                images.into_iter().enumerate().par_bridge().try_for_each(
+                    |(i, image)| -> Result<()> {
+                        let path = output_dir.join(format!(
+                            "{}_{}.{}",
+                            object.name,
+                            i,
+                            args.image_ext.extensions_str()[0]
+                        ));
+                        tracing::info!(output_path = %path.display(), "writing image");
 
-                            let mut file = BufWriter::new(File::create(&path)?);
-                            image.write_to(&mut file, args.image_ext)?;
-                            file.flush()?;
+                        let mut file = BufWriter::new(File::create(&path)?);
+                        image.write_to(&mut file, args.image_ext)?;
+                        file.flush()?;
 
-                            Ok(())
-                        },
-                    )?;
-                }
-
-                #[cfg(not(feature = "process-image"))]
-                {
-                    tracing::info!(output_path = %output_path.display(), "writing unprocessed image");
-
-                    let mut file = BufReader::new(unity_extractor.extract(info)?);
-                    let mut output_file = BufWriter::new(File::create(output_path)?);
-
-                    std::io::copy(&mut file, &mut output_file)?;
-                }
+                        Ok(())
+                    },
+                )?;
             }
 
-            "Sprite" => (), // sprites are handled in Texture2D extractor
-            _ => tracing::warn!(class = &*info.class, "unknown asset class"),
+            Class::Sprite => (), // sprites are handled in Texture2D extractor
+            class => tracing::warn!(%class, "unknown asset class"),
         };
     }
 
-    #[cfg(feature = "decode-audio")]
-    for output_path in audio_paths.into_iter() {
+    // unload the file before the time-consuming audio decoding
+    drop(bundle);
+
+    for output_path in audio_paths {
         extract_audio(&output_path, &args.audio, key_files)?;
     }
 
     Ok(())
 }
 
-#[cfg(feature = "process-image")]
+/// Gets the images of a texture, with the puzzle solved if it is one.
 fn extract_image<'a>(
-    texture_info: &AssetInfo,
-    sprite_infos: impl Iterator<Item = &'a AssetInfo>,
-    extractor: &impl Extractor,
+    bundle: &impl Bundle,
+    texture: &Object,
+    sprites: impl Iterator<Item = &'a Object>,
 ) -> Result<Vec<DynamicImage>> {
-    use std::io::BufReader;
+    let upright = bundle.texture(texture)?;
 
-    let image =
-        image::load(BufReader::new(extractor.extract(texture_info)?), image::ImageFormat::Png)?
-            .flipv();
+    // the rectangles of sprites are measured from the bottom left corner
+    let image = upright.flipv();
 
     let mut rects = BTreeMap::new();
-    for info in sprite_infos {
-        if info.class != "Sprite" {
+    for object in sprites {
+        let sprite = bundle.sprite(object)?;
+        if sprite.texture_id != texture.path_id {
             continue;
         }
 
-        // AssetRipper names the fields `m_X`, `m_Texture`, ... while the type tree based
-        // extractors use the names written by Unity (`x`, `texture`, ...) and floats.
-        let json = extractor.asset_serialized(info)?;
-        let pointer = |paths: &[&str]| paths.iter().find_map(|p| json.pointer(p)).cloned();
-        let number =
-            |paths: &[&str]| pointer(paths).and_then(|v| v.as_f64()).map(|v| v.round() as u32);
-
-        let Some(path_id) = pointer(&["/m_RD/m_Texture/m_PathID", "/m_RD/texture/m_PathID"])
-            .and_then(|v| v.as_i64())
-        else {
-            tracing::warn!(name = &*info.name, "sprite has no texture reference, skipping");
-            continue;
-        };
-        if path_id != texture_info.path_id {
-            continue;
-        }
-
-        let (Some(x), Some(y), Some(width), Some(height)) = (
-            number(&["/m_Rect/m_X", "/m_Rect/x"]),
-            number(&["/m_Rect/m_Y", "/m_Rect/y"]),
-            number(&["/m_Rect/m_Width", "/m_Rect/width"]),
-            number(&["/m_Rect/m_Height", "/m_Rect/height"]),
-        ) else {
-            tracing::warn!(name = &*info.name, "sprite has no rect, skipping");
-            continue;
-        };
+        let Rect { x, y, width, height } = sprite.rect;
         if u64::from(x) + u64::from(width) > u64::from(image.width())
             || u64::from(y) + u64::from(height) > u64::from(image.height())
         {
-            tracing::warn!(name = &*info.name, "sprite rect is out of the texture, skipping");
+            tracing::warn!(name = object.name, "sprite rect is out of the texture, skipping");
             continue;
         }
 
-        let Some(sprite_id) = info.name.rsplit_once('_').and_then(|(_, n)| n.parse::<u32>().ok())
+        let Some(sprite_id) = object.name.rsplit_once('_').and_then(|(_, n)| n.parse::<u32>().ok())
         else {
-            tracing::warn!(name = &*info.name, "sprite name has no piece number, skipping");
+            tracing::warn!(name = object.name, "sprite name has no piece number, skipping");
             continue;
         };
-        let piece = image.view(x, y, width, height);
-        rects.insert(sprite_id, piece);
+        rects.insert(sprite_id, image.view(x, y, width, height));
     }
 
-    let images =
-        match solve_puzzle(&texture_info.name, &image, &rects.into_values().collect::<Vec<_>>()) {
-            Ok(images) => images,
-            Err(e) => {
-                tracing::warn!(error = ?e, filename = &*texture_info.name, "using original image");
-                vec![image]
-            }
-        };
+    let images = match solve_puzzle(&texture.name, &image, &rects.into_values().collect::<Vec<_>>())
+    {
+        Ok(images) => images,
+        Err(e) => {
+            tracing::warn!(error = ?e, filename = texture.name, "using original image");
+            vec![upright]
+        }
+    };
 
     Ok(images)
 }
 
-#[cfg(feature = "decode-audio")]
 fn extract_audio(path: &Path, args: &AudioArgs, key_files: &KeyFiles) -> Result<()> {
     use rayon::iter::IntoParallelIterator;
 
