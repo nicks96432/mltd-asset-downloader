@@ -2996,7 +2996,7 @@ dependencies = [
 
 [[package]]
 name = "vgmstream-sys"
-version = "0.2.0-vgmstream-r2055-22-g354cb080"
+version = "0.2.0-vgmstream-r2168"
 dependencies = [
  "bindgen",
  "cmake",
