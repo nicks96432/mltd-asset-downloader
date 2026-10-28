@@ -304,6 +304,10 @@ impl Extractor for RabexExtractor {
             .ok_or_else(|| Repr::io("path has no file name", None))?;
 
         let bytes = std::fs::read(path).map_err(|e| Repr::io("cannot read bundle", Some(e)))?;
+        // rabex panics on the other signatures (UnityWeb, UnityRaw, ...) instead of returning an error
+        if !bytes.starts_with(b"UnityFS\0") {
+            return Err(Repr::io("not a UnityFS bundle", None).into());
+        }
         let config = ExtractionConfig::default().assume_recent_unity();
         let reader = BundleFileReader::from_reader(Cursor::new(bytes), &config)
             .map_err(|e| io_error("failed to parse bundle", e))?;
@@ -539,6 +543,23 @@ mod tests {
         }
 
         extractor.clear();
+        assert_eq!(extractor.bundles().len(), 0);
+    }
+
+    #[test]
+    fn test_load_file_not_unityfs() {
+        init_test_logger();
+
+        let mut bytes = std::fs::read(test_cases()[1].asset_path).unwrap();
+        bytes[..8].copy_from_slice(b"UnityWeb");
+        let path = std::env::temp_dir().join("mltd_test_not_unityfs.unity3d");
+        std::fs::write(&path, bytes).unwrap();
+
+        let mut extractor = RabexExtractor::new();
+        let result = extractor.load_file(&path);
+        std::fs::remove_file(&path).unwrap();
+
+        assert!(result.is_err());
         assert_eq!(extractor.bundles().len(), 0);
     }
 
