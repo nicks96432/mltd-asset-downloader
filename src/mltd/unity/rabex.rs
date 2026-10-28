@@ -1,4 +1,4 @@
-//! Extractor backed by the pure Rust [`rabex`](rabex) crate.
+//! Extractor backed by the pure Rust [`rabex`] crate.
 
 use std::fmt::{Debug, Formatter};
 use std::io::Cursor;
@@ -216,7 +216,7 @@ struct Collection {
     file: SerializedFile,
 }
 
-/// Extractor that reads bundles with the [`rabex`](rabex) crate.
+/// Extractor that reads bundles with the [`rabex`] crate.
 pub struct RabexExtractor {
     type_trees: Arc<TypeTrees>,
 }

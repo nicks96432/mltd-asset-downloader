@@ -107,9 +107,8 @@ impl<'a> Encoder<'a> {
     ///
     /// # Errors
     ///
-    /// [`Error::VGMStream`]: if vgmstream cannot identify the input file format.
-    ///
-    /// [`Error::FFmpeg`]: if ffmpeg encoder initialization failed.
+    /// Returns [`crate::ErrorKind::AudioDecode`] if vgmstream cannot identify the input file
+    /// format, or ffmpeg encoder initialization failed.
     pub fn open<P>(
         input_file: P,
         subsong_index: usize,
@@ -368,7 +367,7 @@ impl<'a> Encoder<'a> {
     ///
     /// # Errors
     ///
-    /// [`Error::FFmpeg`]: if encoding failed.
+    /// Returns [`crate::ErrorKind::AudioDecode`] if encoding failed.
     pub fn encode(&mut self) -> Result<()> {
         match self.options {
             Some(ref o) => {
