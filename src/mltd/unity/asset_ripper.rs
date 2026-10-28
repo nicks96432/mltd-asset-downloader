@@ -532,6 +532,18 @@ mod tests {
         concat!(env!("CARGO_MANIFEST_DIR"), "/AssetRipper/AssetRipper.GUI.Free")
     };
 
+    /// Starts Asset Ripper on `port`.
+    ///
+    /// Returns [`None`] if it is not installed, so the test is skipped.
+    fn start(port: u16) -> Option<AssetRipper> {
+        if !Path::new(ASSET_RIPPER_PATH).exists() {
+            eprintln!("skipped: {ASSET_RIPPER_PATH} does not exist");
+            return None;
+        }
+
+        Some(AssetRipper::new(ASSET_RIPPER_PATH, port).unwrap())
+    }
+
     #[derive(Debug)]
     struct TestCase {
         path: &'static str,
@@ -584,7 +596,7 @@ mod tests {
     fn test_load_objects() {
         init_test_logger();
 
-        let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56789).unwrap();
+        let Some(mut asset_ripper) = start(56789) else { return };
 
         // a bundle is unloaded when dropped, so the next file can be loaded
         for case in test_cases() {
@@ -599,7 +611,7 @@ mod tests {
     fn test_text() {
         init_test_logger();
 
-        let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56790).unwrap();
+        let Some(mut asset_ripper) = start(56790) else { return };
         let case = &test_cases()[0];
         let bundle = asset_ripper.load(case.path.as_ref()).unwrap();
         let object = bundle.objects().iter().find(|o| case.matches(o)).unwrap();
@@ -612,7 +624,7 @@ mod tests {
     fn test_texture_and_sprite() {
         init_test_logger();
 
-        let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56791).unwrap();
+        let Some(mut asset_ripper) = start(56791) else { return };
         let case = &test_cases()[1];
         let bundle = asset_ripper.load(case.path.as_ref()).unwrap();
         let texture = bundle.objects().iter().find(|o| case.matches(o)).unwrap();
@@ -633,7 +645,7 @@ mod tests {
     fn test_wrong_class() {
         init_test_logger();
 
-        let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56792).unwrap();
+        let Some(mut asset_ripper) = start(56792) else { return };
         let case = &test_cases()[1];
         let bundle = asset_ripper.load(case.path.as_ref()).unwrap();
         let sprite = bundle.objects().iter().find(|o| o.class == Class::Sprite).unwrap();
@@ -646,7 +658,7 @@ mod tests {
     fn test_serialized() {
         init_test_logger();
 
-        let mut asset_ripper = AssetRipper::new(ASSET_RIPPER_PATH, 56793).unwrap();
+        let Some(mut asset_ripper) = start(56793) else { return };
 
         // skipping acb and text assets because they are too large
         let case = &test_cases()[1];
