@@ -91,7 +91,6 @@ decrypt-text = [
 ]
 download = ["dep:human_bytes"]
 extract = [
-  "asset-ripper",
   "decode-audio",
   "decrypt-text",
   "dep:glob",

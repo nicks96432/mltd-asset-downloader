@@ -48,7 +48,7 @@ Options:
       `winget install BtbN.FFmpeg.LGPL.Shared.9.0`. See `winget search ffmpeg`
       for more options.
 3. Download [AssetRipper](https://github.com/AssetRipper/AssetRipper) to extract
-   assets
+   assets (optional)
     - decompress the zip file and rename the folder to `./AssetRipper`.
     - you can also specify the path via the `--asset-ripper-path` option.
 
@@ -64,14 +64,10 @@ The following tools are required:
     remember to set `LIBCLANG_PATH` environment variable on Windows
 
 - pkg-config (Linux/MacOS)
-- FFmpeg >= 7.1 shared library in your `PATH` (Windows) or `LD_LIBRARY_PATH` (Linux/MacOS)
+- FFmpeg >= 9.0 shared library in your `PATH` (Windows) or `LD_LIBRARY_PATH` (Linux/MacOS)
 
     On Windows, `FFMPEG_DIR` should set to the folder where FFmpeg is installed.
-    For example, setting it to `winget` installed package would be like:
 
-    ```powershell
-    FFMPEG_DIR = 'C:\Users\username\AppData\Local\Microsoft\WinGet\Packages\BtbN.FFmpeg.LGPL.Shared.7.1_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-n7.1-62-gb168ed9b14-win64-lgpl-shared-7.1'
-    ```
 
 Alternatively, you can set the environment variables in `.cargo/config-windows.toml`.
 

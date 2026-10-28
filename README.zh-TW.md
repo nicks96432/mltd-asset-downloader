@@ -40,7 +40,7 @@ Commands:
     - 確保FFmpeg共享函式庫在你的 `PATH` 裡面
     - Windows上可以用 `winget` 來安裝FFmpeg，這樣它就會被自動加進`PATH`裡，例如
       `winget install BtbN.FFmpeg.LGPL.Shared.7.1` 。用 `winget search ffmpeg` 可以查看更多選擇
-3. 如果要拆包，下載[AssetRipper](https://github.com/AssetRipper/AssetRipper)
+3. 如果要拆包，可下載[AssetRipper](https://github.com/AssetRipper/AssetRipper)
     - 解壓縮後重新命名為`./AssetRipper`
     - 或是用`--asset-ripper-path`指定執行檔路徑
 
@@ -58,11 +58,7 @@ Commands:
 - pkg-config (Linux/MacOS)
 - 在你的 `PATH` (Windows) 或 `LD_LIBRARY_PATH` (Linux/MacOS) 中有FFmpeg >= 7.1 共享函式庫版
 
-    Windows上要額外設定 `FFMPEG_DIR` 環境變數為FFmpeg安裝資料夾，例如在Powershell中設定 `winget` 安裝的FFmpeg套件：
-
-    ```powershell
-    $env:FFMPEG_DIR='C:\Users\username\AppData\Local\Microsoft\WinGet\Packages\BtbN.FFmpeg.LGPL.Shared.7.1_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-n7.1-62-gb168ed9b14-win64-lgpl-shared-7.1'
-    ```
+    Windows上要額外設定 `FFMPEG_DIR` 環境變數為FFmpeg安裝資料夾
 
 環境變數也可以在 `.cargo/config-windows.toml` 中設定。
 
