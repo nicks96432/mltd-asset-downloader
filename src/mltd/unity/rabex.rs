@@ -112,9 +112,41 @@ struct Collection {
 
 /// A loaded bundle file.
 struct Bundle {
-    /// Non-serialized files in the bundle (e.g. `.resS` streaming resources), by file name.
-    resources: HashMap<String, Vec<u8>>,
+    reader: BundleFileReader<Cursor<Vec<u8>>>,
     collections: HashMap<String, Collection>,
+}
+
+impl Bundle {
+    /// Reads `size` bytes at `offset` of a non-serialized file, decompressing only the blocks
+    /// covering them.
+    fn read_resource(&self, name: &str, offset: i64, size: i64) -> Result<Vec<u8>> {
+        let entry = self
+            .reader
+            .file(name)
+            .ok_or_else(|| Repr::io("streaming resource does not exist", None))?;
+
+        if entry.flags & FileEntry::FLAG_SERIALIZEDFILE != 0 {
+            return Err(Repr::io("serialized file is not a resource", None).into());
+        }
+
+        // the range is checked here, the reader panics or truncates on a range it cannot serve
+        let range = (offset >= 0 && size >= 0)
+            .then(|| offset.checked_add(size).filter(|end| *end <= entry.size))
+            .flatten()
+            .and_then(|_| entry.offset.checked_add(offset))
+            .map(|offset| FileEntry { offset, size, flags: entry.flags, path: entry.path.clone() })
+            .ok_or_else(|| Repr::io("streaming data is out of range", None))?;
+
+        let data = self
+            .reader
+            .read_at_entry(&range)
+            .map_err(|e| Repr::io("failed to decompress bundle file", Some(e)))?;
+        if usize::try_from(size).ok() != Some(data.len()) {
+            return Err(Repr::io("streaming data is truncated", None).into());
+        }
+
+        Ok(data)
+    }
 }
 
 pub struct RabexExtractor {
@@ -276,17 +308,11 @@ impl Extractor for RabexExtractor {
         let reader = BundleFileReader::from_reader(Cursor::new(bytes), &config)
             .map_err(|e| io_error("failed to parse bundle", e))?;
 
-        let mut bundle = Bundle { resources: HashMap::new(), collections: HashMap::new() };
         let mut serialized_files = Vec::new();
-        for entry in reader.files() {
+        for entry in reader.serialized_files() {
             let data = reader
                 .read_at_entry(entry)
                 .map_err(|e| Repr::io("failed to decompress bundle file", Some(e)))?;
-
-            if entry.flags & FileEntry::FLAG_SERIALIZEDFILE == 0 {
-                bundle.resources.insert(entry.path.clone(), data);
-                continue;
-            }
 
             let file = SerializedFile::from_reader(&mut Cursor::new(&data))
                 .map_err(|e| io_error("failed to parse serialized file", e))?;
@@ -302,6 +328,7 @@ impl Extractor for RabexExtractor {
         if self.bundles.contains_key(&bundle_name) {
             return Err(Repr::io("a bundle with the same name is already loaded", None).into());
         }
+        let mut bundle = Bundle { reader, collections: HashMap::new() };
         for (collection_name, file, data) in serialized_files {
             let collection = self.load_collection(&bundle_name, &collection_name, file, data);
             bundle.collections.insert(collection_name, collection);
@@ -382,24 +409,11 @@ impl Extractor for RabexExtractor {
                     .map_err(|e| io_error("failed to read Texture2D", e))?;
 
                 let stream = &texture.m_StreamData;
+                let streamed;
                 let data = if stream.size.0 > 0 {
                     let name = stream.path.rsplit('/').next().unwrap_or_default();
-                    let resource = bundle
-                        .resources
-                        .get(name)
-                        .ok_or_else(|| Repr::io("streaming resource does not exist", None))?;
-                    let start = usize::try_from(stream.offset.0)
-                        .map_err(|e| io_error("invalid streaming offset", e))?;
-                    let end = stream
-                        .offset
-                        .0
-                        .checked_add(stream.size.0)
-                        .and_then(|end| usize::try_from(end).ok())
-                        .ok_or_else(|| Repr::io("invalid streaming size", None))?;
-
-                    resource
-                        .get(start..end)
-                        .ok_or_else(|| Repr::io("streaming data is out of range", None))?
+                    streamed = bundle.read_resource(name, stream.offset.0, stream.size.0)?;
+                    &streamed
                 } else {
                     &texture.image_data.0
                 };
@@ -444,6 +458,8 @@ impl Extractor for RabexExtractor {
 mod tests {
     use std::borrow::Cow;
     use std::io::Read;
+
+    use rabex::files::unityfile::FileEntry;
 
     use super::RabexExtractor;
     use crate::unity::{AssetInfo, Extractor};
@@ -603,6 +619,40 @@ mod tests {
             image::open(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_image.png")).unwrap();
 
         assert_eq!(actual.to_rgba8(), expected.to_rgba8());
+    }
+
+    #[test]
+    fn test_read_resource() {
+        init_test_logger();
+
+        let mut extractor = RabexExtractor::new();
+        let case = &test_cases()[1];
+        extractor.load_file(case.asset_path.as_ref()).unwrap();
+
+        let bundle = &extractor.bundles[case.asset_info.orig_bundle.as_ref()];
+        let resource = bundle
+            .reader
+            .files()
+            .iter()
+            .find(|entry| entry.flags & FileEntry::FLAG_SERIALIZEDFILE == 0)
+            .unwrap();
+        let name = resource.path.as_str();
+        let all = bundle.reader.read_at(name).unwrap().unwrap();
+        assert_eq!(all.len(), usize::try_from(resource.size).unwrap());
+
+        // a range is the same as the matching part of the whole file
+        assert_eq!(bundle.read_resource(name, 0, resource.size).unwrap(), all);
+        assert_eq!(bundle.read_resource(name, 3, 5).unwrap(), all[3..8]);
+
+        // invalid ranges and names fail instead of panicking
+        assert!(bundle.read_resource(name, 0, resource.size + 1).is_err());
+        assert!(bundle.read_resource(name, resource.size, 1).is_err());
+        assert!(bundle.read_resource(name, -1, 1).is_err());
+        assert!(bundle.read_resource(name, 1, i64::MAX).is_err());
+        assert!(bundle.read_resource("missing.resS", 0, 1).is_err());
+        // serialized files are not resources
+        let serialized = &bundle.reader.serialized_files().next().unwrap().path;
+        assert!(bundle.read_resource(serialized, 0, 1).is_err());
     }
 
     #[test]

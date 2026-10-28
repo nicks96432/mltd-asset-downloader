@@ -10,7 +10,6 @@ use mltd::ErrorKind;
 use mltd::extract::ENCRYPTED_TEXT_EXTENSIONS;
 use mltd::unity::Extractor;
 use rayon::iter::{ParallelBridge, ParallelIterator};
-
 #[cfg(feature = "process-image")]
 use {
     image::DynamicImage, image::GenericImageView, mltd::extract::puzzle::solve_puzzle,
