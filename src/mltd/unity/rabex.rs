@@ -68,8 +68,10 @@ struct ContainerEntry {
 }
 
 #[derive(Deserialize)]
-#[allow(non_snake_case)]
+#[allow(non_snake_case, clippy::struct_field_names)]
 struct AssetBundleData {
+    #[serde(default)]
+    m_Name: String,
     m_PreloadTable: Vec<PPtrData>,
     m_Container: Vec<(String, ContainerEntry)>,
 }
@@ -129,13 +131,12 @@ impl Bundle {
             return Err(Repr::io("serialized file is not a resource", None).into());
         }
 
-        // the range is checked here, the reader panics or truncates on a range it cannot serve
-        let range = (offset >= 0 && size >= 0)
-            .then(|| offset.checked_add(size).filter(|end| *end <= entry.size))
-            .flatten()
-            .and_then(|_| entry.offset.checked_add(offset))
-            .map(|offset| FileEntry { offset, size, flags: entry.flags, path: entry.path.clone() })
-            .ok_or_else(|| Repr::io("streaming data is out of range", None))?;
+        let out_of_range = || Repr::io("streaming data is out of range", None);
+        if offset < 0 || size < 0 || offset.checked_add(size).is_none_or(|end| end > entry.size) {
+            return Err(out_of_range().into());
+        }
+        let start = entry.offset.checked_add(offset).ok_or_else(out_of_range)?;
+        let range = FileEntry { offset: start, size, flags: entry.flags, path: entry.path.clone() };
 
         let data = self
             .reader
@@ -199,21 +200,22 @@ impl RabexExtractor {
         Ok((bundle, collection))
     }
 
-    /// Maps path ids to the container (original) path of the asset bundle.
-    fn container_paths(&self, file: &SerializedFile, data: &[u8]) -> HashMap<i64, String> {
-        let mut paths = HashMap::new();
+    /// Reads the asset bundle object of a serialized file, if it has one.
+    fn read_asset_bundle(&self, file: &SerializedFile, data: &[u8]) -> Option<AssetBundleData> {
+        let info = file.objects().find(|o| o.m_ClassID == ClassId::AssetBundle)?;
 
-        let Some(info) = file.objects().find(|o| o.m_ClassID == ClassId::AssetBundle) else {
-            return paths;
-        };
-        let bundle: AssetBundleData =
-            match file.read(info, &*self.type_trees, &mut Cursor::new(data)) {
-                Ok(b) => b,
-                Err(e) => {
-                    tracing::warn!(error = ?e, "failed to read asset bundle container");
-                    return paths;
-                }
-            };
+        match file.read(info, &*self.type_trees, &mut Cursor::new(data)) {
+            Ok(bundle) => Some(bundle),
+            Err(e) => {
+                tracing::warn!(error = ?e, "failed to read asset bundle container");
+                None
+            }
+        }
+    }
+
+    /// Maps path ids to the container (original) path of the asset bundle.
+    fn container_paths(bundle: &AssetBundleData) -> HashMap<i64, String> {
+        let mut paths = HashMap::new();
 
         // the asset the entry points to takes priority over assets that are only preloaded by it
         for (path, entry) in &bundle.m_Container {
@@ -233,17 +235,6 @@ impl RabexExtractor {
         paths
     }
 
-    /// Gets the name of the asset bundle object of a serialized file, if it has one.
-    fn asset_bundle_name(&self, file: &SerializedFile, data: &[u8]) -> Option<String> {
-        let object = file.objects().find(|o| o.m_ClassID == ClassId::AssetBundle)?;
-        let named: Named = file.read(object, &*self.type_trees, &mut Cursor::new(data)).ok()?;
-
-        match named.m_Name.as_str() {
-            "" => None,
-            _ => Some(named.m_Name),
-        }
-    }
-
     /// Builds the collection of a parsed serialized file in the bundle named `bundle_name`.
     fn load_collection(
         &self,
@@ -251,18 +242,22 @@ impl RabexExtractor {
         collection_name: &str,
         file: SerializedFile,
         data: Vec<u8>,
+        asset_bundle: Option<&AssetBundleData>,
     ) -> Collection {
-        let container = self.container_paths(&file, &data);
+        let container = asset_bundle.map(Self::container_paths).unwrap_or_default();
 
         let mut infos = HashMap::new();
         for object in file.objects() {
             let class = object.m_ClassID.name().unwrap_or_default();
-            let name = match file.read::<Named>(object, &*self.type_trees, &mut Cursor::new(&data))
-            {
-                Ok(named) => named.m_Name,
-                Err(e) => {
-                    tracing::debug!(error = ?e, path_id = object.m_PathID, class, "cannot read name");
-                    String::new()
+            let name = if object.m_ClassID == ClassId::AssetBundle {
+                asset_bundle.map(|b| b.m_Name.clone()).unwrap_or_default()
+            } else {
+                match file.read::<Named>(object, &*self.type_trees, &mut Cursor::new(&data)) {
+                    Ok(named) => named.m_Name,
+                    Err(e) => {
+                        tracing::debug!(error = ?e, path_id = object.m_PathID, class, "cannot read name");
+                        String::new()
+                    }
                 }
             };
 
@@ -308,9 +303,16 @@ impl Extractor for RabexExtractor {
         if !bytes.starts_with(b"UnityFS\0") {
             return Err(Repr::io("not a UnityFS bundle", None).into());
         }
+        let len = bytes.len() as u64;
         let config = ExtractionConfig::default().assume_recent_unity();
         let reader = BundleFileReader::from_reader(Cursor::new(bytes), &config)
             .map_err(|e| io_error("failed to parse bundle", e))?;
+
+        // resources are decompressed on demand, so a truncated bundle has to be rejected here
+        let compressed: u64 = reader.blocks().iter().map(|b| u64::from(b.compressed_size)).sum();
+        if reader.reader.position().saturating_add(compressed) > len {
+            return Err(Repr::io("bundle is truncated", None).into());
+        }
 
         let mut serialized_files = Vec::new();
         for entry in reader.serialized_files() {
@@ -320,21 +322,29 @@ impl Extractor for RabexExtractor {
 
             let file = SerializedFile::from_reader(&mut Cursor::new(&data))
                 .map_err(|e| io_error("failed to parse serialized file", e))?;
-            // same naming as AssetRipper: lower-cased collection names
-            serialized_files.push((entry.path.to_lowercase(), file, data));
+            let asset_bundle = self.read_asset_bundle(&file, &data);
+            serialized_files.push((entry.path.to_lowercase(), file, data, asset_bundle));
         }
 
-        // the bundle is named by the asset bundle object, like AssetRipper does
+        // the bundle is named by the AssetBundle object
         let bundle_name = serialized_files
             .iter()
-            .find_map(|(_, file, data)| self.asset_bundle_name(file, data))
-            .unwrap_or(file_name);
+            .find_map(|(.., asset_bundle)| {
+                asset_bundle.as_ref().map(|b| b.m_Name.as_str()).filter(|name| !name.is_empty())
+            })
+            .map_or(file_name, str::to_owned);
         if self.bundles.contains_key(&bundle_name) {
             return Err(Repr::io("a bundle with the same name is already loaded", None).into());
         }
         let mut bundle = Bundle { reader, collections: HashMap::new() };
-        for (collection_name, file, data) in serialized_files {
-            let collection = self.load_collection(&bundle_name, &collection_name, file, data);
+        for (collection_name, file, data, asset_bundle) in serialized_files {
+            let collection = self.load_collection(
+                &bundle_name,
+                &collection_name,
+                file,
+                data,
+                asset_bundle.as_ref(),
+            );
             bundle.collections.insert(collection_name, collection);
         }
         self.bundles.insert(bundle_name, bundle);
@@ -544,6 +554,24 @@ mod tests {
 
         extractor.clear();
         assert_eq!(extractor.bundles().len(), 0);
+    }
+
+    #[test]
+    fn test_load_file_truncated() {
+        init_test_logger();
+
+        let bytes = std::fs::read(test_cases()[1].asset_path).unwrap();
+        let path = std::env::temp_dir().join("mltd_test_truncated.unity3d");
+
+        // inside the streaming resource, which is not decompressed when loading
+        for len in [100_000, bytes.len() - 1] {
+            std::fs::write(&path, &bytes[..len]).unwrap();
+
+            let mut extractor = RabexExtractor::new();
+            assert!(extractor.load_file(&path).is_err());
+            assert_eq!(extractor.bundles().len(), 0);
+        }
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]
