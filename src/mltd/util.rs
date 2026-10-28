@@ -10,6 +10,8 @@ use pin_project_lite::pin_project;
 use tokio::io::{AsyncRead, ReadBuf};
 
 pub(crate) type HashMap<K, V> = std::collections::HashMap<K, V, RandomState>;
+
+#[cfg(feature = "asset-ripper")]
 pub(crate) type HashSet<T> = std::collections::HashSet<T, RandomState>;
 
 pin_project! {

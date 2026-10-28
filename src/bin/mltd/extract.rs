@@ -6,19 +6,19 @@ use std::sync::Mutex;
 
 use anyhow::{Result, anyhow};
 use clap::{Args, ValueEnum};
-use mltd::ErrorKind;
 use mltd::extract::ENCRYPTED_TEXT_EXTENSIONS;
 use mltd::unity::Extractor;
 use rayon::iter::{ParallelBridge, ParallelIterator};
+#[cfg(feature = "decode-audio")]
+use {
+    crate::util::HashSet,
+    ahash::HashSetExt,
+    mltd::extract::audio::{Encoder, EncoderOutputOptions, MLTD_HCA_KEY},
+};
 #[cfg(feature = "process-image")]
 use {
     image::DynamicImage, image::GenericImageView, mltd::extract::puzzle::solve_puzzle,
     mltd::unity::AssetInfo, std::collections::BTreeMap,
-};
-#[cfg(feature = "decode-audio")]
-use {
-    mltd::extract::audio::{Encoder, EncoderOutputOptions, MLTD_HCA_KEY},
-    std::collections::HashSet,
 };
 #[cfg(feature = "decrypt-text")]
 use {mltd::extract::text::decrypt_text, std::io::Read};
@@ -189,7 +189,7 @@ pub fn extract_files(args: &ExtractorArgs) -> Result<()> {
                         unity_extractors.push(ripper);
                         port += 1;
                     }
-                    Err(e) if e.kind() == ErrorKind::Network => port += 1,
+                    Err(e) if e.kind() == mltd::ErrorKind::Network => port += 1,
                     Err(e) => return Err(e.into()),
                 };
             }

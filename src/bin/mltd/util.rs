@@ -1,4 +1,7 @@
+use ahash::RandomState;
 use indicatif::{ProgressBar, ProgressFinish, ProgressStyle};
+
+pub(crate) type HashSet<T> = std::collections::HashSet<T, RandomState>;
 
 #[inline]
 pub(crate) fn create_progress_bar() -> ProgressBar {
