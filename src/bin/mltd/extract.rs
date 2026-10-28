@@ -5,13 +5,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use anyhow::{Result, anyhow};
-use clap::Args;
+use clap::{Args, ValueEnum};
 use mltd::ErrorKind;
 use mltd::extract::ENCRYPTED_TEXT_EXTENSIONS;
 use mltd::unity::Extractor;
-#[cfg(feature = "asset-ripper")]
-use mltd::unity::asset_ripper::AssetRipper;
 use rayon::iter::{ParallelBridge, ParallelIterator};
+
 #[cfg(feature = "process-image")]
 use {
     image::DynamicImage, image::GenericImageView, mltd::extract::puzzle::solve_puzzle,
@@ -46,9 +45,35 @@ pub struct AudioArgs {
     pub audio_args: Vec<(String, String)>,
 }
 
+/// Library used to read Unity asset bundles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum Backend {
+    /// External AssetRipper process
+    #[cfg(feature = "asset-ripper")]
+    AssetRipper,
+
+    /// Built-in pure Rust parser (experimental)
+    #[cfg(feature = "rabex")]
+    Rabex,
+}
+
+impl Default for Backend {
+    fn default() -> Self {
+        #[cfg(feature = "asset-ripper")]
+        return Self::AssetRipper;
+
+        #[cfg(all(feature = "rabex", not(feature = "asset-ripper")))]
+        return Self::Rabex;
+    }
+}
+
 #[derive(Debug, Args)]
 #[command(author, version, about, arg_required_else_help(true))]
 pub struct ExtractorArgs {
+    /// The library used to read the asset bundles
+    #[arg(long, value_enum, default_value_t = Backend::default(), display_order = 3)]
+    pub backend: Backend,
+
     /// The input files, supports glob patterns
     #[arg(value_name = "PATH", num_args = 1..)]
     pub input_paths: Vec<String>,
@@ -145,36 +170,73 @@ pub fn extract_files(args: &ExtractorArgs) -> Result<()> {
             }
         });
 
-    tracing::debug!(
-        parallel = args.parallel,
-        asset_ripper_path = %args.asset_ripper_path.display(),
-        "creating AssetRippers"
-    );
-
-    let mut port = 50000;
-    let mut unity_extractors = Vec::new();
-    while unity_extractors.len() < args.parallel.get() {
-        match AssetRipper::new(&args.asset_ripper_path, port) {
-            Ok(ripper) => {
-                tracing::trace!(port, "created AssetRipper");
-                unity_extractors.push(Mutex::new(ripper));
-                port += 1;
-            }
-            Err(e) if e.kind() == ErrorKind::Network => port += 1,
-            Err(e) => return Err(e.into()),
-        };
-    }
-
     create_dir_all(&args.output)?;
 
-    files.zip(unity_extractors.iter().cycle()).par_bridge().for_each(|(path, extractor)| {
-        let mut extractor = extractor.lock().unwrap();
-        if let Err(e) = extract_file(&path, &mut *extractor, args) {
-            tracing::warn!(error = ?e, "failed to extract file");
-        };
-    });
+    match args.backend {
+        #[cfg(feature = "asset-ripper")]
+        Backend::AssetRipper => {
+            tracing::debug!(
+                parallel = args.parallel,
+                asset_ripper_path = %args.asset_ripper_path.display(),
+                "creating AssetRippers"
+            );
+
+            let mut port = 50000;
+            let mut unity_extractors = Vec::new();
+            while unity_extractors.len() < args.parallel.get() {
+                match mltd::unity::AssetRipper::new(&args.asset_ripper_path, port) {
+                    Ok(ripper) => {
+                        tracing::trace!(port, "created AssetRipper");
+                        unity_extractors.push(ripper);
+                        port += 1;
+                    }
+                    Err(e) if e.kind() == ErrorKind::Network => port += 1,
+                    Err(e) => return Err(e.into()),
+                };
+            }
+
+            extract_parallel(unity_extractors, files, args);
+        }
+
+        #[cfg(feature = "rabex")]
+        Backend::Rabex => {
+            tracing::debug!(parallel = args.parallel, "creating rabex extractors");
+            extract_parallel(mltd::unity::RabexExtractor::pool(args.parallel.get()), files, args);
+        }
+    }
 
     Ok(())
+}
+
+/// Extracts the files with the given extractors, each of them handles one file at a time.
+fn extract_parallel<E>(
+    unity_extractors: Vec<E>,
+    files: impl Iterator<Item = PathBuf> + Send,
+    args: &ExtractorArgs,
+) where
+    E: Extractor + Send,
+{
+    let files = Mutex::new(files);
+    let files = &files;
+
+    std::thread::scope(|scope| {
+        for mut extractor in unity_extractors {
+            scope.spawn(move || {
+                loop {
+                    let next = files.lock().unwrap().next();
+                    let Some(path) = next else { break };
+
+                    let result = extract_file(&path, &mut extractor, args);
+
+                    extractor.clear();
+
+                    if let Err(e) = result {
+                        tracing::warn!(error = ?e, "failed to extract file");
+                    };
+                }
+            });
+        }
+    });
 }
 
 /// Extracts a single .unity3d file.
@@ -209,11 +271,8 @@ fn extract_file(
             "TextAsset" => {
                 // remove .bytes
                 let output_path = output_path.with_extension("");
-                let file_ext = output_path
-                    .extension()
-                    .and_then(|s| s.to_str())
-                    .map(|s| s.to_owned())
-                    .ok_or_else(|| anyhow!("file stem should exist"))?;
+                let file_ext =
+                    output_path.extension().and_then(|s| s.to_str()).unwrap_or_default().to_owned();
 
                 let mut file = BufReader::new(unity_extractor.extract(info)?);
                 let mut out_file = BufWriter::new(File::create(&output_path)?);
@@ -263,7 +322,8 @@ fn extract_file(
             "Texture2D" => {
                 #[cfg(feature = "process-image")]
                 // Texture2D requires all relavent Sprite infos to be extracted
-                for texture_info in infos.iter().filter(|info| info.class == "Texture2D") {
+                {
+                    let texture_info = info;
                     let images = extract_image(
                         texture_info,
                         infos.iter().cloned().filter(|info| info.class == "Sprite"),
@@ -310,8 +370,6 @@ fn extract_file(
         extract_audio(&output_path, &args.audio)?;
     }
 
-    unity_extractor.clear();
-
     Ok(())
 }
 
@@ -333,18 +391,44 @@ fn extract_image<'a>(
             continue;
         }
 
+        // AssetRipper names the fields `m_X`, `m_Texture`, ... while the type tree based
+        // extractors use the names written by Unity (`x`, `texture`, ...) and floats.
         let json = extractor.asset_serialized(info)?;
-        let path_id = json.pointer("/m_RD/m_Texture/m_PathID").unwrap().as_i64().unwrap();
+        let pointer = |paths: &[&str]| paths.iter().find_map(|p| json.pointer(p)).cloned();
+        let number =
+            |paths: &[&str]| pointer(paths).and_then(|v| v.as_f64()).map(|v| v.round() as u32);
+
+        let Some(path_id) = pointer(&["/m_RD/m_Texture/m_PathID", "/m_RD/texture/m_PathID"])
+            .and_then(|v| v.as_i64())
+        else {
+            tracing::warn!(name = &*info.name, "sprite has no texture reference, skipping");
+            continue;
+        };
         if path_id != texture_info.path_id {
             continue;
         }
 
-        let x = json.pointer("/m_Rect/m_X").unwrap().as_u64().unwrap() as u32;
-        let y = json.pointer("/m_Rect/m_Y").unwrap().as_u64().unwrap() as u32;
-        let width = json.pointer("/m_Rect/m_Width").unwrap().as_u64().unwrap() as u32;
-        let height = json.pointer("/m_Rect/m_Height").unwrap().as_u64().unwrap() as u32;
+        let (Some(x), Some(y), Some(width), Some(height)) = (
+            number(&["/m_Rect/m_X", "/m_Rect/x"]),
+            number(&["/m_Rect/m_Y", "/m_Rect/y"]),
+            number(&["/m_Rect/m_Width", "/m_Rect/width"]),
+            number(&["/m_Rect/m_Height", "/m_Rect/height"]),
+        ) else {
+            tracing::warn!(name = &*info.name, "sprite has no rect, skipping");
+            continue;
+        };
+        if u64::from(x) + u64::from(width) > u64::from(image.width())
+            || u64::from(y) + u64::from(height) > u64::from(image.height())
+        {
+            tracing::warn!(name = &*info.name, "sprite rect is out of the texture, skipping");
+            continue;
+        }
 
-        let sprite_id: u32 = info.name.rsplit_once("_").unwrap().1.parse().unwrap();
+        let Some(sprite_id) = info.name.rsplit_once('_').and_then(|(_, n)| n.parse::<u32>().ok())
+        else {
+            tracing::warn!(name = &*info.name, "sprite name has no piece number, skipping");
+            continue;
+        };
         let piece = image.view(x, y, width, height);
         rects.insert(sprite_id, piece);
     }
@@ -410,7 +494,9 @@ fn extract_audio(path: &Path, args: &AudioArgs) -> Result<()> {
     });
 
     tracing::debug!(key_path = %key_path.display(), "removing temporary files");
-    std::fs::remove_file(key_path)?;
+    if let Err(e) = std::fs::remove_file(key_path) {
+        tracing::warn!(error = ?e);
+    }
 
     Ok(())
 }

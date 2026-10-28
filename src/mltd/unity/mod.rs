@@ -1,5 +1,9 @@
 #[cfg(feature = "asset-ripper")]
 pub mod asset_ripper;
+#[cfg(feature = "rabex")]
+pub mod rabex;
+#[cfg(feature = "rabex")]
+mod texture;
 
 use std::borrow::Cow;
 use std::fs::File;
@@ -7,6 +11,8 @@ use std::path::Path;
 
 #[cfg(feature = "asset-ripper")]
 pub use asset_ripper::AssetRipper;
+#[cfg(feature = "rabex")]
+pub use rabex::RabexExtractor;
 
 use crate::error::Result;
 
