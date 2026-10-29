@@ -4,6 +4,7 @@ mod error;
 mod sf;
 
 use std::ffi::{CStr, c_int};
+use std::os::raw::c_char;
 use std::ptr::NonNull;
 
 use bitflags::bitflags;
@@ -551,7 +552,7 @@ impl From<LogLevel> for vgmstream_sys::libvgmstream_loglevel_t {
 /// * Note that log is currently set globally rather than per [`VgmStream`].
 /// * Call with [`LogLevel::None`] to disable current callback.
 /// * Call with [`None`] callback to use default stdout callback.
-pub fn set_log(level: LogLevel, callback: Option<unsafe extern "C" fn(c_int, *const i8)>) {
+pub fn set_log(level: LogLevel, callback: Option<unsafe extern "C" fn(c_int, *const c_char)>) {
     unsafe { vgmstream_sys::libvgmstream_set_log(level.into(), callback) };
 }
 
