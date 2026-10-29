@@ -19,7 +19,7 @@ jobs:
           fetch-tags: true
           submodules: true
 
-      - uses: ./.github/actions/setup-rust
+      - uses: ./.github/actions/setup-build-env
         with:
           toolchain: nightly
 
@@ -45,7 +45,7 @@ jobs:
           fetch-tags: true
           submodules: true
 
-      - uses: ./.github/actions/setup-rust
+      - uses: ./.github/actions/setup-build-env
         with:
           toolchain: nightly
           components: rustfmt
@@ -65,7 +65,7 @@ jobs:
           fetch-tags: true
           submodules: true
 
-      - uses: ./.github/actions/setup-rust
+      - uses: ./.github/actions/setup-build-env
         with:
           components: clippy
 
@@ -83,7 +83,7 @@ jobs:
           fetch-tags: true
           submodules: true
 
-      - uses: ./.github/actions/setup-rust
+      - uses: ./.github/actions/setup-build-env
 
       - name: Test
         run: cargo test
