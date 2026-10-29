@@ -31,9 +31,18 @@ runs:
         fi
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: ${{ inputs.toolchain }}
-        components: ${{ inputs.components }}
+      shell: bash
+      env:
+        TOOLCHAIN: ${{ inputs.toolchain }}
+        COMPONENTS: ${{ inputs.components }}
+      run: |
+        args=()
+        IFS=',' read -ra components <<< "$COMPONENTS"
+        for component in "${components[@]}"; do
+          [ -n "$component" ] && args+=(--component "$component")
+        done
+
+        rustup toolchain install "$TOOLCHAIN" --profile minimal --no-self-update "${args[@]}"
+        rustup default "$TOOLCHAIN"
 
     - uses: Swatinem/rust-cache@v2.9.3
