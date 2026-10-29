@@ -1,20 +1,20 @@
 //! Manifest file handling.
 
-use std::collections::HashMap;
 use std::ops::Deref;
 
+use ahash::HashMapExt;
 use linked_hash_map::LinkedHashMap;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
 use crate::asset::Asset;
 use crate::error::{Error, Repr, Result};
+use crate::util::HashMap;
 
 #[derive(Debug, ThisError)]
 #[error("manifest error: {kind}")]
 pub(crate) struct ManifestError {
     pub kind: ManifestErrorKind,
-    pub manifest: Vec<u8>,
 }
 
 #[derive(Debug, ThisError)]
@@ -29,8 +29,8 @@ pub(crate) enum ManifestErrorKind {
 }
 
 impl ManifestError {
-    pub fn new(kind: ManifestErrorKind, manifest: Vec<u8>) -> Self {
-        Self { kind, manifest }
+    pub fn new(kind: ManifestErrorKind) -> Self {
+        Self { kind }
     }
 }
 
@@ -111,8 +111,7 @@ impl Manifest {
     ///
     /// Returns [`crate::Error`] with [`crate::ErrorKind::Manifest`] if the deserialization fails.
     pub fn from_slice(value: &[u8]) -> Result<Self> {
-        rmp_serde::from_slice(value)
-            .map_err(|e| ManifestError::new(e.into(), value.to_vec()).into())
+        rmp_serde::from_slice(value).map_err(|e| ManifestError::new(e.into()).into())
     }
 }
 
@@ -144,7 +143,7 @@ impl TryFrom<Manifest> for Vec<u8> {
     type Error = Error;
 
     fn try_from(value: Manifest) -> Result<Self, Self::Error> {
-        rmp_serde::to_vec(&value).map_err(|e| ManifestError::new(e.into(), Vec::new()).into())
+        rmp_serde::to_vec(&value).map_err(|e| ManifestError::new(e.into()).into())
     }
 }
 
@@ -168,27 +167,24 @@ impl ManifestDiff<'_> {
 }
 
 #[cfg(test)]
-#[ctor::ctor]
-fn init() {
-    crate::util::init_test_logger!();
-}
-
-#[cfg(test)]
 mod tests {
-    use std::ops::Deref;
-
     use super::Manifest;
+    use crate::util::init_test_logger;
 
     #[test]
     fn test_raw_manifest_from_slice() {
+        init_test_logger();
+
         let expected = include_bytes!("../../tests/test1.msgpack");
         let manifest: Manifest = Manifest::try_from(&expected[..]).unwrap();
 
-        assert_eq!(*expected, *rmp_serde::to_vec(&[manifest.deref()]).unwrap());
+        assert_eq!(*expected, *rmp_serde::to_vec(&[&*manifest]).unwrap());
     }
 
     #[test]
     fn test_raw_manifest_diff() {
+        init_test_logger();
+
         let manifest1 = Manifest::from_slice(include_bytes!("../../tests/test1.msgpack")).unwrap();
         let manifest2 = Manifest::from_slice(include_bytes!("../../tests/test2.msgpack")).unwrap();
 

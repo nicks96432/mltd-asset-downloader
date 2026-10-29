@@ -3,11 +3,11 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Args, Subcommand};
-use mltd::asset::{Asset, AssetInfo, Platform};
+use mltd::asset::{Asset, AssetInfo};
 use mltd::manifest::Manifest;
-use mltd::net::{get_all_asset_versions, get_asset_version, latest_asset_version};
+use mltd::net::MatsuriApiClient;
 
-use crate::util::create_progress_bar;
+use crate::util::{BarProgress, PlatformArg, create_progress_bar};
 
 #[derive(Args)]
 #[command(about, arg_required_else_help(true))]
@@ -43,7 +43,7 @@ pub struct ManifestDiffArgs {
 pub struct ManifestDownloadArgs {
     /// The platform variant to download
     #[arg(value_enum, value_name = "VARIANT")]
-    pub platform: Platform,
+    pub platform: PlatformArg,
 
     /// The manifest version to download, defaults to the latest version
     #[arg(long, value_name = "VERSION")]
@@ -55,20 +55,27 @@ pub struct ManifestDownloadArgs {
 }
 
 pub async fn download_manifest(args: &ManifestDownloadArgs) -> Result<()> {
+    let matsuri_client = MatsuriApiClient::new();
+
     let asset_version = match args.asset_version {
-        None => latest_asset_version().await,
-        Some(v) => get_asset_version(v).await,
+        None => matsuri_client.latest_asset_version().await,
+        Some(v) => matsuri_client.get_asset_version(v).await,
     }?;
 
     let asset_info = AssetInfo {
         filename: asset_version.manifest_filename.clone(),
-        platform: args.platform,
+        platform: args.platform.into(),
         version: asset_version,
     };
 
-    let mut progress_bar = create_progress_bar().with_message(asset_info.filename.clone());
+    let progress_bar = create_progress_bar().with_message(asset_info.filename.clone());
 
-    Asset::download_to_file(&asset_info, args.output.as_deref(), Some(&mut progress_bar)).await?;
+    Asset::download_to_file(
+        &asset_info,
+        args.output.as_deref(),
+        Some(&mut BarProgress(&progress_bar)),
+    )
+    .await?;
 
     Ok(())
 }
@@ -95,7 +102,7 @@ pub fn diff_manifest(args: &ManifestDiffArgs) -> Result<()> {
 }
 
 pub async fn list_manifests() -> Result<()> {
-    let versions = get_all_asset_versions().await?;
+    let versions = MatsuriApiClient::new().get_all_asset_versions().await?;
 
     for version in versions {
         println!(

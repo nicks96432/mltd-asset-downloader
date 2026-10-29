@@ -4,14 +4,18 @@
 //!
 //! [github]: https://img.shields.io/badge/github-333333?style=for-the-badge&labelColor=555555&logo=github
 
-#![warn(clippy::all, clippy::pedantic)]
-#![allow(clippy::doc_markdown, clippy::similar_names)]
+#![warn(unsafe_code, clippy::all, clippy::pedantic)]
+#![allow(
+    clippy::uninlined_format_args // I think uninlined args are more readable
+)]
 
 pub mod asset;
 mod error;
 
-#[cfg(feature = "extract")]
+#[cfg(any(feature = "decode-audio", feature = "decrypt-text", feature = "process-image"))]
 pub mod extract;
+#[cfg(any(feature = "rabex", feature = "asset-ripper"))]
+pub mod unity;
 
 pub mod manifest;
 pub mod net;

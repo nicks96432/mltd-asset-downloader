@@ -1,0 +1,62 @@
+{
+    "m_AlphaIsTransparency": false,
+    "m_ColorSpace": 1,
+    "m_CompleteImageSize": 1048576,
+    "m_CorrespondingSourceObject": { "m_FileID": 0, "m_PathID": 0 },
+    "m_Dimension": 2,
+    "m_DownscaleFallback": false,
+    "m_ForcedFallbackFormat": 4,
+    "m_Format": 54,
+    "m_Height": 1024,
+    "m_HideFlags": 0,
+    "m_ImageContentsHash": {
+        "m_Bytes__0": 0,
+        "m_Bytes__1": 0,
+        "m_Bytes__2": 0,
+        "m_Bytes__3": 0,
+        "m_Bytes__4": 0,
+        "m_Bytes__5": 0,
+        "m_Bytes__6": 0,
+        "m_Bytes__7": 0,
+        "m_Bytes__8": 0,
+        "m_Bytes__9": 0,
+        "m_Bytes_10": 0,
+        "m_Bytes_11": 0,
+        "m_Bytes_12": 0,
+        "m_Bytes_13": 0,
+        "m_Bytes_14": 0,
+        "m_Bytes_15": 0
+    },
+    "m_ImageCount": 1,
+    "m_ImageData": "",
+    "m_IsReadable": false,
+    "m_LightmapFormat": 6,
+    "m_MipCount": 1,
+    "m_Name": "014mir0011_0",
+    "m_OriginalAssetGuid": {
+        "m_Data_0_": 0,
+        "m_Data_1_": 0,
+        "m_Data_2_": 0,
+        "m_Data_3_": 0
+    },
+    "m_OriginalHeight": 0,
+    "m_OriginalWidth": 0,
+    "m_PrefabAsset": { "m_FileID": 0, "m_PathID": 0 },
+    "m_PrefabInstance": { "m_FileID": 0, "m_PathID": 0 },
+    "m_StreamData": {
+        "m_Offset": 0,
+        "m_Path": "archive:/CAB-a374172171027544962fcca998dc31af/CAB-a374172171027544962fcca998dc31af.resS",
+        "m_Size": 1048576
+    },
+    "m_StreamingMipmaps": false,
+    "m_StreamingMipmapsPriority": 0,
+    "m_TextureSettings": {
+        "m_Aniso": 1,
+        "m_FilterMode": 1,
+        "m_MipBias": 0,
+        "m_WrapU": 1,
+        "m_WrapV": 1,
+        "m_WrapW": 1
+    },
+    "m_Width": 1024
+}

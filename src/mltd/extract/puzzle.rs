@@ -1,12 +1,14 @@
 //! Puzzle handling.
 
+use std::sync::LazyLock;
+
 use image::{DynamicImage, GenericImageView, SubImage, imageops};
 use thiserror::Error as ThisError;
 
-use crate::error::{Error, Repr, Result};
+use crate::error::{Error as CrateError, Repr, Result};
 
 #[derive(Debug, ThisError)]
-pub(crate) enum PuzzleError {
+pub(crate) enum Error {
     #[error("puzzle not found for texture {0}")]
     PuzzleNotFound(String),
 
@@ -14,8 +16,8 @@ pub(crate) enum PuzzleError {
     NotImplemented(String),
 }
 
-impl From<PuzzleError> for Error {
-    fn from(value: PuzzleError) -> Self {
+impl From<Error> for CrateError {
+    fn from(value: Error) -> Self {
         Repr::from(value).into()
     }
 }
@@ -30,13 +32,20 @@ pub fn solve_puzzle(
     img: &DynamicImage,
     pieces: &[SubImage<&DynamicImage>],
 ) -> Result<Vec<DynamicImage>> {
-    let (puzzle_name, _) = NAME_PUZZLE_MAP
-        .iter()
-        .find(|(_, r)| regex::Regex::new(r).map_or_else(|_| false, |r| r.is_match(texture_name)))
-        .ok_or_else(|| PuzzleError::PuzzleNotFound(texture_name.to_string()))?;
+    static PATTERNS: LazyLock<Vec<(&'static str, regex::Regex)>> = LazyLock::new(|| {
+        NAME_PUZZLE_MAP
+            .iter()
+            .map(|(name, pattern)| (*name, regex::Regex::new(pattern).expect("valid pattern")))
+            .collect()
+    });
 
-    let puzzle = piece_map(puzzle_name)
-        .ok_or_else(|| PuzzleError::NotImplemented((*puzzle_name).to_string()))?;
+    let (puzzle_name, _) = PATTERNS
+        .iter()
+        .find(|(_, r)| r.is_match(texture_name))
+        .ok_or_else(|| Error::PuzzleNotFound(texture_name.to_string()))?;
+
+    let puzzle =
+        piece_map(puzzle_name).ok_or_else(|| Error::NotImplemented((*puzzle_name).to_string()))?;
 
     let mut puzzle_imgs = Vec::new();
 
@@ -70,8 +79,8 @@ pub fn solve_puzzle(
 
 #[rustfmt::skip]
 const NAME_PUZZLE_MAP: &[(&str, &str)] =  &[
-        ("bg"                , r"^bg2d_[a-z0-9][0-9]{2,3}$"),
-        ("bg_thumb"          , r"^bg2d_[a-z0-9][0-9]{2,3}_thumb$"),
+        ("bg"                , r"^bg2d_[a-z0-9][0-9]{2,4}$"),
+        ("bg_thumb"          , r"^bg2d_[a-z0-9][0-9]{2,4}_thumb$"),
         ("card"              , r"^[0-9]{3}[a-z]{3}[0-9]{4}_[0-9]$"),
         ("card_big"          , r"^[0-9]{3}[a-z]{3}[0-9]{4}_[0-9]_bg$"),
         ("event_bg"          , r"^mycard_bg_(?:event|other)_[0-9]{4}$"),
@@ -118,7 +127,7 @@ fn piece_map(puzzle_name: &str) -> Option<Puzzle> {
             ],
             img_count: 2,
         }),
-        "card_big" => Some(Puzzle {
+        "bg" | "card_big" => Some(Puzzle {
             width: 1280,
             height: 720,
             pieces: vec![Piece { x: 0, y: 0, rotate: 0 }, Piece { x: 1022, y: 0, rotate: 270 }],

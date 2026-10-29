@@ -1,19 +1,23 @@
 //! Error type definitions.
 
-use std::backtrace::Backtrace;
 use std::io::Error as IoError;
-use std::panic::Location;
+use std::path::{Path, PathBuf};
 
 use thiserror::Error as ThisError;
 
+#[cfg(feature = "decode-audio")]
 use crate::extract::audio::AudioDecodeError;
-use crate::extract::puzzle::PuzzleError;
+#[cfg(feature = "process-image")]
+use crate::extract::puzzle::Error as PuzzleError;
+#[cfg(feature = "decrypt-text")]
 use crate::extract::text::AesError;
 use crate::manifest::ManifestError;
 use crate::net::Error as NetworkError;
+#[cfg(any(feature = "rabex", feature = "asset-ripper"))]
+use crate::unity::Error as UnityError;
 
 #[derive(Debug, ThisError)]
-#[error("{repr}")]
+#[error(transparent)]
 pub struct Error {
     repr: Box<Repr>,
 }
@@ -33,31 +37,117 @@ impl From<Repr> for Error {
     }
 }
 
+/// The category of an [`Error`].
+///
+/// New kinds may be added, and some of them only exist when the related feature is enabled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ErrorKind {
+    /// Deserialization of an asset failed.
+    Deserialize,
+
+    /// A file system operation failed.
     Io,
-    UnknownPlatform,
-    Aes,
-    AudioDecode,
-    Puzzle,
+
+    /// The manifest cannot be (de)serialized.
     Manifest,
+
+    /// A network request failed.
     Network,
+
+    /// The path read from an untrusted source escapes the directory it should stay in.
+    UnsafePath,
+
+    /// The platform name is unknown.
+    UnknownPlatform,
+
+    /// An external process failed to start or exited unexpectedly.
+    #[cfg(feature = "asset-ripper")]
+    Process,
+
+    /// A Unity asset bundle is invalid, or an asset in it cannot be read.
+    #[cfg(any(feature = "rabex", feature = "asset-ripper"))]
+    Unity,
+
+    /// Audio decoding or encoding failed.
+    #[cfg(feature = "decode-audio")]
+    AudioDecode,
+
+    /// Text decryption failed.
+    #[cfg(feature = "decrypt-text")]
+    Aes,
+
+    /// Puzzle solving failed.
+    #[cfg(feature = "process-image")]
+    Puzzle,
+
+    /// An image cannot be encoded or decoded.
+    #[cfg(feature = "process-image")]
+    Image,
+
+    /// An index is out of range.
+    #[cfg(any(feature = "decode-audio", feature = "process-image"))]
     OutOfRange,
-    Bug,
 }
 
 impl From<&Repr> for ErrorKind {
     fn from(value: &Repr) -> Self {
         match value {
-            Repr::Io { .. } => ErrorKind::Io,
-            Repr::UnknownPlatform(_) => ErrorKind::UnknownPlatform,
-            Repr::Aes(_) => ErrorKind::Aes,
-            Repr::AudioDecode(_) => ErrorKind::AudioDecode,
-            Repr::Puzzle(_) => ErrorKind::Puzzle,
+            Repr::Io(_) => ErrorKind::Io,
             Repr::Manifest(_) => ErrorKind::Manifest,
             Repr::Network(_) => ErrorKind::Network,
+            Repr::UnknownPlatform(_) => ErrorKind::UnknownPlatform,
+            Repr::UnsafePath(_) => ErrorKind::UnsafePath,
+
+            #[cfg(feature = "asset-ripper")]
+            Repr::Process(_) => ErrorKind::Process,
+
+            #[cfg(any(feature = "rabex", feature = "asset-ripper"))]
+            Repr::Unity(_) => ErrorKind::Unity,
+
+            #[cfg(any(feature = "extract", feature = "rabex", feature = "asset-ripper"))]
+            Repr::JSONDeserialize(_) => ErrorKind::Deserialize,
+
+            #[cfg(feature = "decode-audio")]
+            Repr::AudioDecode(_) => ErrorKind::AudioDecode,
+
+            #[cfg(feature = "decrypt-text")]
+            Repr::Aes(_) => ErrorKind::Aes,
+
+            #[cfg(feature = "process-image")]
+            Repr::Puzzle(_) => ErrorKind::Puzzle,
+
+            #[cfg(feature = "process-image")]
+            Repr::Image(_) => ErrorKind::Image,
+
+            #[cfg(any(feature = "decode-audio", feature = "process-image"))]
             Repr::OutOfRange { .. } => ErrorKind::OutOfRange,
-            Repr::Bug { .. } => ErrorKind::Bug,
+        }
+    }
+}
+
+/// A file system operation failed.
+#[derive(Debug, ThisError)]
+#[error("failed to {op}{}", PathDisplay(.path.as_deref()))]
+pub(crate) struct FsError {
+    /// What was being done, e.g. `"create directory"`.
+    op: &'static str,
+
+    /// The path the operation was applied to.
+    path: Option<PathBuf>,
+
+    #[source]
+    source: IoError,
+}
+
+/// Displays ` <path>` if the path is known.
+struct PathDisplay<'a>(Option<&'a Path>);
+
+impl std::fmt::Display for PathDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            Some(path) => write!(f, " `{}`", path.display()),
+            None => Ok(()),
         }
     }
 }
@@ -65,53 +155,70 @@ impl From<&Repr> for ErrorKind {
 /// Error type for this crate.
 #[derive(ThisError, Debug)]
 pub(crate) enum Repr {
-    /// IO operation failed.
-    #[error("{reason}, cause: {source:?}")]
-    Io { reason: String, source: Option<IoError> },
+    /// A file system operation failed.
+    #[error(transparent)]
+    Io(#[from] FsError),
+
+    /// A path escapes the directory it should stay in.
+    #[error("unsafe path: {0}")]
+    UnsafePath(String),
 
     /// Unknown platform.
     #[error("unknown platform: {0}")]
     UnknownPlatform(String),
 
-    /// AES related error for text assets.
+    /// An external process failed to start or exited unexpectedly.
+    #[cfg(feature = "asset-ripper")]
     #[error("{0}")]
-    Aes(#[from] AesError),
+    Process(String),
 
+    /// An Unity asset bundle is invalid, or an asset in it cannot be read.
+    #[cfg(any(feature = "rabex", feature = "asset-ripper"))]
+    #[error(transparent)]
+    Unity(#[from] UnityError),
+
+    #[cfg(feature = "decode-audio")]
     #[error("failed to decode audio: {0}")]
     AudioDecode(#[from] AudioDecodeError),
 
     /// Puzzle solving failed.
+    #[cfg(feature = "process-image")]
     #[error("failed to solve puzzle: {0}")]
     Puzzle(#[from] PuzzleError),
 
+    /// An image cannot be encoded or decoded.
+    #[cfg(feature = "process-image")]
+    #[error("image error: {0}")]
+    Image(#[from] image::ImageError),
+
+    /// AES related error for text assets.
+    #[cfg(feature = "decrypt-text")]
+    #[error(transparent)]
+    Aes(#[from] AesError),
+
     /// manifest related error.
-    #[error("{0}")]
+    #[error(transparent)]
     Manifest(#[from] ManifestError),
 
     /// network related error.
-    #[error("{0}")]
+    #[error(transparent)]
     Network(#[from] NetworkError),
 
+    /// JSON deserialization error.
+    #[cfg(any(feature = "extract", feature = "rabex", feature = "asset-ripper"))]
+    #[error(transparent)]
+    JSONDeserialize(#[from] serde_json::Error),
+
     /// Array index out of range error.
+    #[cfg(any(feature = "decode-audio", feature = "process-image"))]
     #[error("try to access index {0} but the length is {1}")]
     OutOfRange(usize, usize),
-
-    /// Bug occurred.
-    #[error("bug: {msg}, at {location}\nsee backtraces above for more details")]
-    Bug { msg: String, location: &'static Location<'static> },
 }
 
 impl Repr {
-    #[track_caller]
-    pub fn bug(msg: &str) -> Self {
-        let backtrace = Backtrace::force_capture();
-        println!("{backtrace}");
-
-        Self::Bug { msg: msg.to_string(), location: Location::caller() }
-    }
-
-    pub fn io(reason: &str, source: Option<IoError>) -> Self {
-        Self::Io { reason: reason.to_string(), source }
+    /// Creates an error for the failed file system operation `op` on `path`.
+    pub fn io(op: &'static str, path: Option<&Path>, source: IoError) -> Self {
+        Self::Io(FsError { op, path: path.map(Path::to_path_buf), source })
     }
 }
 
@@ -119,14 +226,27 @@ impl Repr {
 mod tests {
     use super::*;
 
-    fn assert_send_sync<T>()
+    const fn assert_send_sync<T>()
     where
         T: Send + Sync,
     {
     }
 
     #[test]
-    fn test_error() {
+    const fn test_error() {
         assert_send_sync::<Error>();
+    }
+
+    #[test]
+    fn test_io_error_message() {
+        let source = IoError::from(std::io::ErrorKind::NotFound);
+
+        let err: Error = Repr::io("open file", Some(Path::new("a.txt")), source).into();
+        assert_eq!(err.kind(), ErrorKind::Io);
+        assert_eq!(err.to_string(), "failed to open file `a.txt`");
+
+        let err: Error = Repr::io("create tempfile", None, IoError::other("x")).into();
+        assert_eq!(err.to_string(), "failed to create tempfile");
+        assert!(std::error::Error::source(&err).is_some());
     }
 }

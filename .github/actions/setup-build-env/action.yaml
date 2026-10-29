@@ -1,0 +1,39 @@
+name: Setup build environment
+description: Install FFmpeg, a Rust toolchain and the cargo cache
+
+inputs:
+  toolchain:
+    description: Rust toolchain to install
+    default: stable
+  components:
+    description: Comma-separated toolchain components to install
+    default: ""
+  ffmpeg:
+    description: Whether to install the FFmpeg development libraries
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Install FFmpeg
+      if: inputs.ffmpeg == 'true'
+      shell: bash
+      run: |
+        if [ "${{ runner.os }}" = "Linux" ]; then
+          sudo apt-get update
+          sudo apt-get install libavformat-dev libavcodec-dev libavutil-dev libswresample-dev
+        elif [ "${{ runner.os }}" = "macOS" ]; then
+          brew install ffmpeg
+        elif [ "${{ runner.os }}" = "Windows" ]; then
+          curl --location https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-28-19-47/ffmpeg-n9.0.2-37-gae19868753-win64-lgpl-shared-9.0.zip --output ffmpeg.zip
+          unzip -q ffmpeg.zip
+          echo "FFMPEG_DIR=$(cygpath -m "$PWD")/ffmpeg-n9.0.2-37-gae19868753-win64-lgpl-shared-9.0" >> "$GITHUB_ENV"
+        fi
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ inputs.toolchain }}
+        components: ${{ inputs.components }}
+
+    - uses: Swatinem/rust-cache@v2

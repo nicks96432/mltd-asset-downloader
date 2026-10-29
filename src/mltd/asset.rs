@@ -3,21 +3,20 @@
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 use std::io::{self, Cursor};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::LazyLock;
 
-use clap::ValueEnum;
-use futures::TryStreamExt;
-use indicatif::ProgressBar;
+use futures_util::TryStreamExt;
 use reqwest::header::HeaderMap;
 use tokio::fs::File;
-use tokio::io::BufWriter;
+use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 
 use crate::Error;
 use crate::error::{Repr, Result};
-use crate::net::{AssetVersion, Error as NetworkError, ErrorKind as NetworkErrorKind};
-use crate::util::ProgressReadAdapter;
+use crate::net::{AssetVersion, Error as NetworkError};
+use crate::util::{Progress, ProgressReadAdapter};
 
 /// Base URL of MLTD asset server.
 pub const ASSET_URL_BASE: &str = "https://td-assets.bn765.com";
@@ -65,31 +64,31 @@ impl Asset<'_> {
     ///
     /// # Errors
     ///
-    /// - [`Error::Request`]: if it cannot send request to MLTD asset server.
+    /// - [`crate::ErrorKind::Network`]: if it cannot send request to MLTD asset server.
     async fn send_request(asset_info: &AssetInfo) -> Result<reqwest::Response> {
-        let client = reqwest::Client::new();
+        static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
         let mut headers = HeaderMap::new();
         headers.insert(
             "X-Unity-Version",
-            UNITY_VERSION.parse().map_err(|_| Repr::bug("unity version should be valid"))?,
+            UNITY_VERSION.parse().expect("unity version should be valid"),
         );
         headers.insert(
             "User-Agent",
-            asset_info
-                .platform
-                .user_agent()
-                .parse()
-                .map_err(|_| Repr::bug("user agent should be valid"))?,
+            asset_info.platform.user_agent().parse().expect("user agent should be valid"),
         );
 
-        let req = client.get(asset_info.to_url()).headers(headers);
+        let url = asset_info.to_url();
+        let res = CLIENT
+            .get(url.clone())
+            .headers(headers)
+            .send()
+            .await
+            .map_err(|e| NetworkError::request(url.clone(), Some(e)))?;
 
-        let res = req.send().await.map_err(|e| NetworkError {
-            kind: NetworkErrorKind::Request,
-            url: asset_info.to_url(),
-            source: Some(e),
-        })?;
+        if !res.status().is_success() {
+            return Err(NetworkError::status(url, res.status().as_u16()).into());
+        }
 
         Ok(res)
     }
@@ -97,21 +96,21 @@ impl Asset<'_> {
     /// Download the specified asset from MLTD asset server.
     ///
     /// This will send GET request to MLTD asset server according to `asset_info`.
-    /// An optional `progress_bar` can be specified to track the download progress.
+    /// An optional `progress` receiver can be specified to track the download progress.
     ///
     /// # Errors
     ///
-    /// - [`Error::IO`]: if it cannot write the downloaded data to file.
-    /// - [`Error::Request`]: if it cannot send request to MLTD asset server.
+    /// - [`crate::ErrorKind::Io`]: if it cannot write the downloaded data to file.
+    /// - [`crate::ErrorKind::Network`]: if it cannot send request to MLTD asset server.
     ///
     /// # Example
     ///
     /// ```no_run
     /// use mltd::asset::{Asset, AssetInfo, Platform};
-    /// use mltd::net;
+    /// use mltd::net::MatsuriApiClient;
     ///
     /// tokio_test::block_on(async {
-    ///     let asset_version = net::latest_asset_version().await.unwrap();
+    ///     let asset_version = MatsuriApiClient::new().latest_asset_version().await.unwrap();
     ///     let asset_info = AssetInfo {
     ///         filename: asset_version.manifest_filename.clone(),
     ///         platform: Platform::Android,
@@ -124,24 +123,24 @@ impl Asset<'_> {
     /// ```
     pub async fn download(
         asset_info: AssetInfo,
-        progress_bar: Option<&mut ProgressBar>,
+        mut progress: Option<&mut dyn Progress>,
     ) -> Result<Self> {
         let res = Self::send_request(&asset_info).await?;
 
-        if let Some(ref pb) = progress_bar {
-            pb.set_length(res.content_length().unwrap_or(0));
+        if let Some(progress) = progress.as_deref_mut() {
+            progress.set_length(res.content_length().unwrap_or(0));
         }
 
-        log::debug!("download {} to buf", asset_info.filename);
+        tracing::debug!(filename = asset_info.filename, "download to buf");
 
         let stream_reader = res.bytes_stream().map_err(io::Error::other).into_async_read().compat();
 
-        let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
+        let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress);
 
         let mut buf = Cursor::new(Vec::new());
         tokio::io::copy(&mut stream_reader, &mut buf)
             .await
-            .map_err(|e| Repr::io("failed to download asset", Some(e)))?;
+            .map_err(|e| Repr::io("download asset", None, e))?;
 
         Ok(Self { data: Cow::from(buf.into_inner()), info: asset_info })
     }
@@ -149,12 +148,12 @@ impl Asset<'_> {
     /// Download the specified asset from MLTD asset server and write it to disk.
     ///
     /// If `output` is not specified, it will be default to `asset_info.filename`.
-    /// An optional `progress_bar` can be specified to track the download progress.
+    /// An optional `progress` receiver can be specified to track the download progress.
     ///
     /// # Errors
     ///
-    /// - [`Error::IO`]: if it cannot write the downloaded data to file.
-    /// - [`Error::Request`]: if it cannot send request to MLTD asset server.
+    /// - [`crate::ErrorKind::Io`]: if it cannot write the downloaded data to file.
+    /// - [`crate::ErrorKind::Network`]: if it cannot send request to MLTD asset server.
     ///
     /// # Example
     ///
@@ -162,10 +161,10 @@ impl Asset<'_> {
     /// use std::path::Path;
     ///
     /// use mltd::asset::{Asset, AssetInfo, Platform};
-    /// use mltd::net;
+    /// use mltd::net::MatsuriApiClient;
     ///
     /// tokio_test::block_on(async {
-    ///     let asset_version = net::latest_asset_version().await.unwrap();
+    ///     let asset_version = MatsuriApiClient::new().latest_asset_version().await.unwrap();
     ///     let asset_info = AssetInfo {
     ///         filename: asset_version.manifest_filename.clone(),
     ///         platform: Platform::Android,
@@ -178,30 +177,48 @@ impl Asset<'_> {
     pub async fn download_to_file(
         asset_info: &AssetInfo,
         output: Option<&Path>,
-        progress_bar: Option<&mut ProgressBar>,
+        mut progress: Option<&mut dyn Progress>,
     ) -> Result<()> {
         let output = output.unwrap_or(asset_info.filename.as_ref());
-        let mut out = BufWriter::new(
-            File::create(output)
-                .await
-                .map_err(|e| Repr::io("failed to create output file", Some(e)))?,
-        );
 
+        // send the request first so that a failed request does not leave an empty file behind
         let res = Self::send_request(asset_info).await?;
 
-        if let Some(ref pb) = progress_bar {
-            pb.set_length(res.content_length().unwrap_or(0));
+        if let Some(progress) = progress.as_deref_mut() {
+            progress.set_length(res.content_length().unwrap_or(0));
         }
 
-        log::debug!("save asset to {}", output.display());
+        if let Some(parent) = output.parent().filter(|p| !p.as_os_str().is_empty()) {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| Repr::io("create directory", Some(parent), e))?;
+        }
 
-        let stream_reader = res.bytes_stream().map_err(io::Error::other).into_async_read().compat();
+        let mut part_name = output.as_os_str().to_owned();
+        part_name.push(".part");
+        let part_path = PathBuf::from(part_name);
 
-        let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress_bar);
+        tracing::debug!(output_path = ?output, "saving asset");
 
-        tokio::io::copy(&mut stream_reader, &mut out)
-            .await
-            .map_err(|e| Repr::io("failed to download asset", Some(e)))?;
+        let result = async {
+            let mut out = BufWriter::new(File::create(&part_path).await?);
+
+            let stream_reader =
+                res.bytes_stream().map_err(io::Error::other).into_async_read().compat();
+            let mut stream_reader = ProgressReadAdapter::new(stream_reader, progress);
+
+            tokio::io::copy(&mut stream_reader, &mut out).await?;
+            out.shutdown().await?;
+            drop(out);
+
+            tokio::fs::rename(&part_path, output).await
+        }
+        .await;
+
+        if let Err(e) = result {
+            let _ = tokio::fs::remove_file(&part_path).await;
+            return Err(Repr::io("download asset to", Some(output), e).into());
+        }
 
         Ok(())
     }
@@ -211,7 +228,7 @@ impl Asset<'_> {
 ///
 /// Although the game and the manifest name looks the same on both platforms,
 /// their manifests are different.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Platform {
     /// Android platform
     Android,

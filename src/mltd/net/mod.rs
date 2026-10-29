@@ -1,11 +1,9 @@
 //! Functions related to network requests.
 
-mod asset_ripper;
-mod matsuri_api;
+pub mod matsuri_api;
 
-pub use thiserror::Error as ThisError;
+use thiserror::Error as ThisError;
 
-pub use self::asset_ripper::*;
 pub use self::matsuri_api::*;
 use crate::error::Repr;
 
@@ -24,14 +22,21 @@ pub(crate) enum ErrorKind {
 
     #[error("failed to decode response body")]
     Decode,
+
+    #[error("server responded with status {0}")]
+    Status(u16),
 }
 
 impl Error {
-    pub fn request(url: reqwest::Url, source: Option<reqwest::Error>) -> Self {
+    pub const fn status(url: reqwest::Url, status: u16) -> Self {
+        Self { kind: ErrorKind::Status(status), url, source: None }
+    }
+
+    pub const fn request(url: reqwest::Url, source: Option<reqwest::Error>) -> Self {
         Self { kind: ErrorKind::Request, url, source }
     }
 
-    pub fn decode(url: reqwest::Url, source: Option<reqwest::Error>) -> Self {
+    pub const fn decode(url: reqwest::Url, source: Option<reqwest::Error>) -> Self {
         Self { kind: ErrorKind::Decode, url, source }
     }
 }

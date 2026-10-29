@@ -33,33 +33,32 @@ Commands:
 ## 下載
 
 1. 下載主程式
-   * [Github最新版本](https://github.com/nicks96432/mltd-asset-downloader/releases/latest)
-   * [main自動編譯版](https://nightly.link/nicks96432/mltd-asset-downloader/workflows/build.yaml/main)
+    - [Github最新版本](https://github.com/nicks96432/mltd-asset-downloader/releases/latest)
+    - [main自動編譯版](https://nightly.link/nicks96432/mltd-asset-downloader/workflows/build.yaml/main)
 2. 安裝FFmpeg >= 7.1 共享函式庫版
-   * [FFmpeg官網連結](https://www.ffmpeg.org/download.html)
-   * 確保FFmpeg共享函式庫在你的 `PATH` 裡面
-   * Windows上可以用 `winget` 來安裝FFmpeg，這樣它就會被自動加進`PATH`裡，例如
-     `winget install BtbN.FFmpeg.LGPL.Shared.7.1` 。用 `winget search ffmpeg` 可以查看更多選擇
-3. 如果要拆包，下載[AssetRipper](https://github.com/AssetRipper/AssetRipper)
-   * 解壓縮後重新命名為`./AssetRipper`
-   * 或是用`--asset-ripper-path`指定執行檔路徑
+    - [FFmpeg官網連結](https://www.ffmpeg.org/download.html)
+    - 確保FFmpeg共享函式庫在你的 `PATH` 裡面
+    - Windows上可以用 `winget` 來安裝FFmpeg，這樣它就會被自動加進`PATH`裡，例如
+      `winget install BtbN.FFmpeg.LGPL.Shared.7.1` 。用 `winget search ffmpeg` 可以查看更多選擇
+3. 如果要拆包，可下載[AssetRipper](https://github.com/AssetRipper/AssetRipper)
+    - 解壓縮後重新命名為`./AssetRipper`
+    - 或是用`--asset-ripper-path`指定執行檔路徑
 
 ## 編譯
 
 你需要這些工具:
 
-* git
-* rust 編譯工具 ([安裝教學](https://www.rust-lang.org/tools/install))
-* cmake >= 3.6 (vgmstream要用到)
-* clang (bindgen要用到) ([安裝教學](https://rust-lang.github.io/rust-bindgen/requirements.html))
-  * Windows上要記得設定 `LIBCLANG_PATH` 環境變數
-* pkg-config (Linux/MacOS)
-* 在你的 `PATH` (Windows) 或 `LD_LIBRARY_PATH` (Linux/MacOS) 中有FFmpeg >= 7.1 共享函式庫版
-  * Windows上要額外設定 `FFMPEG_DIR` 環境變數為FFmpeg安裝資料夾，例如在Powershell中設定 `winget` 安裝的FFmpeg套件：
+- git
+- rust 編譯工具 ([安裝教學](https://www.rust-lang.org/tools/install))
+- cmake >= 3.6 (vgmstream要用到)
+- clang (bindgen要用到) ([安裝教學](https://rust-lang.github.io/rust-bindgen/requirements.html))
 
-  ```powershell
-  $env:FFMPEG_DIR='C:\Users\username\AppData\Local\Microsoft\WinGet\Packages\BtbN.FFmpeg.LGPL.Shared.7.1_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-n7.1-62-gb168ed9b14-win64-lgpl-shared-7.1'
-  ```
+    Windows上要記得設定 `LIBCLANG_PATH` 環境變數
+
+- pkg-config (Linux/MacOS)
+- 在你的 `PATH` (Windows) 或 `LD_LIBRARY_PATH` (Linux/MacOS) 中有FFmpeg >= 7.1 共享函式庫版
+
+    Windows上要額外設定 `FFMPEG_DIR` 環境變數為FFmpeg安裝資料夾
 
 環境變數也可以在 `.cargo/config-windows.toml` 中設定。
 
