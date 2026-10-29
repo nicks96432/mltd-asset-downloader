@@ -1,4 +1,4 @@
-//! Writes textures.
+//! Unpacks `Texture2D` and `Sprite`.
 
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -9,8 +9,8 @@ use image::{DynamicImage, GenericImageView, ImageFormat};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 
 use crate::error::{Repr, Result};
-use crate::extract::puzzle::solve_puzzle;
 use crate::unity::{Bundle, Class, Object, Rect};
+use crate::unpack::puzzle::solve_puzzle;
 
 /// Writes the images of a [`Class::Texture2D`] to `output_dir`, which are named after the
 /// texture and numbered.

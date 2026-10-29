@@ -1,4 +1,4 @@
-//! Decodes the audio files extracted from the assets.
+//! Decodes the audio files unpacked from the assets.
 
 pub mod encoder;
 

@@ -5,7 +5,7 @@ use anyhow::{Result, anyhow};
 use clap::Args;
 use mltd::decode::audio::{AudioOptions, KeyFiles, decode as decode_audio};
 use mltd::decode::text::decrypt_file;
-use mltd::extract::{AUDIO_EXTENSIONS, ENCRYPTED_TEXT_EXTENSIONS};
+use mltd::decode::{AUDIO_EXTENSIONS, ENCRYPTED_TEXT_EXTENSIONS};
 
 use crate::audio::AudioArgs;
 use crate::util::glob_files;
@@ -13,7 +13,7 @@ use crate::util::glob_files;
 #[derive(Debug, Args)]
 #[command(author, version, about, arg_required_else_help(true))]
 pub struct DecoderArgs {
-    /// The files extracted with `extract --raw`, supports glob patterns.
+    /// The unpacked assets, supports glob patterns.
     ///
     /// Encrypted text files (.gtx.bytes, .mld.bytes) are decrypted, and audio files (.acb, .awb)
     /// are decoded. Other files are skipped.

@@ -1,3 +1,4 @@
+#[cfg(any(feature = "unpack", feature = "decode"))]
 use std::path::PathBuf;
 
 use clap::ValueEnum;
@@ -39,6 +40,7 @@ impl Progress for BarProgress<'_> {
 }
 
 /// Expands the glob `patterns` to the files they match, and warns about the other matches.
+#[cfg(any(feature = "unpack", feature = "decode"))]
 pub(crate) fn glob_files(patterns: &[String]) -> impl Iterator<Item = PathBuf> + '_ {
     patterns
         .iter()

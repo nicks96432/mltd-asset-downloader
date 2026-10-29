@@ -29,8 +29,8 @@ name = "mltd"
 required-features = ["cli"]
 
 [[test]]
-name = "extract"
-required-features = ["cli", "extract"]
+name = "unpack"
+required-features = ["cli", "decode", "unpack"]
 
 [dependencies]
 aes = { version = "0.9.3", optional = true }
@@ -80,8 +80,9 @@ vergen-gitcl = "10.0.3"
 [features]
 default = [
   "cli",
+  "decode",
   "download",
-  "extract",
+  "unpack",
 ]
 asset-ripper = [
   "dep:scraper",
@@ -115,13 +116,6 @@ decrypt-text = [
   "dep:cbc",
 ]
 download = []
-extract = [
-  "asset-ripper",
-  "decode",
-  "dep:serde_json",
-  "process-image",
-  "rabex",
-]
 process-image = [
   "dep:image",
   "dep:regex",
@@ -132,6 +126,13 @@ rabex = [
   "dep:tempfile",
   "dep:texture2ddecoder",
   "process-image",
+]
+unpack = [
+  "asset-ripper",
+  "dep:rayon",
+  "dep:serde_json",
+  "process-image",
+  "rabex",
 ]
 
 # UnityFS v6 header fix (jakobhellermann/RustyAssetBundleEXtractor#1)

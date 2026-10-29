@@ -83,12 +83,12 @@ const TEST_CASES: &[TestCase] = &[
 ];
 
 #[test]
-fn test_extract_raw_then_decode_audio() {
+fn test_unpack_raw_then_decode_audio() {
     let dir = TempDir::new().unwrap();
     let relpath = Path::new("Assets/imas/resources/adx2/song3");
 
     cargo_bin_cmd!("mltd")
-        .args(["extract", "tests/test_acb.unity3d", "--raw"])
+        .args(["unpack", "tests/test_acb.unity3d", "--raw"])
         .args([OsStr::new("-o"), dir.path().as_os_str()])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .assert()
@@ -112,13 +112,13 @@ fn test_extract_raw_then_decode_audio() {
 }
 
 #[test]
-fn test_extract_raw_then_decrypt_text() {
+fn test_unpack_raw_then_decrypt_text() {
     let dir = TempDir::new().unwrap();
     let relpath = Path::new("Assets/imas/resources/textassets/zh/commu/card");
     let name = "card_blst_014mir0034_zh.gtx";
 
     cargo_bin_cmd!("mltd")
-        .args(["extract", "tests/test_text.unity3d", "--no-decrypt"])
+        .args(["unpack", "tests/test_text.unity3d", "--no-decrypt"])
         .args([OsStr::new("-o"), dir.path().as_os_str()])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .assert()
@@ -148,12 +148,12 @@ fn test_extract_raw_then_decrypt_text() {
 }
 
 #[test]
-fn test_extract() {
+fn test_unpack() {
     for case in TEST_CASES {
         let dir = TempDir::new().unwrap();
 
         let mut cmd = cargo_bin_cmd!("mltd");
-        cmd.arg("extract")
+        cmd.arg("unpack")
             .arg(case.bundle_path)
             .args([OsStr::new("-o"), dir.path().as_os_str()])
             .current_dir(env!("CARGO_MANIFEST_DIR"));

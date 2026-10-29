@@ -24,8 +24,8 @@ Usage: mltd [OPTIONS] <COMMAND>
 
 Commands:
   download  Download assets from MLTD asset server
-  extract   Extract media from MLTD assets
-  decode    Decrypt text and decode audio assets extracted with `extract --raw`
+  unpack    Unpack files from MLTD asset bundles
+  decode    Decrypt text and audio assets
   manifest  Download asset manifest from MLTD asset server
   help      Print this message or the help of the given subcommand(s)
 
