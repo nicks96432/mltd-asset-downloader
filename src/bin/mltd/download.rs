@@ -2,19 +2,22 @@ use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use anyhow::{Context, Result, anyhow};
+use ahash::RandomState;
+use anyhow::{Result, anyhow};
 use clap::Args;
 use futures_util::StreamExt;
 use human_bytes::human_bytes;
 use indicatif::{MultiProgress, MultiProgressAlignment, ProgressDrawTarget};
 use mltd::Error;
-use mltd::asset::{Asset, AssetInfo, Platform};
-use mltd::manifest::Manifest;
+use mltd::asset::{Asset, AssetInfo};
+use mltd::manifest::{Manifest, ManifestEntry};
 use mltd::net::AssetVersion;
 use mltd::util::safe_join;
 use tokio::fs::create_dir_all;
 
-use crate::util::{BarProgress, PlatformArg, create_progress_bar};
+use crate::util::{BarProgress, ManifestSource, PlatformArg, create_progress_bar, fetch_manifest};
+
+type HashSet<T> = std::collections::HashSet<T, RandomState>;
 
 #[derive(Debug, Args)]
 #[command(about, arg_required_else_help = true, disable_help_flag = true)]
@@ -48,35 +51,53 @@ pub struct DownloaderArgs {
     #[arg(long, value_name = "PATH", conflicts_with = "manifest")]
     save_manifest: Option<PathBuf>,
 
+    /// Only download assets that are added or updated since this older asset version
+    /// or manifest file (a plain number is treated as a version, use ./ for a file named so)
+    #[arg(long, value_name = "VERSION|MANIFEST")]
+    since: Option<ManifestSource>,
+
+    /// Only download assets whose name matches this glob pattern, can be specified multiple times
+    #[arg(short, long, value_name = "PATTERN")]
+    include: Vec<glob::Pattern>,
+
     /// Print help
     #[arg(long, action = clap::ArgAction::HelpShort)]
     help: Option<bool>,
 }
 
-async fn download_manifest(
-    version: Option<u64>,
-    platform: Platform,
-    save_path: Option<&Path>,
-) -> Result<(Manifest, AssetInfo)> {
-    let manifest_info = AssetInfo::manifest(platform, version).await?;
+/// Selects the manifest entries to download according to `--since` and `--include`.
+async fn select_entries<'a>(
+    manifest: &'a Manifest,
+    args: &DownloaderArgs,
+) -> Result<Vec<(&'a String, &'a ManifestEntry)>> {
+    let changed = match &args.since {
+        Some(since) => {
+            let old = since.load(Some(args.platform.into())).await?;
 
-    let asset = Asset::download(manifest_info.clone(), None).await?;
+            let diff = old.diff(manifest);
+            tracing::info!(
+                added = diff.added.len(),
+                updated = diff.updated.len(),
+                removed = diff.removed.len(),
+                "compared with {since}",
+            );
 
-    if let Some(path) = save_path {
-        tracing::debug!(path = %path.display(), "saving manifest");
-        tokio::fs::write(path, &asset.data)
-            .await
-            .with_context(|| format!("cannot save manifest to {}", path.display()))?;
-    }
+            Some(
+                diff.added
+                    .keys()
+                    .chain(diff.updated.keys())
+                    .map(|name| (*name).clone())
+                    .collect::<HashSet<String>>(),
+            )
+        }
+        None => None,
+    };
 
-    let manifest: Manifest = asset.try_into()?;
-
-    tracing::info!(?manifest_info.version,
-        "downloaded manifest, total asset size {}",
-        human_bytes(manifest.asset_size() as f64)
-    );
-
-    Ok((manifest, manifest_info))
+    Ok(manifest
+        .iter()
+        .filter(|(name, _)| changed.as_ref().is_none_or(|c| c.contains(*name)))
+        .filter(|(name, _)| args.include.is_empty() || args.include.iter().any(|p| p.matches(name)))
+        .collect())
 }
 
 async fn download_task<P>(
@@ -128,14 +149,25 @@ pub async fn download_assets(args: &DownloaderArgs) -> Result<()> {
             (manifest, manifest_info)
         }
         None => {
-            download_manifest(
-                args.asset_version,
-                args.platform.into(),
-                args.save_manifest.as_deref(),
-            )
-            .await?
+            fetch_manifest(args.asset_version, args.platform.into(), args.save_manifest.as_deref())
+                .await?
         }
     };
+
+    let entries = select_entries(&manifest, args).await?;
+    let total_size: usize = entries.iter().map(|(_, entry)| entry.2).sum();
+
+    if entries.is_empty() {
+        tracing::info!("no asset to download");
+        return Ok(());
+    }
+
+    tracing::info!(
+        "downloading {} of {} asset(s), size {}",
+        entries.len(),
+        manifest.len(),
+        human_bytes(total_size as f64)
+    );
 
     tracing::trace!("create MultiProgress");
     let multi_progress = MultiProgress::with_draw_target(ProgressDrawTarget::stdout_with_hz(5));
@@ -143,13 +175,13 @@ pub async fn download_assets(args: &DownloaderArgs) -> Result<()> {
     multi_progress.set_move_cursor(true);
 
     let main_progress_bar = multi_progress.add(create_progress_bar().with_message("total "));
-    main_progress_bar.set_length(manifest.asset_size() as u64);
+    main_progress_bar.set_length(total_size as u64);
     main_progress_bar.tick();
 
     let failed = &AtomicUsize::new(0);
 
     tracing::debug!("start downloading assets");
-    let tasks = futures_util::stream::iter(&*manifest).for_each_concurrent(
+    let tasks = futures_util::stream::iter(entries).for_each_concurrent(
         Some(args.parallel.get()),
         |(name, entry)| {
             let main_progress_bar = main_progress_bar.clone();
