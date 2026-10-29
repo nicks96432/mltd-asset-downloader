@@ -29,7 +29,7 @@ jobs:
       - name: Build
         id: build
         run: |
-          export name=mltd-git-$(git describe --tags --dirty)-${{ runner.os }}
+          export name=mltd-git-$(git describe --tags --dirty)-$(rustc -vV | sed -n 's|host: ||p')
 
           if [ "${{ runner.os }}" = "Windows" ]; then
             export name=$name.exe
