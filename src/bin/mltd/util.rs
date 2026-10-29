@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::ValueEnum;
 use indicatif::{ProgressBar, ProgressFinish, ProgressStyle};
 use mltd::asset::Platform;
@@ -34,6 +36,34 @@ impl Progress for BarProgress<'_> {
     fn advance(&mut self, delta: u64) {
         self.0.inc(delta);
     }
+}
+
+/// Expands the glob `patterns` to the files they match, and warns about the other matches.
+pub(crate) fn glob_files(patterns: &[String]) -> impl Iterator<Item = PathBuf> + '_ {
+    patterns
+        .iter()
+        .filter_map(|p| match glob::glob(p) {
+            Ok(paths) => Some(paths),
+            Err(e) => {
+                tracing::warn!(pattern = p, error = ?e, "failed to glob");
+                None
+            }
+        })
+        .flatten()
+        .filter_map(|r| match r {
+            Ok(p) => Some(p),
+            Err(e) => {
+                tracing::warn!(error = ?e, "failed to read directory entry");
+                None
+            }
+        })
+        .filter(|p| match p.is_file() {
+            true => true,
+            false => {
+                tracing::warn!(path = %p.display(), "input path is not a file");
+                false
+            }
+        })
 }
 
 #[inline]

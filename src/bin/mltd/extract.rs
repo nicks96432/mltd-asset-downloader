@@ -5,6 +5,8 @@ use anyhow::{Result, anyhow};
 use clap::{Args, ValueEnum};
 use mltd::extract::pipeline::{AudioOptions, Options, extract_all};
 
+use crate::util::glob_files;
+
 #[derive(Debug, Args)]
 pub struct AudioArgs {
     /// Audio output format extension
@@ -62,6 +64,10 @@ pub struct ExtractorArgs {
     #[arg(short, long, value_name = "DIR", display_order = 1)]
     #[arg(default_value_os_t = PathBuf::from("output"))]
     pub output: PathBuf,
+
+    /// Write encrypted text and audio assets as they are, they can be decoded later by `mltd decode`
+    #[arg(long, alias = "no-decrypt", display_order = 2)]
+    pub raw: bool,
 
     #[clap(flatten)]
     pub audio: AudioArgs,
@@ -124,41 +130,25 @@ impl From<&ExtractorArgs> for Options {
         Self {
             output: args.output.clone(),
             image_format: args.image_ext,
-            audio: AudioOptions {
-                format: args.audio.audio_format.clone(),
-                codec: args.audio.audio_codec.clone(),
-                ffmpeg_args: args.audio.audio_args.clone(),
-            },
+            decrypt_text: !args.raw,
+            decode_audio: !args.raw,
+            audio: AudioOptions::from(&args.audio),
+        }
+    }
+}
+
+impl From<&AudioArgs> for AudioOptions {
+    fn from(args: &AudioArgs) -> Self {
+        Self {
+            format: args.audio_format.clone(),
+            codec: args.audio_codec.clone(),
+            ffmpeg_args: args.audio_args.clone(),
         }
     }
 }
 
 pub fn extract_files(args: &ExtractorArgs) -> Result<()> {
-    let files = args
-        .input_paths
-        .iter()
-        .filter_map(|p| match glob::glob(p) {
-            Ok(paths) => Some(paths),
-            Err(e) => {
-                tracing::warn!(pattern = p, error = ?e, "failed to glob");
-                None
-            }
-        })
-        .flatten()
-        .filter_map(|r| match r {
-            Ok(p) => Some(p),
-            Err(e) => {
-                tracing::warn!(error = ?e, "failed to read directory entry");
-                None
-            }
-        })
-        .filter(|p| match p.is_file() {
-            true => true,
-            false => {
-                tracing::warn!("input path is not a file");
-                false
-            }
-        });
+    let files = glob_files(&args.input_paths);
 
     let options = Options::from(args);
 

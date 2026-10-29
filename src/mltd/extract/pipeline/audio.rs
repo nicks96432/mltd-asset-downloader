@@ -66,15 +66,26 @@ impl Drop for KeyFiles {
     }
 }
 
-/// Decodes all the subsongs of the audio file `path` into the directory it is in.
-pub(super) fn extract(path: &Path, options: &AudioOptions, key_files: &KeyFiles) -> Result<()> {
+/// Decodes all the subsongs of the audio file `path` into `output_dir`.
+///
+/// The decoded files are named after `path`. A temporary key file is written next to `path`
+/// and removed when `key_files` is dropped.
+///
+/// # Errors
+///
+/// This function fails if the file cannot be opened, or any of the subsongs cannot be decoded.
+pub fn decode(
+    path: &Path,
+    output_dir: &Path,
+    options: &AudioOptions,
+    key_files: &KeyFiles,
+) -> Result<()> {
     // According to https://github.com/vgmstream/vgmstream/blob/master/doc/USAGE.md#decryption-keys,
     // we can specify the decryption key in the .hcakey file so that vgmstream doesn't have
     // to brute-force the key.
     key_files.ensure(path.with_file_name(".hcakey"))?;
 
     let unsafe_path = || Repr::UnsafePath(path.display().to_string());
-    let output_dir = path.parent().ok_or_else(unsafe_path)?;
     let prefix = path.file_stem().and_then(OsStr::to_str).ok_or_else(unsafe_path)?;
     tracing::info!(output_path = %output_dir.display(), "extracting audio");
 

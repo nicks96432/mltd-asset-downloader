@@ -3,8 +3,9 @@
 //! Every [`Class::TextAsset`] and [`Class::Texture2D`] in a bundle is written to the path it had
 //! before bundled, under the output directory:
 //!
-//! - text assets are decrypted if they are encrypted
-//! - audio assets are decoded after all the files of the bundle are written
+//! - text assets are decrypted if they are encrypted, unless [`Options::decrypt_text`] is `false`
+//! - audio assets are decoded after all the files of the bundle are written, unless
+//!   [`Options::decode_audio`] is `false`
 //! - textures are written as images, with the puzzles solved
 
 mod audio;
@@ -17,7 +18,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use image::ImageFormat;
 
-pub use self::audio::{AudioOptions, KeyFiles};
+pub use self::audio::{AudioOptions, KeyFiles, decode as decode_audio};
 use crate::error::{Error, Repr, Result};
 use crate::unity::{Bundle, Class, Extractor};
 use crate::util::safe_join;
@@ -31,6 +32,18 @@ pub struct Options {
     /// Format of the output images.
     pub image_format: ImageFormat,
 
+    /// Whether to decrypt the encrypted text assets.
+    ///
+    /// If it is `false`, they are written as they are, and can be decrypted later by
+    /// [`decrypt_file`](crate::extract::text::decrypt_file).
+    pub decrypt_text: bool,
+
+    /// Whether to decode the audio assets.
+    ///
+    /// If it is `false`, they are written as they are, and can be decoded later by
+    /// [`decode_audio`].
+    pub decode_audio: bool,
+
     /// Options of the audio output.
     pub audio: AudioOptions,
 }
@@ -42,6 +55,8 @@ impl Options {
         Self {
             output: output.into(),
             image_format: ImageFormat::Png,
+            decrypt_text: true,
+            decode_audio: true,
             audio: AudioOptions::default(),
         }
     }
@@ -133,7 +148,7 @@ where
             .map_err(|e| Repr::io("create directory", Some(output_dir), e))?;
 
         if object.class == Class::TextAsset {
-            audio_paths.extend(text::extract(&bundle, object, &output_path)?);
+            audio_paths.extend(text::extract(&bundle, object, &output_path, options.decrypt_text)?);
         } else {
             texture::extract(&bundle, object, output_dir, options.image_format)?;
         }
@@ -144,8 +159,13 @@ where
 
     // we should handle audio files after all of them are extracted because some files may
     // contain informations (Ex: filename) about others
-    for output_path in audio_paths {
-        audio::extract(&output_path, &options.audio, key_files)?;
+    if options.decode_audio {
+        for audio_path in audio_paths {
+            let output_dir = audio_path
+                .parent()
+                .ok_or_else(|| Repr::UnsafePath(audio_path.display().to_string()))?;
+            audio::decode(&audio_path, output_dir, &options.audio, key_files)?;
+        }
     }
 
     Ok(())

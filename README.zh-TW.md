@@ -20,6 +20,7 @@ $ ./mltd --help
 Commands:
   download  從MLTD資源伺服器下載資源包
   extract   從MLTD的資源包中提取資源
+  decode    解密文字並解碼以 `extract --raw` 提取出來的音訊
   manifest  從MLTD資源伺服器下載資源包列表
   help      顯示這個說明訊息或是以上指令的說明
 
