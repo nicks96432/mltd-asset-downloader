@@ -15,7 +15,7 @@ use tokio_util::compat::FuturesAsyncReadCompatExt;
 
 use crate::Error;
 use crate::error::{Repr, Result};
-use crate::net::{AssetVersion, Error as NetworkError};
+use crate::net::{AssetVersion, Error as NetworkError, MatsuriApiClient};
 use crate::util::{Progress, ProgressReadAdapter};
 
 /// Base URL of MLTD asset server.
@@ -38,6 +38,23 @@ pub struct AssetInfo {
 }
 
 impl AssetInfo {
+    /// Gets the [`AssetInfo`] of the specified `platform` from matsurihi.me.
+    ///
+    /// If `version` is `None`, the latest asset version is used.
+    ///
+    /// # Errors
+    ///
+    /// - [`crate::ErrorKind::Network`]: if it cannot send request.
+    pub async fn manifest(platform: Platform, version: Option<u64>) -> Result<Self> {
+        let client = MatsuriApiClient::new();
+        let version = match version {
+            Some(v) => client.get_asset_version(v).await,
+            None => client.latest_asset_version().await,
+        }?;
+
+        Ok(Self { filename: version.manifest_filename.clone(), platform, version })
+    }
+
     fn to_url(&self) -> reqwest::Url {
         reqwest::Url::parse(&format!(
             "{}/{}/production/2018/{}/{}",

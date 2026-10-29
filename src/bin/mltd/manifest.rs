@@ -55,18 +55,7 @@ pub struct ManifestDownloadArgs {
 }
 
 pub async fn download_manifest(args: &ManifestDownloadArgs) -> Result<()> {
-    let matsuri_client = MatsuriApiClient::new();
-
-    let asset_version = match args.asset_version {
-        None => matsuri_client.latest_asset_version().await,
-        Some(v) => matsuri_client.get_asset_version(v).await,
-    }?;
-
-    let asset_info = AssetInfo {
-        filename: asset_version.manifest_filename.clone(),
-        platform: args.platform.into(),
-        version: asset_version,
-    };
+    let asset_info = AssetInfo::manifest(args.platform.into(), args.asset_version).await?;
 
     let progress_bar = create_progress_bar().with_message(asset_info.filename.clone());
 

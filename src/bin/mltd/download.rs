@@ -2,7 +2,7 @@ use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use clap::Args;
 use futures_util::StreamExt;
 use human_bytes::human_bytes;
@@ -10,7 +10,7 @@ use indicatif::{MultiProgress, MultiProgressAlignment, ProgressDrawTarget};
 use mltd::Error;
 use mltd::asset::{Asset, AssetInfo, Platform};
 use mltd::manifest::Manifest;
-use mltd::net::{AssetVersion, MatsuriApiClient};
+use mltd::net::AssetVersion;
 use mltd::util::safe_join;
 use tokio::fs::create_dir_all;
 
@@ -44,6 +44,10 @@ pub struct DownloaderArgs {
     #[arg(long, value_name = "MANIFEST", requires = "asset_version")]
     manifest: Option<PathBuf>,
 
+    /// Save the downloaded manifest to this path
+    #[arg(long, value_name = "PATH", conflicts_with = "manifest")]
+    save_manifest: Option<PathBuf>,
+
     /// Print help
     #[arg(long, action = clap::ArgAction::HelpShort)]
     help: Option<bool>,
@@ -52,20 +56,19 @@ pub struct DownloaderArgs {
 async fn download_manifest(
     version: Option<u64>,
     platform: Platform,
-) -> Result<(Manifest, AssetInfo), Error> {
-    let matsuri_client = MatsuriApiClient::new();
-    let asset_version = match version {
-        Some(v) => matsuri_client.get_asset_version(v).await,
-        None => matsuri_client.latest_asset_version().await,
-    }?;
-
-    let manifest_info = AssetInfo {
-        filename: asset_version.manifest_filename.clone(),
-        platform,
-        version: asset_version,
-    };
+    save_path: Option<&Path>,
+) -> Result<(Manifest, AssetInfo)> {
+    let manifest_info = AssetInfo::manifest(platform, version).await?;
 
     let asset = Asset::download(manifest_info.clone(), None).await?;
+
+    if let Some(path) = save_path {
+        tracing::debug!(path = %path.display(), "saving manifest");
+        tokio::fs::write(path, &asset.data)
+            .await
+            .with_context(|| format!("cannot save manifest to {}", path.display()))?;
+    }
+
     let manifest: Manifest = asset.try_into()?;
 
     tracing::info!(?manifest_info.version,
@@ -124,7 +127,14 @@ pub async fn download_assets(args: &DownloaderArgs) -> Result<()> {
 
             (manifest, manifest_info)
         }
-        None => download_manifest(args.asset_version, args.platform.into()).await?,
+        None => {
+            download_manifest(
+                args.asset_version,
+                args.platform.into(),
+                args.save_manifest.as_deref(),
+            )
+            .await?
+        }
     };
 
     tracing::trace!("create MultiProgress");
