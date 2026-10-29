@@ -1,5 +1,7 @@
 //! Encrypt and decrypt text assets in MLTD.
 
+use std::path::Path;
+
 use aes::Aes192;
 use aes::cipher::{BlockModeDecrypt, BlockModeEncrypt, KeyIvInit};
 use cbc::cipher::block_padding::Pkcs7;
@@ -80,7 +82,7 @@ pub type TextDecryptor = Decryptor<Aes192>;
 /// # Example
 ///
 /// ```
-/// use mltd::extract::text::encrypt_text;
+/// use mltd::decode::text::encrypt_text;
 ///
 /// let text = b"Hello, world!";
 /// let cipher = encrypt_text(text);
@@ -101,7 +103,7 @@ pub fn encrypt_text(plaintext: &[u8]) -> Vec<u8> {
 /// # Example
 ///
 /// ```
-/// use mltd::extract::text::decrypt_text;
+/// use mltd::decode::text::decrypt_text;
 ///
 /// let cipher = [
 ///     0xca, 0x64, 0x14, 0x8e, 0x80, 0x9e, 0x50, 0xc9, 0xe3, 0x4e, 0x18, 0x6f, 0x1e, 0x9c, 0x3e,
@@ -119,6 +121,23 @@ pub fn decrypt_text(cipher: &[u8]) -> Result<Vec<u8>> {
     }?;
 
     Ok(plaintext)
+}
+
+/// Decrypts the file `input` and writes the result to `output`.
+///
+/// `input` and `output` may be the same file, but decrypting a file twice fails or
+/// produces garbage, so callers should keep the encrypted and decrypted files apart.
+///
+/// # Errors
+///
+/// This function fails if the file cannot be read or written, or the content cannot be decrypted.
+pub fn decrypt_file(input: &Path, output: &Path) -> Result<()> {
+    let cipher = std::fs::read(input).map_err(|e| Repr::io("read text", Some(input), e))?;
+    let plaintext = decrypt_text(&cipher)?;
+
+    std::fs::write(output, plaintext).map_err(|e| Repr::io("write text", Some(output), e))?;
+
+    Ok(())
 }
 
 #[cfg(test)]

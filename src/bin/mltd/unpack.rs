@@ -3,27 +3,13 @@ use std::path::PathBuf;
 
 use anyhow::{Result, anyhow};
 use clap::{Args, ValueEnum};
-use mltd::extract::pipeline::{AudioOptions, Options, extract_all};
+#[cfg(feature = "decode")]
+use mltd::decode::audio::AudioOptions;
+use mltd::unpack::pipeline::{Options, unpack_all};
 
-#[derive(Debug, Args)]
-pub struct AudioArgs {
-    /// Audio output format extension
-    #[arg(long, value_name = "FORMAT", display_order = 2)]
-    #[arg(default_value_t = String::from("wav"))]
-    pub audio_format: String,
-
-    /// Audio output codec
-    #[arg(long, value_name = "CODEC", display_order = 2)]
-    #[arg(default_value_t = String::from("pcm_s16le"))]
-    pub audio_codec: String,
-
-    /// Arguments to pass to ffmpeg encoder for audio output
-    ///
-    /// Value should be a list of -arg=value pairs separated by commas
-    #[arg(long, value_name = "ARGS", display_order = 2)]
-    #[arg(value_parser = parse_key_val, allow_hyphen_values = true)]
-    pub audio_args: Vec<(String, String)>,
-}
+#[cfg(feature = "decode")]
+use crate::audio::AudioArgs;
+use crate::util::glob_files;
 
 /// Library used to read Unity asset bundles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -49,7 +35,7 @@ impl Default for Backend {
 
 #[derive(Debug, Args)]
 #[command(author, version, about, arg_required_else_help(true))]
-pub struct ExtractorArgs {
+pub struct UnpackerArgs {
     /// The library used to read the asset bundles
     #[arg(long, value_enum, default_value_t = Backend::default(), display_order = 3)]
     pub backend: Backend,
@@ -63,6 +49,12 @@ pub struct ExtractorArgs {
     #[arg(default_value_os_t = PathBuf::from("output"))]
     pub output: PathBuf,
 
+    /// Write encrypted text and audio assets as is
+    #[cfg(feature = "decode")]
+    #[arg(long, alias = "no-decrypt", display_order = 2)]
+    pub raw: bool,
+
+    #[cfg(feature = "decode")]
     #[clap(flatten)]
     pub audio: AudioArgs,
 
@@ -71,7 +63,7 @@ pub struct ExtractorArgs {
     #[arg(value_parser = parse_image_format, default_value = "png")]
     pub image_ext: image::ImageFormat,
 
-    /// The number of asset to extract at the same time
+    /// The number of asset to unpack at the same time
     #[arg(short = 'P', long, value_name = "CPUS", display_order = 2)]
     #[arg(default_value_t = std::thread::available_parallelism().unwrap_or_else(|_|1.try_into().unwrap()))]
     pub parallel: NonZeroUsize,
@@ -81,19 +73,6 @@ pub struct ExtractorArgs {
     #[arg(long, value_name = "PATH", display_order = 3)]
     #[arg(default_value_os_t = default_asset_ripper_path())]
     pub asset_ripper_path: PathBuf,
-}
-
-/// Parses a single key-value pair
-fn parse_key_val(s: &str) -> Result<(String, String)> {
-    if !s.starts_with('-') {
-        return Err(anyhow!("invalid -KEY=value: no `-` found in `{}`", s));
-    }
-    let pos = match s.find('=') {
-        Some(p) => p,
-        None => return Err(anyhow!("invalid -KEY=value: no `=` found in `{}`", s))?,
-    };
-
-    Ok((s[1..pos].to_owned(), s[pos + 1..].to_owned()))
 }
 
 /// Parses string to image format
@@ -119,46 +98,23 @@ fn default_asset_ripper_path() -> PathBuf {
     path
 }
 
-impl From<&ExtractorArgs> for Options {
-    fn from(args: &ExtractorArgs) -> Self {
+impl From<&UnpackerArgs> for Options {
+    fn from(args: &UnpackerArgs) -> Self {
         Self {
             output: args.output.clone(),
             image_format: args.image_ext,
-            audio: AudioOptions {
-                format: args.audio.audio_format.clone(),
-                codec: args.audio.audio_codec.clone(),
-                ffmpeg_args: args.audio.audio_args.clone(),
-            },
+            #[cfg(feature = "decode")]
+            decrypt_text: !args.raw,
+            #[cfg(feature = "decode")]
+            decode_audio: !args.raw,
+            #[cfg(feature = "decode")]
+            audio: AudioOptions::from(&args.audio),
         }
     }
 }
 
-pub fn extract_files(args: &ExtractorArgs) -> Result<()> {
-    let files = args
-        .input_paths
-        .iter()
-        .filter_map(|p| match glob::glob(p) {
-            Ok(paths) => Some(paths),
-            Err(e) => {
-                tracing::warn!(pattern = p, error = ?e, "failed to glob");
-                None
-            }
-        })
-        .flatten()
-        .filter_map(|r| match r {
-            Ok(p) => Some(p),
-            Err(e) => {
-                tracing::warn!(error = ?e, "failed to read directory entry");
-                None
-            }
-        })
-        .filter(|p| match p.is_file() {
-            true => true,
-            false => {
-                tracing::warn!("input path is not a file");
-                false
-            }
-        });
+pub fn unpack_files(args: &UnpackerArgs) -> Result<()> {
+    let files = glob_files(&args.input_paths);
 
     let options = Options::from(args);
 
@@ -173,19 +129,19 @@ pub fn extract_files(args: &ExtractorArgs) -> Result<()> {
 
             let rippers =
                 mltd::unity::AssetRipper::pool(&args.asset_ripper_path, args.parallel.get())?;
-            extract_all(rippers, files, &options)
+            unpack_all(rippers, files, &options)
         }
 
         #[cfg(feature = "rabex")]
         Backend::Rabex => {
             tracing::debug!(parallel = args.parallel, "creating rabex extractors");
 
-            extract_all(mltd::unity::RabexExtractor::pool(args.parallel.get()), files, &options)
+            unpack_all(mltd::unity::RabexExtractor::pool(args.parallel.get()), files, &options)
         }
     };
 
     if !failures.is_empty() {
-        return Err(anyhow!("failed to extract {} file(s)", failures.len()));
+        return Err(anyhow!("failed to unpack {} file(s)", failures.len()));
     }
 
     Ok(())

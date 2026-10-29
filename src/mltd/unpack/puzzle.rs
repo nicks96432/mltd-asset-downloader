@@ -1,4 +1,4 @@
-//! Puzzle handling.
+//! Texture puzzles handling.
 
 use std::sync::LazyLock;
 

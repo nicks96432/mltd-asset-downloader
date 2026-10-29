@@ -6,15 +6,15 @@ use std::path::{Path, PathBuf};
 use thiserror::Error as ThisError;
 
 #[cfg(feature = "decode-audio")]
-use crate::extract::audio::AudioDecodeError;
-#[cfg(feature = "process-image")]
-use crate::extract::puzzle::Error as PuzzleError;
+use crate::decode::audio::encoder::AudioDecodeError;
 #[cfg(feature = "decrypt-text")]
-use crate::extract::text::AesError;
+use crate::decode::text::AesError;
 use crate::manifest::ManifestError;
 use crate::net::Error as NetworkError;
 #[cfg(any(feature = "rabex", feature = "asset-ripper"))]
 use crate::unity::Error as UnityError;
+#[cfg(feature = "process-image")]
+use crate::unpack::puzzle::Error as PuzzleError;
 
 #[derive(Debug, ThisError)]
 #[error(transparent)]
@@ -105,7 +105,7 @@ impl From<&Repr> for ErrorKind {
             #[cfg(any(feature = "rabex", feature = "asset-ripper"))]
             Repr::Unity(_) => ErrorKind::Unity,
 
-            #[cfg(any(feature = "extract", feature = "rabex", feature = "asset-ripper"))]
+            #[cfg(any(feature = "unpack", feature = "rabex", feature = "asset-ripper"))]
             Repr::JSONDeserialize(_) => ErrorKind::Deserialize,
 
             #[cfg(feature = "decode-audio")]
@@ -205,7 +205,7 @@ pub(crate) enum Repr {
     Network(#[from] NetworkError),
 
     /// JSON deserialization error.
-    #[cfg(any(feature = "extract", feature = "rabex", feature = "asset-ripper"))]
+    #[cfg(any(feature = "unpack", feature = "rabex", feature = "asset-ripper"))]
     #[error(transparent)]
     JSONDeserialize(#[from] serde_json::Error),
 

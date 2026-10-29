@@ -1,4 +1,6 @@
-//! Decodes audio files.
+//! Decodes the audio files unpacked from the assets.
+
+pub mod encoder;
 
 use std::collections::BTreeSet;
 use std::ffi::OsStr;
@@ -7,9 +9,8 @@ use std::sync::{Mutex, PoisonError};
 
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-use super::lock;
+use self::encoder::{AudioDecodeError, Encoder, EncoderOutputOptions, MLTD_HCA_KEY};
 use crate::error::{Repr, Result};
-use crate::extract::audio::{AudioDecodeError, Encoder, EncoderOutputOptions, MLTD_HCA_KEY};
 
 /// Options of the audio output.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,7 +42,7 @@ impl KeyFiles {
     ///
     /// All MLTD audio files use the same key, so each file is written once.
     fn ensure(&self, path: PathBuf) -> Result<()> {
-        let mut paths = lock(&self.0);
+        let mut paths = self.0.lock().unwrap_or_else(PoisonError::into_inner);
         if !paths.contains(&path) {
             tracing::debug!(output_path = %path.display(), "writing temporary .hcakey");
             std::fs::write(&path, MLTD_HCA_KEY.to_string())
@@ -66,15 +67,26 @@ impl Drop for KeyFiles {
     }
 }
 
-/// Decodes all the subsongs of the audio file `path` into the directory it is in.
-pub(super) fn extract(path: &Path, options: &AudioOptions, key_files: &KeyFiles) -> Result<()> {
+/// Decodes all the subsongs of the audio file `path` into `output_dir`.
+///
+/// The decoded files are named after `path`. A temporary key file is written next to `path`
+/// and removed when `key_files` is dropped.
+///
+/// # Errors
+///
+/// This function fails if the file cannot be opened, or any of the subsongs cannot be decoded.
+pub fn decode(
+    path: &Path,
+    output_dir: &Path,
+    options: &AudioOptions,
+    key_files: &KeyFiles,
+) -> Result<()> {
     // According to https://github.com/vgmstream/vgmstream/blob/master/doc/USAGE.md#decryption-keys,
     // we can specify the decryption key in the .hcakey file so that vgmstream doesn't have
     // to brute-force the key.
     key_files.ensure(path.with_file_name(".hcakey"))?;
 
     let unsafe_path = || Repr::UnsafePath(path.display().to_string());
-    let output_dir = path.parent().ok_or_else(unsafe_path)?;
     let prefix = path.file_stem().and_then(OsStr::to_str).ok_or_else(unsafe_path)?;
     tracing::info!(output_path = %output_dir.display(), "extracting audio");
 

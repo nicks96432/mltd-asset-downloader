@@ -1,8 +1,13 @@
+#[cfg(feature = "decode")]
+mod audio;
+#[cfg(feature = "decode")]
+mod decode;
+
 #[cfg(feature = "download")]
 mod download;
 
-#[cfg(feature = "extract")]
-mod extract;
+#[cfg(feature = "unpack")]
+mod unpack;
 
 mod manifest;
 mod util;
@@ -29,13 +34,17 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Decrypt text and audio assets
+    #[cfg(feature = "decode")]
+    Decode(self::decode::DecoderArgs),
+
     /// Download assets from MLTD asset server
     #[cfg(feature = "download")]
     Download(self::download::DownloaderArgs),
 
-    /// Extract media from MLTD assets
-    #[cfg(feature = "extract")]
-    Extract(self::extract::ExtractorArgs),
+    /// Unpack files from MLTD asset bundles
+    #[cfg(feature = "unpack")]
+    Unpack(self::unpack::UnpackerArgs),
 
     /// Download manifest from MLTD asset server
     Manifest(self::manifest::ManifestArgs),
@@ -73,15 +82,18 @@ fn main() -> Result<()> {
     let runtime = tokio::runtime::Runtime::new()?;
 
     match args.command {
+        #[cfg(feature = "decode")]
+        Command::Decode(d) => self::decode::decode_files(&d),
+
         #[cfg(feature = "download")]
         Command::Download(d) => {
             runtime.block_on(async { self::download::download_assets(&d).await })
         }
 
-        #[cfg(feature = "extract")]
-        Command::Extract(e) => {
+        #[cfg(feature = "unpack")]
+        Command::Unpack(e) => {
             // AssetRipper requires running outside of tokio runtime because of reqwest blocking
-            self::extract::extract_files(&e)
+            self::unpack::unpack_files(&e)
         }
 
         Command::Manifest(m) => runtime.block_on(async { self::manifest::manifest_main(&m).await }),

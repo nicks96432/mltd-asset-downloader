@@ -83,12 +83,77 @@ const TEST_CASES: &[TestCase] = &[
 ];
 
 #[test]
-fn test_extract() {
+fn test_unpack_raw_then_decode_audio() {
+    let dir = TempDir::new().unwrap();
+    let relpath = Path::new("Assets/imas/resources/adx2/song3");
+
+    cargo_bin_cmd!("mltd")
+        .args(["unpack", "tests/test_acb.unity3d", "--raw"])
+        .args([OsStr::new("-o"), dir.path().as_os_str()])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .assert()
+        .success();
+
+    // the audio is written but not decoded
+    let raw = dir.child(relpath.join("song3_00test.acb"));
+    raw.assert(predicate::path::eq_file("tests/test_acb.acb"));
+    let wav = dir.child(relpath.join("song3_00test_bgm.wav"));
+    wav.assert(predicate::path::missing());
+
+    cargo_bin_cmd!("mltd")
+        .arg("decode")
+        .arg(raw.path())
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .assert()
+        .success();
+
+    assert!(wav_audio(wav.path()) == wav_audio(Path::new("tests/test_acb.wav")));
+    dir.child(relpath.join(".hcakey")).assert(predicate::path::missing());
+}
+
+#[test]
+fn test_unpack_raw_then_decrypt_text() {
+    let dir = TempDir::new().unwrap();
+    let relpath = Path::new("Assets/imas/resources/textassets/zh/commu/card");
+    let name = "card_blst_014mir0034_zh.gtx";
+
+    cargo_bin_cmd!("mltd")
+        .args(["unpack", "tests/test_text.unity3d", "--no-decrypt"])
+        .args([OsStr::new("-o"), dir.path().as_os_str()])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .assert()
+        .success();
+
+    // the encrypted text keeps `.bytes` so it is not mistaken for a decrypted one
+    let raw = dir.child(relpath.join(format!("{name}.bytes")));
+    raw.assert(predicate::path::eq_file("tests/test_text.gtx"));
+    dir.child(relpath.join(name)).assert(predicate::path::missing());
+
+    cargo_bin_cmd!("mltd")
+        .arg("decode")
+        .arg(raw.path())
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .assert()
+        .success();
+
+    dir.child(relpath.join(name)).assert(predicate::path::eq_file("tests/test_text_decrypted.gtx"));
+
+    // a file without `.bytes` is never decrypted in place
+    cargo_bin_cmd!("mltd")
+        .arg("decode")
+        .arg(dir.child(relpath.join(name)).path())
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_unpack() {
     for case in TEST_CASES {
         let dir = TempDir::new().unwrap();
 
         let mut cmd = cargo_bin_cmd!("mltd");
-        cmd.arg("extract")
+        cmd.arg("unpack")
             .arg(case.bundle_path)
             .args([OsStr::new("-o"), dir.path().as_os_str()])
             .current_dir(env!("CARGO_MANIFEST_DIR"));

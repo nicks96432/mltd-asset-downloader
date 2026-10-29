@@ -10,12 +10,14 @@
 )]
 
 pub mod asset;
+
+pub mod decode;
 mod error;
 
-#[cfg(any(feature = "decode-audio", feature = "decrypt-text", feature = "process-image"))]
-pub mod extract;
 #[cfg(any(feature = "rabex", feature = "asset-ripper"))]
 pub mod unity;
+#[cfg(feature = "process-image")]
+pub mod unpack;
 
 pub mod manifest;
 pub mod net;
