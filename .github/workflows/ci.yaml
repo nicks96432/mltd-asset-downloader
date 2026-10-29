@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: true
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          toolchain: nightly
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Install cargo check tools
+        run: cargo binstall --no-confirm --force cargo-deny cargo-udeps
+
+      - name: Check
+        run: |
+          cargo deny check
+          cargo udeps
+
+  fmt:
+    name: Fmt
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: true
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          toolchain: nightly
+          components: rustfmt
+          ffmpeg: "false"
+
+      - name: Fmt
+        run: cargo fmt --all -- --check
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: true
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          components: clippy
+
+      - name: Lint
+        run: cargo clippy -- -D warnings
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: true
+
+      - uses: ./.github/actions/setup-rust
+
+      - name: Test
+        run: cargo test
