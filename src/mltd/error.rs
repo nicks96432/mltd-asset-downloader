@@ -6,11 +6,11 @@ use std::path::{Path, PathBuf};
 use thiserror::Error as ThisError;
 
 #[cfg(feature = "decode-audio")]
-use crate::extract::audio::AudioDecodeError;
+use crate::decode::audio::encoder::AudioDecodeError;
+#[cfg(feature = "decrypt-text")]
+use crate::decode::text::AesError;
 #[cfg(feature = "process-image")]
 use crate::extract::puzzle::Error as PuzzleError;
-#[cfg(feature = "decrypt-text")]
-use crate::extract::text::AesError;
 use crate::manifest::ManifestError;
 use crate::net::Error as NetworkError;
 #[cfg(any(feature = "rabex", feature = "asset-ripper"))]

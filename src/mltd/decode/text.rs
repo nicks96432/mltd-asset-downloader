@@ -82,7 +82,7 @@ pub type TextDecryptor = Decryptor<Aes192>;
 /// # Example
 ///
 /// ```
-/// use mltd::extract::text::encrypt_text;
+/// use mltd::decode::text::encrypt_text;
 ///
 /// let text = b"Hello, world!";
 /// let cipher = encrypt_text(text);
@@ -103,7 +103,7 @@ pub fn encrypt_text(plaintext: &[u8]) -> Vec<u8> {
 /// # Example
 ///
 /// ```
-/// use mltd::extract::text::decrypt_text;
+/// use mltd::decode::text::decrypt_text;
 ///
 /// let cipher = [
 ///     0xca, 0x64, 0x14, 0x8e, 0x80, 0x9e, 0x50, 0xc9, 0xe3, 0x4e, 0x18, 0x6f, 0x1e, 0x9c, 0x3e,

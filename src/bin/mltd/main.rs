@@ -1,4 +1,6 @@
-#[cfg(feature = "extract")]
+#[cfg(feature = "decode")]
+mod audio;
+#[cfg(feature = "decode")]
 mod decode;
 #[cfg(feature = "download")]
 mod download;
@@ -32,7 +34,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Decrypt text and decode audio assets extracted with `extract --raw`
-    #[cfg(feature = "extract")]
+    #[cfg(feature = "decode")]
     Decode(self::decode::DecoderArgs),
 
     /// Download assets from MLTD asset server
@@ -79,7 +81,7 @@ fn main() -> Result<()> {
     let runtime = tokio::runtime::Runtime::new()?;
 
     match args.command {
-        #[cfg(feature = "extract")]
+        #[cfg(feature = "decode")]
         Command::Decode(d) => self::decode::decode_files(&d),
 
         #[cfg(feature = "download")]

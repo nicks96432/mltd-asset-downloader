@@ -3,8 +3,8 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
+use crate::decode::text::decrypt_text;
 use crate::error::{Repr, Result};
-use crate::extract::text::decrypt_text;
 use crate::extract::{AUDIO_EXTENSIONS, ENCRYPTED_TEXT_EXTENSIONS};
 use crate::unity::{Bundle, Object};
 
@@ -16,7 +16,7 @@ use crate::unity::{Bundle, Object};
 ///
 /// Returns the output path if it's an audio file.
 ///
-/// [`decrypt_file`]: crate::extract::text::decrypt_file
+/// [`decrypt_file`]: crate::decode::text::decrypt_file
 pub(super) fn extract(
     bundle: &impl Bundle,
     object: &Object,

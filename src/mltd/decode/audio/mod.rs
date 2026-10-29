@@ -1,4 +1,6 @@
-//! Decodes audio files.
+//! Decodes the audio files extracted from the assets.
+
+pub mod encoder;
 
 use std::collections::BTreeSet;
 use std::ffi::OsStr;
@@ -7,9 +9,8 @@ use std::sync::{Mutex, PoisonError};
 
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-use super::lock;
+use self::encoder::{AudioDecodeError, Encoder, EncoderOutputOptions, MLTD_HCA_KEY};
 use crate::error::{Repr, Result};
-use crate::extract::audio::{AudioDecodeError, Encoder, EncoderOutputOptions, MLTD_HCA_KEY};
 
 /// Options of the audio output.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,7 +42,7 @@ impl KeyFiles {
     ///
     /// All MLTD audio files use the same key, so each file is written once.
     fn ensure(&self, path: PathBuf) -> Result<()> {
-        let mut paths = lock(&self.0);
+        let mut paths = self.0.lock().unwrap_or_else(PoisonError::into_inner);
         if !paths.contains(&path) {
             tracing::debug!(output_path = %path.display(), "writing temporary .hcakey");
             std::fs::write(&path, MLTD_HCA_KEY.to_string())

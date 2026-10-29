@@ -101,8 +101,13 @@ cli = [
   "dep:tracing-subscriber",
 ]
 debug = []
+decode = [
+  "decode-audio",
+  "decrypt-text",
+]
 decode-audio = [
   "dep:ffmpeg-next",
+  "dep:rayon",
   "dep:vgmstream",
 ]
 decrypt-text = [
@@ -112,9 +117,7 @@ decrypt-text = [
 download = []
 extract = [
   "asset-ripper",
-  "decode-audio",
-  "decrypt-text",
-  "dep:rayon",
+  "decode",
   "dep:serde_json",
   "process-image",
   "rabex",

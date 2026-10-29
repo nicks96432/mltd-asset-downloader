@@ -10,6 +10,8 @@
 )]
 
 pub mod asset;
+#[cfg(any(feature = "decode-audio", feature = "decrypt-text"))]
+pub mod decode;
 mod error;
 
 #[cfg(any(feature = "decode-audio", feature = "decrypt-text", feature = "process-image"))]

@@ -1,16 +1,10 @@
 //! Functions to extract assets from MLTD.
 
-#[cfg(feature = "decode-audio")]
-pub mod audio;
-
 #[cfg(feature = "extract")]
 pub mod pipeline;
 
 #[cfg(feature = "process-image")]
 pub mod puzzle;
-
-#[cfg(feature = "decrypt-text")]
-pub mod text;
 
 /// File extensions for audio assets in MLTD, which are decoded after all the files are extracted.
 pub const AUDIO_EXTENSIONS: &[&str; 2] = &["acb", "awb"];

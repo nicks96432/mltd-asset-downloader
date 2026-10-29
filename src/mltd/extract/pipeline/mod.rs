@@ -8,7 +8,6 @@
 //!   [`Options::decode_audio`] is `false`
 //! - textures are written as images, with the puzzles solved
 
-mod audio;
 mod text;
 mod texture;
 
@@ -18,7 +17,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use image::ImageFormat;
 
-pub use self::audio::{AudioOptions, KeyFiles, decode as decode_audio};
+pub use crate::decode::audio::{AudioOptions, KeyFiles, decode as decode_audio};
 use crate::error::{Error, Repr, Result};
 use crate::unity::{Bundle, Class, Extractor};
 use crate::util::safe_join;
@@ -35,7 +34,7 @@ pub struct Options {
     /// Whether to decrypt the encrypted text assets.
     ///
     /// If it is `false`, they are written as they are, and can be decrypted later by
-    /// [`decrypt_file`](crate::extract::text::decrypt_file).
+    /// [`decrypt_file`](crate::decode::text::decrypt_file).
     pub decrypt_text: bool,
 
     /// Whether to decode the audio assets.
@@ -164,7 +163,7 @@ where
             let output_dir = audio_path
                 .parent()
                 .ok_or_else(|| Repr::UnsafePath(audio_path.display().to_string()))?;
-            audio::decode(&audio_path, output_dir, &options.audio, key_files)?;
+            decode_audio(&audio_path, output_dir, &options.audio, key_files)?;
         }
     }
 

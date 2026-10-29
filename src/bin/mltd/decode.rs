@@ -3,11 +3,11 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
 use clap::Args;
-use mltd::extract::pipeline::{AudioOptions, KeyFiles, decode_audio};
-use mltd::extract::text::decrypt_file;
+use mltd::decode::audio::{AudioOptions, KeyFiles, decode as decode_audio};
+use mltd::decode::text::decrypt_file;
 use mltd::extract::{AUDIO_EXTENSIONS, ENCRYPTED_TEXT_EXTENSIONS};
 
-use crate::extract::AudioArgs;
+use crate::audio::AudioArgs;
 use crate::util::glob_files;
 
 #[derive(Debug, Args)]
