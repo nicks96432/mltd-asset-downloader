@@ -18,13 +18,13 @@ jobs:
         os: [macos-latest, ubuntu-latest, windows-latest]
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           fetch-tags: true
           submodules: true
 
-      - uses: ./.github/actions/setup-build-env
+      - uses: $/.github/actions/setup-build-env
 
       - name: Build
         id: build
@@ -47,7 +47,7 @@ jobs:
         shell: bash
 
       - name: Publish artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           path: target/release/${{ steps.build.outputs.name }}
           archive: false
