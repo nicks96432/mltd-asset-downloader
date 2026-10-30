@@ -20,7 +20,7 @@ use crate::util::{BarProgress, ManifestSource, PlatformArg, create_progress_bar,
 type HashSet<T> = std::collections::HashSet<T, RandomState>;
 
 #[derive(Debug, Args)]
-#[command(about, arg_required_else_help = true, disable_help_flag = true)]
+#[command(about, arg_required_else_help = true)]
 pub struct DownloaderArgs {
     /// The platform variant to download
     #[arg(value_enum, value_name = "Platform")]
@@ -43,7 +43,7 @@ pub struct DownloaderArgs {
     )]
     parallel: NonZeroUsize,
 
-    /// The manifest file list to download in MessagePack format
+    /// The manifest file to download from, instead of fetching from the asset server
     #[arg(long, value_name = "MANIFEST", requires = "asset_version")]
     manifest: Option<PathBuf>,
 
@@ -52,6 +52,9 @@ pub struct DownloaderArgs {
     save_manifest: Option<PathBuf>,
 
     /// Only download assets newer than this asset version or manifest file
+    ///
+    /// The asset server does not save manifest files that is too old, so it's recommended to use
+    /// `--save-manifest` option to save the manifest for future use
     #[arg(long, value_name = "VERSION|MANIFEST")]
     since: Option<ManifestSource>,
 
@@ -59,9 +62,11 @@ pub struct DownloaderArgs {
     #[arg(short = 'I', long, value_name = "PATTERN")]
     include: Vec<glob::Pattern>,
 
-    /// Print help
-    #[arg(long, action = clap::ArgAction::HelpShort)]
-    help: Option<bool>,
+    /// Skip assets that already exist in the output directory with the same file size
+    ///
+    /// Only the file size is compared, so an updated asset with an unchanged size is not detected
+    #[arg(long)]
+    skip_existing: bool,
 }
 
 /// Selects the manifest entries to download according to `--since` and `--include`.
@@ -92,11 +97,36 @@ async fn select_entries<'a>(
         None => None,
     };
 
-    Ok(manifest
+    let mut entries: Vec<_> = manifest
         .iter()
         .filter(|(name, _)| changed.as_ref().is_none_or(|c| c.contains(*name)))
         .filter(|(name, _)| args.include.is_empty() || args.include.iter().any(|p| p.matches(name)))
-        .collect())
+        .collect();
+
+    if args.skip_existing {
+        let before = entries.len();
+        let mut remaining = Vec::with_capacity(before);
+
+        for (name, entry) in entries {
+            if !is_up_to_date(&args.output_dir, name, entry).await {
+                remaining.push((name, entry));
+            }
+        }
+
+        tracing::info!(skipped = before - remaining.len(), "skipped existing assets");
+        entries = remaining;
+    }
+
+    Ok(entries)
+}
+
+/// Checks if the asset already exists in `output_dir` with the size recorded in the manifest.
+async fn is_up_to_date(output_dir: &Path, name: &str, entry: &ManifestEntry) -> bool {
+    let Ok(path) = safe_join(output_dir, name) else {
+        return false;
+    };
+
+    tokio::fs::metadata(path).await.is_ok_and(|m| m.is_file() && m.len() == entry.2 as u64)
 }
 
 async fn download_task<P>(

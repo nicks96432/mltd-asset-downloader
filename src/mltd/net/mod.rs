@@ -8,7 +8,7 @@ pub use self::matsuri_api::*;
 use crate::error::Repr;
 
 #[derive(Debug, ThisError)]
-#[error("network error: {kind}")]
+#[error("cannot access {url}: {kind}")]
 pub(crate) struct Error {
     pub kind: ErrorKind,
     pub url: reqwest::Url,
