@@ -51,13 +51,12 @@ pub struct DownloaderArgs {
     #[arg(long, value_name = "PATH", conflicts_with = "manifest")]
     save_manifest: Option<PathBuf>,
 
-    /// Only download assets that are added or updated since this older asset version
-    /// or manifest file (a plain number is treated as a version, use ./ for a file named so)
+    /// Only download assets newer than this asset version or manifest file
     #[arg(long, value_name = "VERSION|MANIFEST")]
     since: Option<ManifestSource>,
 
-    /// Only download assets whose name matches this glob pattern, can be specified multiple times
-    #[arg(short, long, value_name = "PATTERN")]
+    /// Only download assets that matches this glob pattern, can be specified multiple times
+    #[arg(short = 'I', long, value_name = "PATTERN")]
     include: Vec<glob::Pattern>,
 
     /// Print help
