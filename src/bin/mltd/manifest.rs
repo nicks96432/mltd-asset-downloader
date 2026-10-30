@@ -1,13 +1,11 @@
-use std::fs::read;
 use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Args, Subcommand};
-use mltd::asset::{Asset, AssetInfo};
-use mltd::manifest::Manifest;
+use mltd::asset::{Asset, AssetInfo, Platform};
 use mltd::net::MatsuriApiClient;
 
-use crate::util::{BarProgress, PlatformArg, create_progress_bar};
+use crate::util::{BarProgress, ManifestSource, PlatformArg, create_progress_bar};
 
 #[derive(Args)]
 #[command(about, arg_required_else_help(true))]
@@ -30,13 +28,17 @@ pub enum ManifestCommand {
 
 #[derive(Args)]
 pub struct ManifestDiffArgs {
-    /// The first manifest
-    #[arg(value_name = "PATH")]
-    first: PathBuf,
+    /// The first manifest, a version number or a file path
+    #[arg(value_name = "VERSION|PATH")]
+    first: ManifestSource,
 
-    /// The second manifest
-    #[arg(value_name = "PATH")]
-    second: PathBuf,
+    /// The second manifest, a version number or a file path
+    #[arg(value_name = "VERSION|PATH")]
+    second: ManifestSource,
+
+    /// The platform variant, required if any manifest is specified by version
+    #[arg(long, value_enum, value_name = "PLATFORM")]
+    platform: Option<PlatformArg>,
 }
 
 #[derive(Args)]
@@ -55,18 +57,7 @@ pub struct ManifestDownloadArgs {
 }
 
 pub async fn download_manifest(args: &ManifestDownloadArgs) -> Result<()> {
-    let matsuri_client = MatsuriApiClient::new();
-
-    let asset_version = match args.asset_version {
-        None => matsuri_client.latest_asset_version().await,
-        Some(v) => matsuri_client.get_asset_version(v).await,
-    }?;
-
-    let asset_info = AssetInfo {
-        filename: asset_version.manifest_filename.clone(),
-        platform: args.platform.into(),
-        version: asset_version,
-    };
+    let asset_info = AssetInfo::manifest(args.platform.into(), args.asset_version).await?;
 
     let progress_bar = create_progress_bar().with_message(asset_info.filename.clone());
 
@@ -80,9 +71,10 @@ pub async fn download_manifest(args: &ManifestDownloadArgs) -> Result<()> {
     Ok(())
 }
 
-pub fn diff_manifest(args: &ManifestDiffArgs) -> Result<()> {
-    let first_manifest = Manifest::from_slice(&read(&args.first)?)?;
-    let second_manifest = Manifest::from_slice(&read(&args.second)?)?;
+pub async fn diff_manifest(args: &ManifestDiffArgs) -> Result<()> {
+    let platform = args.platform.map(Platform::from);
+    let first_manifest = args.first.load(platform).await?;
+    let second_manifest = args.second.load(platform).await?;
 
     let diff = first_manifest.diff(&second_manifest);
 
@@ -116,7 +108,7 @@ pub async fn list_manifests() -> Result<()> {
 
 pub async fn manifest_main(args: &ManifestArgs) -> Result<()> {
     match &args.command {
-        ManifestCommand::Diff(args) => diff_manifest(args),
+        ManifestCommand::Diff(args) => diff_manifest(args).await,
         ManifestCommand::Download(args) => download_manifest(args).await,
         ManifestCommand::List => list_manifests().await,
     }

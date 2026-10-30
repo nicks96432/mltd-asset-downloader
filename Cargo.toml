@@ -84,14 +84,6 @@ default = [
   "download",
   "unpack",
 ]
-asset-ripper = [
-  "dep:scraper",
-  "dep:serde_json",
-  "dep:tempfile",
-  "process-image",
-  "reqwest/blocking",
-  "reqwest/form",
-]
 cli = [
   "dep:anyhow",
   "dep:clap",
@@ -102,6 +94,35 @@ cli = [
   "dep:tracing-subscriber",
 ]
 debug = []
+download = []
+
+unpack = [
+  "asset-ripper",
+  "dep:rayon",
+  "dep:serde_json",
+  "process-image",
+  "rabex",
+]
+asset-ripper = [
+  "dep:scraper",
+  "dep:serde_json",
+  "dep:tempfile",
+  "process-image",
+  "reqwest/blocking",
+  "reqwest/form",
+]
+rabex = [
+  "dep:rabex",
+  "dep:serde_json",
+  "dep:tempfile",
+  "dep:texture2ddecoder",
+  "process-image",
+]
+process-image = [
+  "dep:image",
+  "dep:regex",
+]
+
 decode = [
   "decode-audio",
   "decrypt-text",
@@ -114,25 +135,6 @@ decode-audio = [
 decrypt-text = [
   "dep:aes",
   "dep:cbc",
-]
-download = []
-process-image = [
-  "dep:image",
-  "dep:regex",
-]
-rabex = [
-  "dep:rabex",
-  "dep:serde_json",
-  "dep:tempfile",
-  "dep:texture2ddecoder",
-  "process-image",
-]
-unpack = [
-  "asset-ripper",
-  "dep:rayon",
-  "dep:serde_json",
-  "process-image",
-  "rabex",
 ]
 
 # UnityFS v6 header fix (jakobhellermann/RustyAssetBundleEXtractor#1)
