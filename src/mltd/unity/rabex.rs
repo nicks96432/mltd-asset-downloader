@@ -34,11 +34,7 @@ fn sanitize_path(path: &str) -> String {
 }
 
 fn original_path(container_path: &str) -> String {
-    let path = sanitize_path(container_path);
-    match path.strip_prefix("assets/") {
-        Some(rest) => format!("Assets/{rest}"),
-        None => path,
-    }
+    sanitize_path(container_path)
 }
 
 #[derive(Deserialize)]
@@ -191,8 +187,8 @@ fn list_objects(
                 let safe_name = sanitize_path(&name);
                 match class {
                     // the CLI strips the `.bytes` suffix of text assets
-                    "TextAsset" => format!("Assets/{class}/{safe_name}.bytes"),
-                    _ => format!("Assets/{class}/{safe_name}"),
+                    "TextAsset" => format!("assets/{class}/{safe_name}.bytes"),
+                    _ => format!("assets/{class}/{safe_name}"),
                 }
             }))
         };
@@ -463,7 +459,7 @@ mod tests {
                     -0x6924_71bf_cbe7_e9c6,
                     Class::TextAsset,
                     "song3_00test.acb",
-                    "Assets/imas/resources/adx2/song3/song3_00test.acb.bytes",
+                    "assets/imas/resources/adx2/song3/song3_00test.acb.bytes",
                 ),
             },
             TestCase {
@@ -473,7 +469,7 @@ mod tests {
                     0x5c6b_8a21_bcbc_972e,
                     Class::Texture2D,
                     "014mir0011_0",
-                    "Assets/imas/resources/card/014mir0011_0.png",
+                    "assets/imas/resources/card/014mir0011_0.png",
                 ),
             },
             TestCase {
@@ -483,7 +479,7 @@ mod tests {
                     0x7aa6_cd6c_f238_30a9,
                     Class::TextAsset,
                     "card_blst_014mir0034_zh.gtx",
-                    "Assets/imas/resources/textassets/zh/commu/card/card_blst_014mir0034_zh.gtx.bytes",
+                    "assets/imas/resources/textassets/zh/commu/card/card_blst_014mir0034_zh.gtx.bytes",
                 ),
             },
         ]
@@ -565,8 +561,8 @@ mod tests {
 
     #[test]
     fn test_sanitize_path() {
-        assert_eq!(super::original_path("assets/a/b.png"), "Assets/a/b.png");
-        assert_eq!(super::original_path("assets/../../x"), "Assets/x");
+        assert_eq!(super::original_path("assets/a/b.png"), "assets/a/b.png");
+        assert_eq!(super::original_path("assets/../../x"), "assets/x");
         assert_eq!(super::sanitize_path("C:\\x/./y?z"), "C_/x/y_z");
     }
 

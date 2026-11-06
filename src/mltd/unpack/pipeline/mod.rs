@@ -277,6 +277,6 @@ mod tests {
         assert_eq!(failures.len(), 1);
         assert_eq!(failures[0].0, dir.path().join("missing.unity3d"));
         assert_eq!(failures[0].1.kind(), ErrorKind::Io);
-        assert!(dir.path().join("out/Assets/imas/resources/textassets/zh/commu/card").is_dir());
+        assert!(dir.path().join("out/assets/imas/resources/textassets/zh/commu/card").is_dir());
     }
 }

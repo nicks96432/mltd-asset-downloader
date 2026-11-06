@@ -109,8 +109,8 @@ impl<R: AsyncRead> AsyncRead for ProgressReadAdapter<'_, R> {
 ///
 /// use mltd::util::safe_join;
 ///
-/// let path = safe_join(Path::new("out"), "Assets/imas/a.png").unwrap();
-/// assert_eq!(path, Path::new("out/Assets/imas/a.png"));
+/// let path = safe_join(Path::new("out"), "assets/imas/a.png").unwrap();
+/// assert_eq!(path, Path::new("out/assets/imas/a.png"));
 ///
 /// assert!(safe_join(Path::new("out"), "../a.png").is_err());
 /// ```

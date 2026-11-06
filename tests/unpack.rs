@@ -52,7 +52,7 @@ const TEST_CASES: &[TestCase] = &[
     TestCase {
         bundle_path: "tests/test_acb.unity3d",
         expected_path: "tests/test_acb.acb",
-        got_relpath: "Assets/imas/resources/adx2/song3/song3_00test.acb",
+        got_relpath: "assets/imas/resources/adx2/song3/song3_00test.acb",
         predicate: |dir, case| {
             let got = dir.child(Path::new(case.got_relpath).with_file_name("song3_00test_bgm.wav"));
             let expected = Path::new(case.expected_path).with_extension("wav");
@@ -70,7 +70,7 @@ const TEST_CASES: &[TestCase] = &[
     TestCase {
         bundle_path: "tests/test_text.unity3d",
         expected_path: "tests/test_text.gtx",
-        got_relpath: "Assets/imas/resources/textassets/zh/commu/card/card_blst_014mir0034_zh.gtx",
+        got_relpath: "assets/imas/resources/textassets/zh/commu/card/card_blst_014mir0034_zh.gtx",
         predicate: |dir, case| {
             dir.child(case.got_relpath).assert(predicate::path::eq_file(
                 Path::new(case.expected_path).with_file_name("test_text_decrypted.gtx"),
@@ -80,7 +80,7 @@ const TEST_CASES: &[TestCase] = &[
     TestCase {
         bundle_path: "tests/test_image.unity3d",
         expected_path: "tests/test_image_processed.png",
-        got_relpath: "Assets/imas/resources/card/014mir0011_0.png",
+        got_relpath: "assets/imas/resources/card/014mir0011_0.png",
         predicate: |dir, case| {
             // a texture of a card has the pieces of 2 images, which are put together by the
             // layout of cards
@@ -98,7 +98,7 @@ const TEST_CASES: &[TestCase] = &[
 #[test]
 fn test_unpack_raw_then_decode_audio() {
     let dir = TempDir::new().unwrap();
-    let relpath = Path::new("Assets/imas/resources/adx2/song3");
+    let relpath = Path::new("assets/imas/resources/adx2/song3");
 
     cargo_bin_cmd!("mltd")
         .args(["unpack", "tests/test_acb.unity3d", "--raw"])
@@ -127,7 +127,7 @@ fn test_unpack_raw_then_decode_audio() {
 #[test]
 fn test_unpack_raw_then_decrypt_text() {
     let dir = TempDir::new().unwrap();
-    let relpath = Path::new("Assets/imas/resources/textassets/zh/commu/card");
+    let relpath = Path::new("assets/imas/resources/textassets/zh/commu/card");
     let name = "card_blst_014mir0034_zh.gtx";
 
     cargo_bin_cmd!("mltd")

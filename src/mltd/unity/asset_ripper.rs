@@ -297,8 +297,10 @@ impl AssetRipper {
         let orig_path = match class {
             // asset bundles contains bundle information only
             Class::AssetBundle => None,
-            // the Windows version of Asset Ripper uses backslashes
-            _ => Some(info_nodes[4].inner_html().replace('\\', "/")),
+            // the Windows version of Asset Ripper uses backslashes and exports under `Assets`,
+            // but the paths are kept lowercase for case-sensitive file systems,
+            // see `read_exported`
+            _ => Some(info_nodes[4].inner_html().replace('\\', "/").to_lowercase()),
         };
 
         Ok(Object::new(slot, path_id, class, name, orig_path))
@@ -476,7 +478,12 @@ impl AssetRipperBundle<'_> {
     /// Reads the exported file of the object.
     fn read_exported(&self, object: &Object) -> Result<Vec<u8>> {
         let orig_path = object.orig_path.as_deref().ok_or(UnityError::NoOriginalPath)?;
-        let path: PathBuf = self.export_dir()?.join(orig_path);
+        // Asset Ripper exports to `Assets`, while the original path is lowercase
+        let exported = match orig_path.strip_prefix("assets/") {
+            Some(rest) => format!("Assets/{rest}"),
+            None => orig_path.to_owned(),
+        };
+        let path: PathBuf = self.export_dir()?.join(exported);
 
         std::fs::read(&path).map_err(|e| Repr::io("read exported file", Some(&path), e).into())
     }
@@ -619,7 +626,7 @@ mod tests {
                 path_id: -0x6924_71bf_cbe7_e9c6,
                 class: Class::TextAsset,
                 name: "song3_00test.acb",
-                orig_path: "Assets/imas/resources/adx2/song3/song3_00test.acb.bytes",
+                orig_path: "assets/imas/resources/adx2/song3/song3_00test.acb.bytes",
             },
             TestCase {
                 path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_image.unity3d"),
@@ -627,7 +634,7 @@ mod tests {
                 path_id: 0x5c6b_8a21_bcbc_972e,
                 class: Class::Texture2D,
                 name: "014mir0011_0",
-                orig_path: "Assets/imas/resources/card/014mir0011_0.png",
+                orig_path: "assets/imas/resources/card/014mir0011_0.png",
             },
             TestCase {
                 path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_text.unity3d"),
@@ -635,7 +642,7 @@ mod tests {
                 path_id: 0x7aa6_cd6c_f238_30a9,
                 class: Class::TextAsset,
                 name: "card_blst_014mir0034_zh.gtx",
-                orig_path: "Assets/imas/resources/textassets/zh/commu/card/card_blst_014mir0034_zh.gtx.bytes",
+                orig_path: "assets/imas/resources/textassets/zh/commu/card/card_blst_014mir0034_zh.gtx.bytes",
             },
         ]
     }
