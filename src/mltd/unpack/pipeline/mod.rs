@@ -58,6 +58,18 @@ pub struct Options {
 
 impl Options {
     /// Creates options that write to `output` with the default formats.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use image::ImageFormat;
+    /// use mltd::unpack::pipeline::Options;
+    ///
+    /// let mut options = Options::new("output");
+    /// assert_eq!(options.image_format, ImageFormat::Png);
+    ///
+    /// options.image_format = ImageFormat::WebP;
+    /// ```
     #[must_use]
     pub fn new(output: impl Into<PathBuf>) -> Self {
         Self {
@@ -91,6 +103,23 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 ///
 /// Returns the files that failed to unpack, with the reasons. The temporary files made
 /// for decoding audio are removed before returning, even if a worker panics.
+///
+/// # Example
+///
+/// ```no_run
+/// use std::path::PathBuf;
+///
+/// use mltd::unity::RabexExtractor;
+/// use mltd::unpack::pipeline::{Options, unpack_all};
+///
+/// let files = vec![PathBuf::from("a.unity3d"), PathBuf::from("b.unity3d")];
+///
+/// // two workers, each of them unpacks one file at a time
+/// let failures = unpack_all(RabexExtractor::pool(2), files.into_iter(), &Options::new("output"));
+/// for (path, error) in failures {
+///     eprintln!("{}: {error}", path.display());
+/// }
+/// ```
 pub fn unpack_all<E>(
     extractors: Vec<E>,
     files: impl Iterator<Item = PathBuf> + Send,
@@ -99,6 +128,8 @@ pub fn unpack_all<E>(
 where
     E: Extractor + Send,
 {
+    tracing::info!(workers = extractors.len(), "unpacking files");
+
     let files = Mutex::new(files);
     let failures = Mutex::new(Vec::new());
     // dropped after all the workers have finished decoding
@@ -131,7 +162,10 @@ where
         }
     });
 
-    failures.into_inner().unwrap_or_else(PoisonError::into_inner)
+    let failures = failures.into_inner().unwrap_or_else(PoisonError::into_inner);
+    tracing::info!(failed = failures.len(), "finished unpacking files");
+
+    failures
 }
 
 /// Unpacks a single .unity3d file.
@@ -139,6 +173,24 @@ where
 /// # Errors
 ///
 /// This method fails if the file cannot be loaded, or any of the assets cannot be unpacked.
+///
+/// # Example
+///
+/// ```no_run
+/// # #[cfg(feature = "decode")]
+/// # {
+/// use std::path::Path;
+///
+/// use mltd::unity::RabexExtractor;
+/// use mltd::unpack::pipeline::{KeyFiles, Options, unpack_file};
+///
+/// let mut extractor = RabexExtractor::new();
+/// let key_files = KeyFiles::default();
+///
+/// unpack_file(&mut extractor, Path::new("a.unity3d"), &Options::new("output"), &key_files)
+///     .unwrap();
+/// # }
+/// ```
 pub fn unpack_file<E>(
     extractor: &mut E,
     path: &Path,
@@ -148,19 +200,28 @@ pub fn unpack_file<E>(
 where
     E: Extractor,
 {
-    tracing::debug!(input_path = %path.display(), "loading file");
+    // the files are unpacked in parallel, so the span tells which file a message is about
+    let span = tracing::info_span!("unpack_file", input = %path.display());
+    let _entered = span.enter();
+
+    tracing::debug!("loading file");
     let bundle = extractor.load(path)?;
 
     let mut audio_paths = BTreeSet::new();
+    let strips = texture::strip_groups(&bundle);
+    tracing::debug!(objects = bundle.objects().len(), strip_groups = strips.len(), "loaded file");
 
     for object in bundle.objects() {
         match &object.class {
             // asset bundles contains bundle information only, and sprites are handled with
             // their textures
-            Class::AssetBundle | Class::Sprite => continue,
+            Class::AssetBundle | Class::Sprite => {
+                tracing::trace!(name = object.name, class = %object.class, "skipping object");
+                continue;
+            }
             Class::TextAsset | Class::Texture2D => (),
             class => {
-                tracing::warn!(%class, "unknown asset class");
+                tracing::warn!(%class, name = object.name, "unknown asset class");
                 continue;
             }
         }
@@ -170,6 +231,13 @@ where
             continue;
         };
 
+        tracing::trace!(
+            name = object.name,
+            class = %object.class,
+            path_id = object.path_id,
+            orig_path,
+            "unpacking object"
+        );
         let output_path = safe_join(&options.output, orig_path)?;
         let output_dir =
             output_path.parent().ok_or_else(|| Repr::UnsafePath(orig_path.to_owned()))?;
@@ -185,7 +253,7 @@ where
                 options.decrypts_text(),
             )?);
         } else if object.class == Class::Texture2D {
-            texture::extract(&bundle, object, output_dir, options.image_format)?;
+            texture::extract(&bundle, object, output_dir, options.image_format, &strips)?;
         }
     }
 
@@ -196,6 +264,7 @@ where
     // contain informations (Ex: filename) about others
     #[cfg(feature = "decode")]
     if options.decode_audio {
+        tracing::debug!(count = audio_paths.len(), "decoding audio files");
         for audio_path in audio_paths {
             let output_dir = audio_path
                 .parent()
@@ -229,6 +298,6 @@ mod tests {
         assert_eq!(failures.len(), 1);
         assert_eq!(failures[0].0, dir.path().join("missing.unity3d"));
         assert_eq!(failures[0].1.kind(), ErrorKind::Io);
-        assert!(dir.path().join("out/Assets/imas/resources/textassets/zh/commu/card").is_dir());
+        assert!(dir.path().join("out/assets/imas/resources/textassets/zh/commu/card").is_dir());
     }
 }

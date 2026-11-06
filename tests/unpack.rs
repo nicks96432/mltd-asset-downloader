@@ -32,6 +32,15 @@ fn wav_audio(path: &Path) -> Vec<u8> {
     audio
 }
 
+/// Returns the width and height of a PNG file.
+fn png_size(path: &Path) -> (u32, u32) {
+    let bytes = std::fs::read(path).unwrap();
+    assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"), "not a PNG file");
+
+    let be = |range: std::ops::Range<usize>| u32::from_be_bytes(bytes[range].try_into().unwrap());
+    (be(16..20), be(20..24))
+}
+
 struct TestCase {
     pub bundle_path: &'static str,
     pub expected_path: &'static str,
@@ -43,7 +52,7 @@ const TEST_CASES: &[TestCase] = &[
     TestCase {
         bundle_path: "tests/test_acb.unity3d",
         expected_path: "tests/test_acb.acb",
-        got_relpath: "Assets/imas/resources/adx2/song3/song3_00test.acb",
+        got_relpath: "assets/imas/resources/adx2/song3/song3_00test.acb",
         predicate: |dir, case| {
             let got = dir.child(Path::new(case.got_relpath).with_file_name("song3_00test_bgm.wav"));
             let expected = Path::new(case.expected_path).with_extension("wav");
@@ -61,7 +70,7 @@ const TEST_CASES: &[TestCase] = &[
     TestCase {
         bundle_path: "tests/test_text.unity3d",
         expected_path: "tests/test_text.gtx",
-        got_relpath: "Assets/imas/resources/textassets/zh/commu/card/card_blst_014mir0034_zh.gtx",
+        got_relpath: "assets/imas/resources/textassets/zh/commu/card/card_blst_014mir0034_zh.gtx",
         predicate: |dir, case| {
             dir.child(case.got_relpath).assert(predicate::path::eq_file(
                 Path::new(case.expected_path).with_file_name("test_text_decrypted.gtx"),
@@ -70,14 +79,18 @@ const TEST_CASES: &[TestCase] = &[
     },
     TestCase {
         bundle_path: "tests/test_image.unity3d",
-        expected_path: "tests/test_image.png",
-        got_relpath: "Assets/imas/resources/card/014mir0011_0.png",
+        expected_path: "tests/test_image_processed.png",
+        got_relpath: "assets/imas/resources/card/014mir0011_0.png",
         predicate: |dir, case| {
-            let expected_path =
-                Path::new(case.expected_path).with_file_name("test_image_processed.png");
-            let got_path =
-                dir.child(Path::new(case.got_relpath).with_file_name("014mir0011_0_0.png"));
-            got_path.assert(predicate::path::eq_file(expected_path));
+            // a texture of a card has the pieces of 2 images, which are put together by the
+            // layout of cards
+            for (name, expected) in [
+                ("014mir0011_0_0.png", "tests/test_image_processed_0.png"),
+                ("014mir0011_0_1.png", "tests/test_image_processed_1.png"),
+            ] {
+                let got_path = dir.child(Path::new(case.got_relpath).with_file_name(name));
+                got_path.assert(predicate::path::eq_file(expected));
+            }
         },
     },
 ];
@@ -85,7 +98,7 @@ const TEST_CASES: &[TestCase] = &[
 #[test]
 fn test_unpack_raw_then_decode_audio() {
     let dir = TempDir::new().unwrap();
-    let relpath = Path::new("Assets/imas/resources/adx2/song3");
+    let relpath = Path::new("assets/imas/resources/adx2/song3");
 
     cargo_bin_cmd!("mltd")
         .args(["unpack", "tests/test_acb.unity3d", "--raw"])
@@ -114,7 +127,7 @@ fn test_unpack_raw_then_decode_audio() {
 #[test]
 fn test_unpack_raw_then_decrypt_text() {
     let dir = TempDir::new().unwrap();
-    let relpath = Path::new("Assets/imas/resources/textassets/zh/commu/card");
+    let relpath = Path::new("assets/imas/resources/textassets/zh/commu/card");
     let name = "card_blst_014mir0034_zh.gtx";
 
     cargo_bin_cmd!("mltd")
@@ -145,6 +158,26 @@ fn test_unpack_raw_then_decrypt_text() {
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .assert()
         .failure();
+}
+
+#[test]
+fn test_unpack_ex4c() {
+    let dir = TempDir::new().unwrap();
+    let relpath =
+        Path::new("assets/imas/update/zh/202106_p10_translation_04/resources/ex4c/ex4c00116");
+
+    cargo_bin_cmd!("mltd")
+        .args(["unpack", "tests/test_ex4c.unity3d"])
+        .args([OsStr::new("-o"), dir.path().as_os_str()])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .assert()
+        .success();
+
+    // the 6 textures of the comic are stacked into one image, whose height is the sum of theirs
+    let comic = dir.child(relpath.join("ex4c_00116.png"));
+    assert_eq!(png_size(comic.path()), (640, 125 + 466 * 3 + 490 + 180));
+    comic.assert(predicate::path::eq_file("tests/test_ex4c.png"));
+    assert_eq!(std::fs::read_dir(dir.child(relpath).path()).unwrap().count(), 1);
 }
 
 #[test]

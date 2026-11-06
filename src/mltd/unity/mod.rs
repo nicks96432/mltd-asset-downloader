@@ -47,6 +47,15 @@ pub enum Class {
 
 impl Class {
     /// Gets the class from the name used by Unity, e.g. `Texture2D`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use mltd::unity::Class;
+    ///
+    /// assert_eq!(Class::from_name("Texture2D"), Class::Texture2D);
+    /// assert_eq!(Class::from_name("Mesh"), Class::Other("Mesh".to_owned()));
+    /// ```
     #[must_use]
     pub fn from_name(name: &str) -> Self {
         match name {
@@ -59,6 +68,15 @@ impl Class {
     }
 
     /// Gets the name used by Unity.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use mltd::unity::Class;
+    ///
+    /// assert_eq!(Class::TextAsset.name(), "TextAsset");
+    /// assert_eq!(Class::Other("Mesh".to_owned()).name(), "Mesh");
+    /// ```
     #[must_use]
     pub fn name(&self) -> &str {
         match self {

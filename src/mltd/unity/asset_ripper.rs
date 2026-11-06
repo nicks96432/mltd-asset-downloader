@@ -77,10 +77,20 @@ impl AssetRipper {
     /// # Errors
     ///
     /// This method fails if the process fails to start.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use mltd::unity::AssetRipper;
+    ///
+    /// let ripper = AssetRipper::new("AssetRipper/AssetRipper.GUI.Free", 50000).unwrap();
+    /// ```
     pub fn new<P>(path: P, port: u16) -> Result<Self>
     where
         P: AsRef<Path>,
     {
+        tracing::debug!(path = %path.as_ref().display(), port, "starting AssetRipper");
+
         let mut process = Command::new(path.as_ref())
             .args(["--port", &port.to_string()])
             .args(["--launch-browser", "false"])
@@ -103,6 +113,7 @@ impl AssetRipper {
         std::thread::spawn(move || {
             let mut listening = false;
             for line in BufReader::new(stdout).lines().map_while(std::result::Result::ok) {
+                tracing::trace!(port, line, "AssetRipper output");
                 if !listening && line.contains("listening on: http://") {
                     listening = true;
                     let _ = tx.send(true);
@@ -114,6 +125,7 @@ impl AssetRipper {
         });
 
         if !matches!(rx.recv_timeout(STARTUP_TIMEOUT), Ok(true)) {
+            tracing::debug!(port, timeout = ?STARTUP_TIMEOUT, "AssetRipper did not report listening");
             let _ = process.kill();
             let _ = process.wait();
             return Err(Repr::Process(format!(
@@ -121,6 +133,8 @@ impl AssetRipper {
             ))
             .into());
         }
+
+        tracing::debug!(port, "AssetRipper is listening");
 
         Ok(Self {
             base_url: format!("http://localhost:{port}"),
@@ -137,6 +151,15 @@ impl AssetRipper {
     /// # Errors
     ///
     /// This method fails if the process cannot be started, or there are too many ports in use.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use mltd::unity::AssetRipper;
+    ///
+    /// let rippers = AssetRipper::pool("AssetRipper/AssetRipper.GUI.Free", 4).unwrap();
+    /// assert_eq!(rippers.len(), 4);
+    /// ```
     pub fn pool<P>(path: P, count: usize) -> Result<Vec<Self>>
     where
         P: AsRef<Path>,
@@ -175,7 +198,17 @@ impl AssetRipper {
     /// # Errors
     ///
     /// This method fails if the network request to the host fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use mltd::unity::AssetRipper;
+    ///
+    /// let ripper = AssetRipper::connect("localhost", 50000).unwrap();
+    /// ```
     pub fn connect(host: &str, port: u16) -> Result<Self> {
+        tracing::debug!(host, port, "connecting to AssetRipper");
+
         let client = Client::new();
         let this = Self { base_url: format!("http://{host}:{port}"), client, process: None };
 
@@ -272,8 +305,10 @@ impl AssetRipper {
         let orig_path = match class {
             // asset bundles contains bundle information only
             Class::AssetBundle => None,
-            // the Windows version of Asset Ripper uses backslashes
-            _ => Some(info_nodes[4].inner_html().replace('\\', "/")),
+            // the Windows version of Asset Ripper uses backslashes and exports under `Assets`,
+            // but the paths are kept lowercase for case-sensitive file systems,
+            // see `read_exported`
+            _ => Some(info_nodes[4].inner_html().replace('\\', "/").to_lowercase()),
         };
 
         Ok(Object::new(slot, path_id, class, name, orig_path))
@@ -284,14 +319,25 @@ impl AssetRipper {
     /// # Errors
     ///
     /// This method fails if the export request fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use mltd::unity::AssetRipper;
+    ///
+    /// let ripper = AssetRipper::connect("localhost", 50000).unwrap();
+    /// ripper.export_primary("output").unwrap();
+    /// ```
     pub fn export_primary<P>(&self, path: P) -> Result<()>
     where
         P: AsRef<Path>,
     {
         let url = self.full_url("Export/PrimaryContent");
+        tracing::debug!(path = %path.as_ref().display(), "exporting primary content");
 
-        if let Err(e) = self.client.post(url.clone()).form(&[("path", path.as_ref())]).send() {
-            return Err(Error::request(url, Some(e)).into());
+        match self.client.post(url.clone()).form(&[("path", path.as_ref())]).send() {
+            Ok(res) => tracing::debug!(status = %res.status(), "exported primary content"),
+            Err(e) => return Err(Error::request(url, Some(e)).into()),
         }
 
         Ok(())
@@ -302,6 +348,20 @@ impl AssetRipper {
     /// # Errors
     ///
     /// This method fails if the update request fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use std::collections::HashMap;
+    ///
+    /// use mltd::unity::AssetRipper;
+    ///
+    /// let ripper = AssetRipper::connect("localhost", 50000).unwrap();
+    ///
+    /// let mut form = HashMap::default();
+    /// form.insert("ImageExportFormat".to_owned(), "Png".to_owned());
+    /// ripper.set(&form).unwrap();
+    /// ```
     pub fn set(&self, form: &HashMap<String, String>) -> Result<()> {
         let url = self.full_url("Settings/update");
 
@@ -348,6 +408,7 @@ impl Extractor for AssetRipper {
             .build()
             .map_err(|e| Error::request(url.clone(), Some(e)))?;
 
+        tracing::debug!(path, "loading file in AssetRipper");
         tracing::trace!(?req, body = ?req.body(), "sending load file request");
 
         if let Err(e) = self.client.execute(req) {
@@ -387,15 +448,31 @@ pub struct AssetRipperBundle<'a> {
 impl AssetRipperBundle<'_> {
     fn list_objects(&mut self) -> Result<()> {
         let bundles = self.ripper.load_bundles()?;
+        tracing::debug!(bundles = bundles.len(), "listing objects");
 
         for bundle_no in 0..bundles.len() {
             for collection_no in 0..self.ripper.load_collection(bundle_no)?.len() {
                 let slot = self.slots.len();
                 self.slots.push((bundle_no, collection_no));
 
-                for path_id in self.ripper.path_ids(bundle_no, collection_no)? {
+                let path_ids = self.ripper.path_ids(bundle_no, collection_no)?;
+                tracing::debug!(
+                    bundle_no,
+                    collection_no,
+                    objects = path_ids.len(),
+                    "listing collection"
+                );
+
+                for path_id in path_ids {
                     let object =
                         self.ripper.load_object(slot, bundle_no, collection_no, path_id)?;
+                    tracing::trace!(
+                        path_id,
+                        name = object.name,
+                        class = %object.class,
+                        orig_path = ?object.orig_path,
+                        "listed object"
+                    );
                     self.objects.push(object);
                 }
             }
@@ -420,6 +497,7 @@ impl AssetRipperBundle<'_> {
         }
 
         let dir = tempdir().map_err(|e| Repr::io("create tempdir", None, e))?;
+        tracing::debug!(dir = %dir.path().display(), "first export of the file");
         self.ripper.export_primary(dir.path())?;
 
         Ok(self.export.get_or_init(|| dir).path())
@@ -428,7 +506,13 @@ impl AssetRipperBundle<'_> {
     /// Reads the exported file of the object.
     fn read_exported(&self, object: &Object) -> Result<Vec<u8>> {
         let orig_path = object.orig_path.as_deref().ok_or(UnityError::NoOriginalPath)?;
-        let path: PathBuf = self.export_dir()?.join(orig_path);
+        // Asset Ripper exports to `Assets`, while the original path is lowercase
+        let exported = match orig_path.strip_prefix("assets/") {
+            Some(rest) => format!("Assets/{rest}"),
+            None => orig_path.to_owned(),
+        };
+        let path: PathBuf = self.export_dir()?.join(exported);
+        tracing::trace!(path = %path.display(), "reading exported file");
 
         std::fs::read(&path).map_err(|e| Repr::io("read exported file", Some(&path), e).into())
     }
@@ -511,8 +595,9 @@ impl Drop for AssetRipperBundle<'_> {
     fn drop(&mut self) {
         let url = self.ripper.full_url("Reset");
 
+        tracing::debug!("resetting AssetRipper");
         if let Err(e) = self.ripper.client.post(url).send() {
-            tracing::warn!("failed to reset asset ripper: {}", e);
+            tracing::warn!(error = ?e, "failed to reset AssetRipper");
         }
     }
 }
@@ -571,7 +656,7 @@ mod tests {
                 path_id: -0x6924_71bf_cbe7_e9c6,
                 class: Class::TextAsset,
                 name: "song3_00test.acb",
-                orig_path: "Assets/imas/resources/adx2/song3/song3_00test.acb.bytes",
+                orig_path: "assets/imas/resources/adx2/song3/song3_00test.acb.bytes",
             },
             TestCase {
                 path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_image.unity3d"),
@@ -579,7 +664,7 @@ mod tests {
                 path_id: 0x5c6b_8a21_bcbc_972e,
                 class: Class::Texture2D,
                 name: "014mir0011_0",
-                orig_path: "Assets/imas/resources/card/014mir0011_0.png",
+                orig_path: "assets/imas/resources/card/014mir0011_0.png",
             },
             TestCase {
                 path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_text.unity3d"),
@@ -587,7 +672,7 @@ mod tests {
                 path_id: 0x7aa6_cd6c_f238_30a9,
                 class: Class::TextAsset,
                 name: "card_blst_014mir0034_zh.gtx",
-                orig_path: "Assets/imas/resources/textassets/zh/commu/card/card_blst_014mir0034_zh.gtx.bytes",
+                orig_path: "assets/imas/resources/textassets/zh/commu/card/card_blst_014mir0034_zh.gtx.bytes",
             },
         ]
     }

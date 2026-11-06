@@ -38,6 +38,35 @@ pin_project! {
 impl<'p, R: AsyncRead> ProgressReadAdapter<'p, R> {
     /// Create a new [`ProgressReadAdapter`] from a [`tokio::io::AsyncRead`]
     /// reader and an optional [`Progress`] receiver.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use mltd::util::{Progress, ProgressReadAdapter};
+    /// use tokio::io::AsyncReadExt;
+    ///
+    /// #[derive(Default)]
+    /// struct Counter(u64);
+    ///
+    /// impl Progress for Counter {
+    ///     fn set_length(&mut self, _len: u64) {}
+    ///
+    ///     fn advance(&mut self, delta: u64) {
+    ///         self.0 += delta;
+    ///     }
+    /// }
+    ///
+    /// tokio_test::block_on(async {
+    ///     let mut counter = Counter::default();
+    ///     let mut reader = ProgressReadAdapter::new(&b"Hello, world!"[..], Some(&mut counter));
+    ///
+    ///     let mut buf = Vec::new();
+    ///     reader.read_to_end(&mut buf).await.unwrap();
+    ///     drop(reader);
+    ///
+    ///     assert_eq!(counter.0, 13);
+    /// });
+    /// ```
     pub fn new(inner: R, progress: Option<&'p mut dyn Progress>) -> Self {
         Self { inner, progress }
     }
@@ -72,6 +101,19 @@ impl<R: AsyncRead> AsyncRead for ProgressReadAdapter<'_, R> {
 ///
 /// Returns [`crate::Error`] with [`crate::ErrorKind::UnsafePath`] if `path` is absolute or
 /// contains `..`.
+///
+/// # Example
+///
+/// ```
+/// use std::path::Path;
+///
+/// use mltd::util::safe_join;
+///
+/// let path = safe_join(Path::new("out"), "assets/imas/a.png").unwrap();
+/// assert_eq!(path, Path::new("out/assets/imas/a.png"));
+///
+/// assert!(safe_join(Path::new("out"), "../a.png").is_err());
+/// ```
 pub fn safe_join(base: &Path, path: &str) -> crate::error::Result<PathBuf> {
     let mut joined = base.to_path_buf();
     for component in Path::new(path).components() {

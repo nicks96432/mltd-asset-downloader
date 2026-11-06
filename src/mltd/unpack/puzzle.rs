@@ -1,4 +1,8 @@
 //! Texture puzzles handling.
+//!
+//! An image that does not fit in a texture is cut into pieces, which are the sprites of the
+//! texture. However, nothing in the bundle tells how to put them back together, so we have
+//! to put them back manually.
 
 use std::sync::LazyLock;
 
@@ -7,13 +11,26 @@ use thiserror::Error as ThisError;
 
 use crate::error::{Error as CrateError, Repr, Result};
 
+/// Names of the textures of four-panel comics, each of which is a horizontal strip.
+const EX4C_PATTERN: &str = r"^(ex4c_[0-9]{5})_([0-9]+)$";
+
+/// Names of the textures of cards.
+const CARD_PATTERN: &str = r"^[0-9]{3}[a-z]{3}[0-9]{4}_[0-9]$";
+
+/// A texture of a card has the pieces of 2 images.
+const CARD_IMG_COUNT: usize = 2;
+
+/// Size `(width, height)` of an image of a card.
+const CARD_SIZE: (u32, u32) = (640, 800);
+
+/// Positions `(x, y)` of the pieces of an image of a card.
+const CARD_PIECES: [(i64, i64); 6] =
+    [(0, 0), (0, 510), (380, 510), (380, 728), (498, 728), (616, 728)];
+
 #[derive(Debug, ThisError)]
 pub(crate) enum Error {
     #[error("puzzle not found for texture {0}")]
     PuzzleNotFound(String),
-
-    #[error("puzzle {0} is not implemented yet")]
-    NotImplemented(String),
 }
 
 impl From<Error> for CrateError {
@@ -24,51 +41,62 @@ impl From<Error> for CrateError {
 
 /// Solves a puzzle.
 ///
+/// Pieces are given in the order of their sprite names, which is the order of the puzzle pieces
+/// recognized by the name of the texture.
+///
 /// # Errors
 ///
 /// Returns [`crate::Error`] with [`crate::ErrorKind::Puzzle`] if the puzzle cannot be solved.
+///
+/// # Example
+///
+/// ```
+/// use image::{DynamicImage, GenericImageView};
+/// use mltd::unpack::puzzle::solve_puzzle;
+///
+/// // a 16:9 image cut into a 1022x720 main piece and a 720x258 strip in a 1024x1024 texture
+/// let texture = DynamicImage::new_rgba8(1024, 1024);
+/// let pieces = [texture.view(1, 303, 1022, 720), texture.view(1, 1, 720, 258)];
+///
+/// let images = solve_puzzle("bg2d_t0084", &texture, &pieces).unwrap();
+/// assert_eq!(images.len(), 1);
+/// assert_eq!((images[0].width(), images[0].height()), (1280, 720));
+/// ```
 pub fn solve_puzzle(
     texture_name: &str,
     img: &DynamicImage,
     pieces: &[SubImage<&DynamicImage>],
 ) -> Result<Vec<DynamicImage>> {
-    static PATTERNS: LazyLock<Vec<(&'static str, regex::Regex)>> = LazyLock::new(|| {
-        NAME_PUZZLE_MAP
-            .iter()
-            .map(|(name, pattern)| (*name, regex::Regex::new(pattern).expect("valid pattern")))
-            .collect()
-    });
+    static CARD_REGEX: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(CARD_PATTERN).expect("valid pattern"));
 
-    let (puzzle_name, _) = PATTERNS
-        .iter()
-        .find(|(_, r)| r.is_match(texture_name))
-        .ok_or_else(|| Error::PuzzleNotFound(texture_name.to_string()))?;
+    if let Some(puzzle_img) = solve_simple_puzzle(img, pieces) {
+        tracing::debug!(texture_name, "solved as a two-piece 16:9 puzzle");
+        return Ok(vec![puzzle_img]);
+    }
 
-    let puzzle =
-        piece_map(puzzle_name).ok_or_else(|| Error::NotImplemented((*puzzle_name).to_string()))?;
+    if !CARD_REGEX.is_match(texture_name) {
+        tracing::debug!(
+            texture_name,
+            pieces = pieces.len(),
+            "neither a two-piece 16:9 puzzle nor a card"
+        );
+        return Err(Error::PuzzleNotFound(texture_name.to_string()).into());
+    }
 
+    let (width, height) = CARD_SIZE;
+    let piece_count = pieces.len() / CARD_IMG_COUNT;
+    tracing::debug!(texture_name, pieces = pieces.len(), piece_count, "solving as a card puzzle");
     let mut puzzle_imgs = Vec::new();
 
-    for i in 0..puzzle.img_count {
-        let piece_count = pieces.len() / puzzle.img_count;
-        let mut puzzle_img = DynamicImage::new_rgba8(puzzle.width, puzzle.height);
+    for i in 0..CARD_IMG_COUNT {
+        let mut puzzle_img = DynamicImage::new_rgba8(width, height);
 
-        for j in 0..piece_count {
+        for (j, &(x, y)) in CARD_PIECES.iter().enumerate().take(piece_count) {
             let piece_idx = i * piece_count + j;
             let piece = pieces.get(piece_idx).ok_or(Repr::OutOfRange(piece_idx, pieces.len()))?;
 
-            let mut piece = img
-                .crop_imm(piece.offsets().0, piece.offsets().1, piece.width(), piece.height())
-                .flipv();
-
-            match puzzle.pieces[j].rotate {
-                90 => piece = piece.rotate90(),
-                180 => piece = piece.rotate180(),
-                270 => piece = piece.rotate270(),
-                _ => (),
-            }
-
-            imageops::overlay(&mut puzzle_img, &piece, puzzle.pieces[j].x, puzzle.pieces[j].y);
+            imageops::overlay(&mut puzzle_img, &crop_piece(img, piece), x, y);
         }
 
         puzzle_imgs.push(puzzle_img);
@@ -77,62 +105,283 @@ pub fn solve_puzzle(
     Ok(puzzle_imgs)
 }
 
-#[rustfmt::skip]
-const NAME_PUZZLE_MAP: &[(&str, &str)] =  &[
-        ("bg"                , r"^bg2d_[a-z0-9][0-9]{2,4}$"),
-        ("bg_thumb"          , r"^bg2d_[a-z0-9][0-9]{2,4}_thumb$"),
-        ("card"              , r"^[0-9]{3}[a-z]{3}[0-9]{4}_[0-9]$"),
-        ("card_big"          , r"^[0-9]{3}[a-z]{3}[0-9]{4}_[0-9]_bg$"),
-        ("event_bg"          , r"^mycard_bg_(?:event|other)_[0-9]{4}$"),
-        ("event_logo"        , r"^mycard_logo_event_[0-9]{4}$"),
-        // ("four_comic",      r"^ex4c[0-9]{5}$"),
-        ("four_comic_thumb"  , r"^ex4c[0-9]{5}_thumb$"),
-        ("one_comic"         , r"^hitokoma_[0-9]{2,6}$"),
-        ("one_comic_thumb"   , r"^hitokoma_[0-9]{2,6}_thumb$"),
-        ("icon"              , r"^icon_[0-9]{3}[a-z]{3}[0-9]{4}$"),
-        ("jacket"            , r"^jacket_[a-z0-9]{6}$"),
-        ("jacket_small"      , r"^jacket_[a-z0-9]{6}_small$"),
-        ("live_skill"        , r"^live_skill_[0-9]{3}$"),
-        ("loading_character" , r"^loadingchara(?:_[0-9]{2}){1,2}?$"),
-        ("whiteboard"        , r"^exwb[0-9]{7}$"),
-];
+/// Crops a piece out of the image of a texture, whose origin is the bottom left corner, and
+/// flips it vertically.
+fn crop_piece(img: &DynamicImage, piece: &SubImage<&DynamicImage>) -> DynamicImage {
+    let (x, y) = piece.offsets();
 
-#[derive(Debug, Clone)]
-struct Piece {
-    x: i64,
-    y: i64,
-    rotate: u32,
+    img.crop_imm(x, y, piece.width(), piece.height()).flipv()
 }
 
-#[derive(Debug, Clone)]
-struct Puzzle {
-    width: u32,
-    height: u32,
-    pieces: Vec<Piece>,
-    img_count: usize,
+/// Solves the puzzle of an 16:9 image, which is cut into two pieces.
+///
+/// The main piece takes the width of the texture except for the padding of a pixel at each
+/// side. The strip that is the rest of the image is stored rotated, so its width is the height
+/// of the main piece, and it is rotated back and put to the right of the main piece.
+///
+/// # Returns
+///
+/// [`None`] if the pieces are not cut this way.
+fn solve_simple_puzzle(
+    img: &DynamicImage,
+    pieces: &[SubImage<&DynamicImage>],
+) -> Option<DynamicImage> {
+    let [first, second] = pieces else {
+        return None;
+    };
+
+    let area =
+        |piece: &SubImage<&DynamicImage>| u64::from(piece.width()) * u64::from(piece.height());
+    let (main, strip) = if area(first) >= area(second) { (first, second) } else { (second, first) };
+
+    if main.width() + 2 != img.width() || strip.width() != main.height() {
+        tracing::trace!(
+            texture_width = img.width(),
+            main = ?(main.width(), main.height()),
+            strip = ?(strip.width(), strip.height()),
+            "pieces do not fit the two-piece layout"
+        );
+        return None;
+    }
+
+    let mut puzzle_img = DynamicImage::new_rgba8(main.width() + strip.height(), main.height());
+    imageops::overlay(&mut puzzle_img, &crop_piece(img, main), 0, 0);
+    imageops::overlay(
+        &mut puzzle_img,
+        &crop_piece(img, strip).rotate270(),
+        i64::from(main.width()),
+        0,
+    );
+
+    Some(puzzle_img)
 }
 
-fn piece_map(puzzle_name: &str) -> Option<Puzzle> {
-    match puzzle_name {
-        "card" => Some(Puzzle {
-            width: 640,
-            height: 800,
-            pieces: vec![
-                Piece { x: 0, y: 0, rotate: 0 },
-                Piece { x: 0, y: 510, rotate: 0 },
-                Piece { x: 380, y: 510, rotate: 0 },
-                Piece { x: 380, y: 728, rotate: 0 },
-                Piece { x: 498, y: 728, rotate: 0 },
-                Piece { x: 616, y: 728, rotate: 0 },
+/// Gets the name of the image and the position of a texture that is one of its strips, e.g.
+/// `("ex4c_00001", 3)` for `ex4c_00001_3`.
+///
+/// # Example
+///
+/// ```
+/// use mltd::unpack::puzzle::ex4c_name;
+///
+/// assert_eq!(ex4c_name("ex4c_00001_3"), Some(("ex4c_00001", 3)));
+/// assert_eq!(ex4c_name("bg2d_t0084"), None);
+/// ```
+#[must_use]
+pub fn ex4c_name(texture_name: &str) -> Option<(&str, u32)> {
+    static EX4C_REGEX: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(EX4C_PATTERN).expect("valid pattern"));
+
+    let captures = EX4C_REGEX.captures(texture_name)?;
+
+    Some((captures.get(1)?.as_str(), captures[2].parse().ok()?))
+}
+
+/// Stacks the strips of an image from top to bottom.
+///
+/// If the strips are not equally wide, they are aligned to the left, and the rest of the
+/// narrower ones is transparent.
+///
+/// # Example
+///
+/// ```
+/// use image::DynamicImage;
+/// use mltd::unpack::puzzle::stack_strips;
+///
+/// let strips = [DynamicImage::new_rgba8(4, 2), DynamicImage::new_rgba8(3, 1)];
+///
+/// let stacked = stack_strips(&strips);
+/// assert_eq!((stacked.width(), stacked.height()), (4, 3));
+/// ```
+#[must_use]
+pub fn stack_strips(strips: &[DynamicImage]) -> DynamicImage {
+    let width = strips.iter().map(DynamicImage::width).max().unwrap_or(0);
+    let height = strips.iter().map(DynamicImage::height).sum();
+
+    let mut stacked = DynamicImage::new_rgba8(width, height);
+    let mut y = 0;
+    for strip in strips {
+        imageops::overlay(&mut stacked, strip, 0, y);
+        y += i64::from(strip.height());
+    }
+
+    stacked
+}
+
+#[cfg(test)]
+mod tests {
+    use image::{Rgba, RgbaImage};
+
+    use super::*;
+    use crate::ErrorKind;
+
+    /// Makes an image whose neighbouring pixels differ, so that misplaced pieces are noticed.
+    fn pattern(width: u32, height: u32) -> DynamicImage {
+        DynamicImage::ImageRgba8(RgbaImage::from_fn(width, height, |x, y| {
+            let byte = |v: u32| u8::try_from(v % 256).unwrap();
+
+            Rgba([byte(x % 251), byte(y % 241), byte(x / 251 + y / 241), 255])
+        }))
+    }
+
+    /// Cuts an image into a main piece and a strip and puts them in a texture of side `side`.
+    ///
+    /// Returns the image of the texture, whose origin is the bottom left corner, and the
+    /// rectangles of the pieces `(x, y, width, height)`.
+    fn cut(img: &DynamicImage, side: u32) -> (DynamicImage, [(u32, u32, u32, u32); 2]) {
+        let height = img.height();
+        let main_width = side - 2;
+        let strip_width = img.width() - main_width;
+
+        let main = img.crop_imm(0, 0, main_width, height);
+        let strip = img.crop_imm(main_width, 0, strip_width, height).rotate90();
+
+        let mut texture = DynamicImage::new_rgba8(side, side);
+        imageops::overlay(&mut texture, &main.flipv(), 1, 1);
+        imageops::overlay(&mut texture, &strip.flipv(), 1, i64::from(height) + 2);
+
+        (texture, [(1, 1, main_width, height), (1, height + 2, height, strip_width)])
+    }
+
+    fn views<'a>(
+        texture: &'a DynamicImage,
+        rects: &[(u32, u32, u32, u32)],
+    ) -> Vec<SubImage<&'a DynamicImage>> {
+        rects.iter().map(|&(x, y, w, h)| texture.view(x, y, w, h)).collect()
+    }
+
+    #[test]
+    fn test_solve_strip_puzzle() {
+        // (image width, image height, texture side)
+        for (width, height, side) in
+            [(1280, 720, 1024), (640, 370, 512), (650, 366, 512), (576, 324, 512)]
+        {
+            let full = pattern(width, height);
+            let (texture, rects) = cut(&full, side);
+
+            let solved = solve_puzzle("any_name", &texture, &views(&texture, &rects)).unwrap();
+
+            assert!(solved.len() == 1 && solved[0] == full, "{width}x{height} is not restored");
+        }
+    }
+
+    #[test]
+    fn test_solve_simple_puzzle_any_order() {
+        let full = pattern(1280, 720);
+        let (texture, rects) = cut(&full, 1024);
+
+        let reversed = [rects[1], rects[0]];
+        let solved = solve_puzzle("any_name", &texture, &views(&texture, &reversed)).unwrap();
+
+        assert!(solved.len() == 1 && solved[0] == full);
+    }
+
+    #[test]
+    fn test_solve_not_simple_puzzle() {
+        // the main piece does not take the width of the texture
+        let (texture, rects) = cut(&pattern(1280, 720), 1024);
+        let narrow = [(1, 1, 1000, 720), rects[1]];
+        let error = solve_puzzle("bg2d_a0001", &texture, &views(&texture, &narrow)).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::Puzzle);
+
+        // two icons of the same size are not pieces of an image
+        let texture = pattern(256, 512);
+        let icons = [(1, 1, 104, 104), (107, 1, 104, 104)];
+        let error = solve_puzzle("014mir0011_0_m", &texture, &views(&texture, &icons)).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::Puzzle);
+
+        // a single piece or more than two pieces are not solved either
+        let single = [(1, 1, 254, 366)];
+        assert!(solve_puzzle("jacket_harm4u", &texture, &views(&texture, &single)).is_err());
+        let many = [(1, 1, 50, 50), (60, 1, 50, 50), (120, 1, 50, 50)];
+        assert!(solve_puzzle("icon_014mir0123", &texture, &views(&texture, &many)).is_err());
+    }
+
+    /// Opens an image in the `tests` directory.
+    fn open(name: &str) -> DynamicImage {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join(name);
+
+        image::open(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+    }
+
+    /// Solves the puzzle of a real texture, whose pieces are the sprites in its bundle.
+    ///
+    /// `rects` are the rectangles of the sprites in the order of their names.
+    fn assert_solves(
+        texture_name: &str,
+        texture: &str,
+        rects: &[(u32, u32, u32, u32)],
+        expected: &[&str],
+    ) {
+        // the rectangles of sprites are measured from the bottom left corner
+        let texture = open(texture).flipv();
+
+        let solved = solve_puzzle(texture_name, &texture, &views(&texture, rects)).unwrap();
+
+        assert_eq!(solved.len(), expected.len(), "{texture_name}");
+        for (solved, expected) in solved.iter().zip(expected) {
+            assert!(solved.to_rgba8() == open(expected).to_rgba8(), "{expected} is not restored");
+        }
+    }
+
+    #[test]
+    fn test_solve_bg2d() {
+        // sprites `bg2d_a1028_0` and `bg2d_a1028_1` in `tests/test_bg2d.unity3d`
+        assert_solves(
+            "bg2d_t0084",
+            "test_bg2d.png",
+            &[(1, 303, 1022, 720), (1, 1, 720, 258)],
+            &["test_bg2d_processed.png"],
+        );
+    }
+
+    #[test]
+    fn test_solve_card() {
+        // sprites `014mir0011_0_0` to `014mir0011_0_11` in `tests/test_image.unity3d`
+        assert_solves(
+            "014mir0011_0",
+            "test_image.png",
+            &[
+                (1, 513, 640, 510),
+                (643, 733, 380, 290),
+                (643, 513, 260, 218),
+                (905, 659, 118, 72),
+                (905, 585, 118, 72),
+                (905, 511, 24, 72),
+                (1, 1, 640, 510),
+                (643, 1, 380, 290),
+                (643, 293, 260, 218),
+                (905, 293, 118, 72),
+                (905, 367, 118, 72),
+                (999, 441, 24, 72),
             ],
-            img_count: 2,
-        }),
-        "bg" | "card_big" => Some(Puzzle {
-            width: 1280,
-            height: 720,
-            pieces: vec![Piece { x: 0, y: 0, rotate: 0 }, Piece { x: 1022, y: 0, rotate: 270 }],
-            img_count: 1,
-        }),
-        _ => None,
+            &["test_image_processed_0.png", "test_image_processed_1.png"],
+        );
+    }
+
+    #[test]
+    fn test_ex4c_name() {
+        assert_eq!(ex4c_name("ex4c_00001_0"), Some(("ex4c_00001", 0)));
+        assert_eq!(ex4c_name("ex4c_00044_12"), Some(("ex4c_00044", 12)));
+
+        for name in ["ex4c00001", "ex4c_00001", "ex4c_00001_", "ex4c_00001_thumb", "xex4c_00001_1"]
+        {
+            assert_eq!(ex4c_name(name), None, "{name}");
+        }
+    }
+
+    #[test]
+    fn test_stack_strips() {
+        let strips = [pattern(4, 2), pattern(3, 1), pattern(4, 3)];
+
+        let stacked = stack_strips(&strips).to_rgba8();
+
+        assert_eq!(stacked.dimensions(), (4, 6));
+        assert_eq!(stacked.get_pixel(3, 0), strips[0].to_rgba8().get_pixel(3, 0));
+        assert_eq!(stacked.get_pixel(2, 2), strips[1].to_rgba8().get_pixel(2, 0));
+        assert_eq!(stacked.get_pixel(3, 2).0[3], 0, "the narrow strip is padded");
+        assert_eq!(stacked.get_pixel(0, 5), strips[2].to_rgba8().get_pixel(0, 2));
+
+        assert_eq!(stack_strips(&[]).dimensions(), (0, 0));
     }
 }

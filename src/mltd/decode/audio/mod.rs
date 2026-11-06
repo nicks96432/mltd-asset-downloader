@@ -75,6 +75,18 @@ impl Drop for KeyFiles {
 /// # Errors
 ///
 /// This function fails if the file cannot be opened, or any of the subsongs cannot be decoded.
+///
+/// # Example
+///
+/// ```no_run
+/// use std::path::Path;
+///
+/// use mltd::decode::audio::{AudioOptions, KeyFiles, decode};
+///
+/// let key_files = KeyFiles::default();
+/// decode(Path::new("test.acb"), Path::new("output"), &AudioOptions::default(), &key_files)
+///     .unwrap();
+/// ```
 pub fn decode(
     path: &Path,
     output_dir: &Path,

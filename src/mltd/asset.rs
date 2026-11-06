@@ -45,6 +45,20 @@ impl AssetInfo {
     /// # Errors
     ///
     /// - [`crate::ErrorKind::Network`]: if it cannot send request.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use mltd::asset::{AssetInfo, Platform};
+    ///
+    /// tokio_test::block_on(async {
+    ///     let latest = AssetInfo::manifest(Platform::Android, None).await.unwrap();
+    ///     println!("latest manifest: {}", latest.filename);
+    ///
+    ///     let v1 = AssetInfo::manifest(Platform::IOS, Some(1)).await.unwrap();
+    ///     assert_eq!(v1.version.version, 1);
+    /// });
+    /// ```
     pub async fn manifest(platform: Platform, version: Option<u64>) -> Result<Self> {
         let client = MatsuriApiClient::new();
         let version = match version {
@@ -96,6 +110,7 @@ impl Asset<'_> {
         );
 
         let url = asset_info.to_url();
+        tracing::debug!(%url, platform = ?asset_info.platform, "requesting asset");
         let res = CLIENT
             .get(url.clone())
             .headers(headers)
@@ -103,6 +118,7 @@ impl Asset<'_> {
             .await
             .map_err(|e| NetworkError::request(url.clone(), Some(e)))?;
 
+        tracing::trace!(%url, status = %res.status(), length = ?res.content_length(), "got response");
         if !res.status().is_success() {
             return Err(NetworkError::status(url, res.status().as_u16()).into());
         }
@@ -158,6 +174,7 @@ impl Asset<'_> {
         tokio::io::copy(&mut stream_reader, &mut buf)
             .await
             .map_err(|e| Repr::io("download asset", None, e))?;
+        tracing::debug!(filename = asset_info.filename, bytes = buf.get_ref().len(), "downloaded");
 
         Ok(Self { data: Cow::from(buf.into_inner()), info: asset_info })
     }
@@ -233,6 +250,7 @@ impl Asset<'_> {
         .await;
 
         if let Err(e) = result {
+            tracing::debug!(part_path = %part_path.display(), error = ?e, "download failed, removing partial file");
             let _ = tokio::fs::remove_file(&part_path).await;
             return Err(Repr::io("download asset to", Some(output), e).into());
         }
@@ -256,6 +274,15 @@ pub enum Platform {
 
 impl Platform {
     /// Returns the string representation of the [`Platform`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use mltd::asset::Platform;
+    ///
+    /// assert_eq!(Platform::Android.as_str(), "Android");
+    /// assert_eq!(Platform::IOS.as_str(), "iOS");
+    /// ```
     #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
@@ -265,6 +292,15 @@ impl Platform {
     }
 
     /// Returns the `User-Agent` string of the [`Platform`] in HTTP request.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use mltd::asset::Platform;
+    ///
+    /// assert!(Platform::Android.user_agent().starts_with("UnityPlayer/"));
+    /// assert!(Platform::IOS.user_agent().contains("CFNetwork"));
+    /// ```
     #[must_use]
     pub fn user_agent(&self) -> &str {
         match self {

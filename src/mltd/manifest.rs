@@ -60,6 +60,25 @@ pub struct Manifest {
 
 impl Manifest {
     /// Computes the difference from `other` manifest.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use mltd::manifest::Manifest;
+    /// # fn manifest(entries: &[(&str, &str, usize)]) -> Manifest {
+    /// #     let map: std::collections::BTreeMap<_, _> =
+    /// #         entries.iter().map(|&(name, hash, size)| (name, (hash, name, size))).collect();
+    /// #     Manifest::from_slice(&rmp_serde::to_vec(&[map]).unwrap()).unwrap()
+    /// # }
+    ///
+    /// let old = manifest(&[("a.unity3d", "hash1", 10), ("b.unity3d", "hash2", 20)]);
+    /// let new = manifest(&[("b.unity3d", "hash3", 20), ("c.unity3d", "hash4", 30)]);
+    ///
+    /// let diff = old.diff(&new);
+    /// assert!(diff.added.contains_key(&"c.unity3d".to_owned()));
+    /// assert!(diff.updated.contains_key(&"b.unity3d".to_owned()));
+    /// assert!(diff.removed.contains_key(&"a.unity3d".to_owned()));
+    /// ```
     #[must_use]
     pub fn diff<'a>(&'a self, other: &'a Manifest) -> ManifestDiff<'a> {
         let mut diff = ManifestDiff::new();
@@ -85,6 +104,19 @@ impl Manifest {
     }
 
     /// Returns the number of entries in the manifest.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use mltd::manifest::Manifest;
+    /// # fn manifest(entries: &[(&str, &str, usize)]) -> Manifest {
+    /// #     let map: std::collections::BTreeMap<_, _> =
+    /// #         entries.iter().map(|&(name, hash, size)| (name, (hash, name, size))).collect();
+    /// #     Manifest::from_slice(&rmp_serde::to_vec(&[map]).unwrap()).unwrap()
+    /// # }
+    ///
+    /// assert_eq!(manifest(&[("a.unity3d", "hash1", 10), ("b.unity3d", "hash2", 20)]).len(), 2);
+    /// ```
     #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
@@ -92,6 +124,20 @@ impl Manifest {
     }
 
     /// Returns `true` if the manifest is empty.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use mltd::manifest::Manifest;
+    /// # fn manifest(entries: &[(&str, &str, usize)]) -> Manifest {
+    /// #     let map: std::collections::BTreeMap<_, _> =
+    /// #         entries.iter().map(|&(name, hash, size)| (name, (hash, name, size))).collect();
+    /// #     Manifest::from_slice(&rmp_serde::to_vec(&[map]).unwrap()).unwrap()
+    /// # }
+    ///
+    /// assert!(manifest(&[]).is_empty());
+    /// assert!(!manifest(&[("a.unity3d", "hash1", 10)]).is_empty());
+    /// ```
     #[inline]
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -99,6 +145,20 @@ impl Manifest {
     }
 
     /// Returns the total size of all assets in the manifest.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use mltd::manifest::Manifest;
+    /// # fn manifest(entries: &[(&str, &str, usize)]) -> Manifest {
+    /// #     let map: std::collections::BTreeMap<_, _> =
+    /// #         entries.iter().map(|&(name, hash, size)| (name, (hash, name, size))).collect();
+    /// #     Manifest::from_slice(&rmp_serde::to_vec(&[map]).unwrap()).unwrap()
+    /// # }
+    ///
+    /// let manifest = manifest(&[("a.unity3d", "hash1", 10), ("b.unity3d", "hash2", 20)]);
+    /// assert_eq!(manifest.asset_size(), 30);
+    /// ```
     #[inline]
     #[must_use]
     pub fn asset_size(&self) -> usize {
@@ -110,8 +170,27 @@ impl Manifest {
     /// # Errors
     ///
     /// Returns [`crate::Error`] with [`crate::ErrorKind::Manifest`] if the deserialization fails.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use mltd::ErrorKind;
+    /// use mltd::manifest::Manifest;
+    ///
+    /// let manifest = Manifest::from_slice(include_bytes!("../../tests/test1.msgpack")).unwrap();
+    /// assert!(!manifest.is_empty());
+    ///
+    /// let error = Manifest::from_slice(b"not a manifest").unwrap_err();
+    /// assert_eq!(error.kind(), ErrorKind::Manifest);
+    /// ```
     pub fn from_slice(value: &[u8]) -> Result<Self> {
-        rmp_serde::from_slice(value).map_err(|e| ManifestError::new(e.into()).into())
+        let manifest: Self = rmp_serde::from_slice(value).map_err(|e| {
+            tracing::debug!(bytes = value.len(), error = ?e, "cannot deserialize manifest");
+            ManifestError::new(e.into())
+        })?;
+        tracing::debug!(bytes = value.len(), entries = manifest.len(), "deserialized manifest");
+
+        Ok(manifest)
     }
 }
 

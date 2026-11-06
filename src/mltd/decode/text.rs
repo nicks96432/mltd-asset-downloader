@@ -115,12 +115,13 @@ pub fn encrypt_text(plaintext: &[u8]) -> Vec<u8> {
 pub fn decrypt_text(cipher: &[u8]) -> Result<Vec<u8>> {
     let decryptor = TextDecryptor::new((&TEXT_DECRYPT_KEY).into(), (&TEXT_DECRYPT_IV).into());
 
-    let plaintext = match decryptor.decrypt_padded_vec::<Pkcs7>(cipher) {
-        Ok(plaintext) => Ok(plaintext),
-        Err(_) => Err(AesError::unpad()),
-    }?;
-
-    Ok(plaintext)
+    decryptor.decrypt_padded_vec::<Pkcs7>(cipher).map_err(|_| {
+        tracing::debug!(
+            bytes = cipher.len(),
+            "cannot unpad the decrypted text, it may not be encrypted or already decrypted"
+        );
+        AesError::unpad().into()
+    })
 }
 
 /// Decrypts the file `input` and writes the result to `output`.
@@ -131,7 +132,23 @@ pub fn decrypt_text(cipher: &[u8]) -> Result<Vec<u8>> {
 /// # Errors
 ///
 /// This function fails if the file cannot be read or written, or the content cannot be decrypted.
+///
+/// # Example
+///
+/// ```
+/// use mltd::decode::text::{decrypt_file, encrypt_text};
+///
+/// let dir = assert_fs::TempDir::new().unwrap();
+/// let input = dir.path().join("hello.gtx");
+/// let output = dir.path().join("hello.txt");
+///
+/// std::fs::write(&input, encrypt_text(b"Hello, world!")).unwrap();
+/// decrypt_file(&input, &output).unwrap();
+///
+/// assert_eq!(std::fs::read(&output).unwrap(), b"Hello, world!");
+/// ```
 pub fn decrypt_file(input: &Path, output: &Path) -> Result<()> {
+    tracing::debug!(input = %input.display(), output = %output.display(), "decrypting file");
     let cipher = std::fs::read(input).map_err(|e| Repr::io("read text", Some(input), e))?;
     let plaintext = decrypt_text(&cipher)?;
 
