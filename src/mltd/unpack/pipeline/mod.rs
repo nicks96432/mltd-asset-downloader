@@ -152,6 +152,7 @@ where
     let bundle = extractor.load(path)?;
 
     let mut audio_paths = BTreeSet::new();
+    let strips = texture::strip_groups(&bundle);
 
     for object in bundle.objects() {
         match &object.class {
@@ -185,7 +186,7 @@ where
                 options.decrypts_text(),
             )?);
         } else if object.class == Class::Texture2D {
-            texture::extract(&bundle, object, output_dir, options.image_format)?;
+            texture::extract(&bundle, object, output_dir, options.image_format, &strips)?;
         }
     }
 
