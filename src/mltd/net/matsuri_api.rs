@@ -83,6 +83,7 @@ impl MatsuriApiClient {
 
     async fn send_request<T: DeserializeOwned>(&self, url: &str) -> Result<T> {
         let url = Url::parse(url).unwrap();
+        tracing::debug!(%url, "requesting matsurihi.me API");
 
         let res = match self.client.get(url.clone()).query(&[("prettyPrint", "false")]).send().await
         {
@@ -90,6 +91,7 @@ impl MatsuriApiClient {
             Err(e) => Err(Error::request(url.clone(), Some(e))),
         }?;
 
+        tracing::trace!(%url, status = %res.status(), "got response");
         if !res.status().is_success() {
             return Err(Error::status(url, res.status().as_u16()).into());
         }

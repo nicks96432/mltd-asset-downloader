@@ -53,7 +53,14 @@ pub(super) fn extract(
         Some((name, group)) if group[0] == texture => {
             return extract_strips(bundle, name, group, output_dir, format);
         }
-        Some((_, group)) if group.contains(&texture) => return Ok(()),
+        Some((name, group)) if group.contains(&texture) => {
+            tracing::trace!(
+                texture = texture.name,
+                image = name,
+                "strip is written with the first one"
+            );
+            return Ok(());
+        }
         _ => (),
     }
 
@@ -61,7 +68,10 @@ pub(super) fn extract(
     let sprites = bundle.objects().iter().filter(|o| o.class == Class::Sprite);
     let images = solve(bundle, texture, sprites)?;
 
+    // rayon workers do not inherit the span of the caller
+    let span = tracing::Span::current();
     images.into_iter().enumerate().par_bridge().try_for_each(|(i, image)| -> Result<()> {
+        let _entered = span.enter();
         let path =
             output_dir.join(format!("{}_{}.{}", texture.name, i, format.extensions_str()[0]));
 
@@ -88,6 +98,7 @@ fn extract_strips(
     output_dir: &Path,
     format: ImageFormat,
 ) -> Result<()> {
+    tracing::debug!(image = name, strips = strips.len(), "stacking strips of a four-panel comic");
     let images = strips.iter().map(|strip| bundle.texture(strip)).collect::<Result<Vec<_>>>()?;
 
     if images.iter().any(|image| image.width() != images[0].width()) {
@@ -116,6 +127,7 @@ fn solve<'a>(
         if sprite.texture_id != texture.path_id {
             continue;
         }
+        tracing::trace!(sprite = object.name, rect = ?sprite.rect, "found sprite of the texture");
 
         let Rect { x, y, width, height } = sprite.rect;
         let exceeds =
@@ -137,6 +149,13 @@ fn solve<'a>(
     rects.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
 
     let pieces = rects.into_iter().map(|(_, _, piece)| piece).collect::<Vec<_>>();
+    tracing::debug!(
+        texture = texture.name,
+        width = image.width(),
+        height = image.height(),
+        pieces = pieces.len(),
+        "solving puzzle"
+    );
     let images = match solve_puzzle(&texture.name, &image, &pieces) {
         Ok(images) => images,
         Err(e) => {

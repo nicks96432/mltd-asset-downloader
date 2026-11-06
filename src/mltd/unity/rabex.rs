@@ -122,7 +122,10 @@ fn read_asset_bundle(
     file: &SerializedFile,
     data: &[u8],
 ) -> Option<AssetBundleData> {
-    let info = file.objects().find(|o| o.m_ClassID == ClassId::AssetBundle)?;
+    let Some(info) = file.objects().find(|o| o.m_ClassID == ClassId::AssetBundle) else {
+        tracing::debug!("serialized file has no AssetBundle object, container paths are unknown");
+        return None;
+    };
 
     match file.read(info, type_trees, &mut Cursor::new(data)) {
         Ok(bundle) => Some(bundle),
@@ -185,11 +188,20 @@ fn list_objects(
         } else {
             Some(container.get(&object.m_PathID).cloned().unwrap_or_else(|| {
                 let safe_name = sanitize_path(&name);
-                match class {
+                let fallback = match class {
                     // the CLI strips the `.bytes` suffix of text assets
                     "TextAsset" => format!("assets/{class}/{safe_name}.bytes"),
                     _ => format!("assets/{class}/{safe_name}"),
-                }
+                };
+                tracing::trace!(
+                    path_id = object.m_PathID,
+                    class,
+                    name,
+                    path = fallback,
+                    "not in the container, using a path made from the class and name"
+                );
+
+                fallback
             }))
         };
 
@@ -280,6 +292,7 @@ pub struct RabexBundle<'a> {
 impl<'a> RabexBundle<'a> {
     fn open(type_trees: &'a TypeTrees, path: &Path) -> Result<Self> {
         let bytes = std::fs::read(path).map_err(|e| Repr::io("read bundle", Some(path), e))?;
+        tracing::trace!(path = %path.display(), bytes = bytes.len(), "opening bundle");
         // rabex panics on the other signatures (UnityWeb, UnityRaw, ...) instead of returning an error
         if !bytes.starts_with(b"UnityFS\0") {
             return Err(UnityError::NotUnityFs.into());
@@ -306,13 +319,18 @@ impl<'a> RabexBundle<'a> {
                 .map_err(|e| UnityError::corrupted("parse serialized file", e))?;
             let asset_bundle = read_asset_bundle(type_trees, &file, &data);
 
-            objects.extend(list_objects(
-                type_trees,
-                collections.len(),
-                &file,
-                &data,
-                asset_bundle.as_ref(),
-            ));
+            let listed =
+                list_objects(type_trees, collections.len(), &file, &data, asset_bundle.as_ref());
+            tracing::debug!(
+                collection = collections.len(),
+                entry = entry.path,
+                bytes = data.len(),
+                objects = listed.len(),
+                has_container = asset_bundle.is_some(),
+                "read serialized file"
+            );
+
+            objects.extend(listed);
             collections.push(Collection { data, file });
         }
 
@@ -349,6 +367,8 @@ impl<'a> RabexBundle<'a> {
         if entry.flags & FileEntry::FLAG_SERIALIZEDFILE != 0 {
             return Err(UnityError::NotAResource(name.to_owned()).into());
         }
+
+        tracing::trace!(name, offset, size, "reading streamed resource");
 
         let out_of_range = || UnityError::ResourceOutOfRange;
         if offset < 0 || size < 0 || offset.checked_add(size).is_none_or(|end| end > entry.size) {
@@ -396,6 +416,16 @@ impl Bundle for RabexBundle<'_> {
         } else {
             &texture.image_data.0
         };
+
+        tracing::trace!(
+            name = object.name,
+            format = texture.m_TextureFormat.0,
+            width = texture.m_Width.0,
+            height = texture.m_Height.0,
+            streamed = stream.size.0 > 0,
+            bytes = data.len(),
+            "decoding texture"
+        );
 
         let dimension =
             |v: Int| u32::try_from(v.0).map_err(|e| UnityError::corrupted("read texture size", e));

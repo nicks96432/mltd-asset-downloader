@@ -71,15 +71,22 @@ pub fn solve_puzzle(
         LazyLock::new(|| regex::Regex::new(CARD_PATTERN).expect("valid pattern"));
 
     if let Some(puzzle_img) = solve_simple_puzzle(img, pieces) {
+        tracing::debug!(texture_name, "solved as a two-piece 16:9 puzzle");
         return Ok(vec![puzzle_img]);
     }
 
     if !CARD_REGEX.is_match(texture_name) {
+        tracing::debug!(
+            texture_name,
+            pieces = pieces.len(),
+            "neither a two-piece 16:9 puzzle nor a card"
+        );
         return Err(Error::PuzzleNotFound(texture_name.to_string()).into());
     }
 
     let (width, height) = CARD_SIZE;
     let piece_count = pieces.len() / CARD_IMG_COUNT;
+    tracing::debug!(texture_name, pieces = pieces.len(), piece_count, "solving as a card puzzle");
     let mut puzzle_imgs = Vec::new();
 
     for i in 0..CARD_IMG_COUNT {
@@ -128,6 +135,12 @@ fn solve_simple_puzzle(
     let (main, strip) = if area(first) >= area(second) { (first, second) } else { (second, first) };
 
     if main.width() + 2 != img.width() || strip.width() != main.height() {
+        tracing::trace!(
+            texture_width = img.width(),
+            main = ?(main.width(), main.height()),
+            strip = ?(strip.width(), strip.height()),
+            "pieces do not fit the two-piece layout"
+        );
         return None;
     }
 

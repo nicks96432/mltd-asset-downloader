@@ -128,6 +128,8 @@ pub fn unpack_all<E>(
 where
     E: Extractor + Send,
 {
+    tracing::info!(workers = extractors.len(), "unpacking files");
+
     let files = Mutex::new(files);
     let failures = Mutex::new(Vec::new());
     // dropped after all the workers have finished decoding
@@ -160,7 +162,10 @@ where
         }
     });
 
-    failures.into_inner().unwrap_or_else(PoisonError::into_inner)
+    let failures = failures.into_inner().unwrap_or_else(PoisonError::into_inner);
+    tracing::info!(failed = failures.len(), "finished unpacking files");
+
+    failures
 }
 
 /// Unpacks a single .unity3d file.
@@ -195,20 +200,28 @@ pub fn unpack_file<E>(
 where
     E: Extractor,
 {
-    tracing::debug!(input_path = %path.display(), "loading file");
+    // the files are unpacked in parallel, so the span tells which file a message is about
+    let span = tracing::info_span!("unpack_file", input = %path.display());
+    let _entered = span.enter();
+
+    tracing::debug!("loading file");
     let bundle = extractor.load(path)?;
 
     let mut audio_paths = BTreeSet::new();
     let strips = texture::strip_groups(&bundle);
+    tracing::debug!(objects = bundle.objects().len(), strip_groups = strips.len(), "loaded file");
 
     for object in bundle.objects() {
         match &object.class {
             // asset bundles contains bundle information only, and sprites are handled with
             // their textures
-            Class::AssetBundle | Class::Sprite => continue,
+            Class::AssetBundle | Class::Sprite => {
+                tracing::trace!(name = object.name, class = %object.class, "skipping object");
+                continue;
+            }
             Class::TextAsset | Class::Texture2D => (),
             class => {
-                tracing::warn!(%class, "unknown asset class");
+                tracing::warn!(%class, name = object.name, "unknown asset class");
                 continue;
             }
         }
@@ -218,6 +231,13 @@ where
             continue;
         };
 
+        tracing::trace!(
+            name = object.name,
+            class = %object.class,
+            path_id = object.path_id,
+            orig_path,
+            "unpacking object"
+        );
         let output_path = safe_join(&options.output, orig_path)?;
         let output_dir =
             output_path.parent().ok_or_else(|| Repr::UnsafePath(orig_path.to_owned()))?;
@@ -244,6 +264,7 @@ where
     // contain informations (Ex: filename) about others
     #[cfg(feature = "decode")]
     if options.decode_audio {
+        tracing::debug!(count = audio_paths.len(), "decoding audio files");
         for audio_path in audio_paths {
             let output_dir = audio_path
                 .parent()

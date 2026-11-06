@@ -89,6 +89,8 @@ impl AssetRipper {
     where
         P: AsRef<Path>,
     {
+        tracing::debug!(path = %path.as_ref().display(), port, "starting AssetRipper");
+
         let mut process = Command::new(path.as_ref())
             .args(["--port", &port.to_string()])
             .args(["--launch-browser", "false"])
@@ -111,6 +113,7 @@ impl AssetRipper {
         std::thread::spawn(move || {
             let mut listening = false;
             for line in BufReader::new(stdout).lines().map_while(std::result::Result::ok) {
+                tracing::trace!(port, line, "AssetRipper output");
                 if !listening && line.contains("listening on: http://") {
                     listening = true;
                     let _ = tx.send(true);
@@ -122,6 +125,7 @@ impl AssetRipper {
         });
 
         if !matches!(rx.recv_timeout(STARTUP_TIMEOUT), Ok(true)) {
+            tracing::debug!(port, timeout = ?STARTUP_TIMEOUT, "AssetRipper did not report listening");
             let _ = process.kill();
             let _ = process.wait();
             return Err(Repr::Process(format!(
@@ -129,6 +133,8 @@ impl AssetRipper {
             ))
             .into());
         }
+
+        tracing::debug!(port, "AssetRipper is listening");
 
         Ok(Self {
             base_url: format!("http://localhost:{port}"),
@@ -201,6 +207,8 @@ impl AssetRipper {
     /// let ripper = AssetRipper::connect("localhost", 50000).unwrap();
     /// ```
     pub fn connect(host: &str, port: u16) -> Result<Self> {
+        tracing::debug!(host, port, "connecting to AssetRipper");
+
         let client = Client::new();
         let this = Self { base_url: format!("http://{host}:{port}"), client, process: None };
 
@@ -325,9 +333,11 @@ impl AssetRipper {
         P: AsRef<Path>,
     {
         let url = self.full_url("Export/PrimaryContent");
+        tracing::debug!(path = %path.as_ref().display(), "exporting primary content");
 
-        if let Err(e) = self.client.post(url.clone()).form(&[("path", path.as_ref())]).send() {
-            return Err(Error::request(url, Some(e)).into());
+        match self.client.post(url.clone()).form(&[("path", path.as_ref())]).send() {
+            Ok(res) => tracing::debug!(status = %res.status(), "exported primary content"),
+            Err(e) => return Err(Error::request(url, Some(e)).into()),
         }
 
         Ok(())
@@ -398,6 +408,7 @@ impl Extractor for AssetRipper {
             .build()
             .map_err(|e| Error::request(url.clone(), Some(e)))?;
 
+        tracing::debug!(path, "loading file in AssetRipper");
         tracing::trace!(?req, body = ?req.body(), "sending load file request");
 
         if let Err(e) = self.client.execute(req) {
@@ -437,15 +448,31 @@ pub struct AssetRipperBundle<'a> {
 impl AssetRipperBundle<'_> {
     fn list_objects(&mut self) -> Result<()> {
         let bundles = self.ripper.load_bundles()?;
+        tracing::debug!(bundles = bundles.len(), "listing objects");
 
         for bundle_no in 0..bundles.len() {
             for collection_no in 0..self.ripper.load_collection(bundle_no)?.len() {
                 let slot = self.slots.len();
                 self.slots.push((bundle_no, collection_no));
 
-                for path_id in self.ripper.path_ids(bundle_no, collection_no)? {
+                let path_ids = self.ripper.path_ids(bundle_no, collection_no)?;
+                tracing::debug!(
+                    bundle_no,
+                    collection_no,
+                    objects = path_ids.len(),
+                    "listing collection"
+                );
+
+                for path_id in path_ids {
                     let object =
                         self.ripper.load_object(slot, bundle_no, collection_no, path_id)?;
+                    tracing::trace!(
+                        path_id,
+                        name = object.name,
+                        class = %object.class,
+                        orig_path = ?object.orig_path,
+                        "listed object"
+                    );
                     self.objects.push(object);
                 }
             }
@@ -470,6 +497,7 @@ impl AssetRipperBundle<'_> {
         }
 
         let dir = tempdir().map_err(|e| Repr::io("create tempdir", None, e))?;
+        tracing::debug!(dir = %dir.path().display(), "first export of the file");
         self.ripper.export_primary(dir.path())?;
 
         Ok(self.export.get_or_init(|| dir).path())
@@ -484,6 +512,7 @@ impl AssetRipperBundle<'_> {
             None => orig_path.to_owned(),
         };
         let path: PathBuf = self.export_dir()?.join(exported);
+        tracing::trace!(path = %path.display(), "reading exported file");
 
         std::fs::read(&path).map_err(|e| Repr::io("read exported file", Some(&path), e).into())
     }
@@ -566,8 +595,9 @@ impl Drop for AssetRipperBundle<'_> {
     fn drop(&mut self) {
         let url = self.ripper.full_url("Reset");
 
+        tracing::debug!("resetting AssetRipper");
         if let Err(e) = self.ripper.client.post(url).send() {
-            tracing::warn!("failed to reset asset ripper: {}", e);
+            tracing::warn!(error = ?e, "failed to reset AssetRipper");
         }
     }
 }

@@ -184,7 +184,13 @@ impl Manifest {
     /// assert_eq!(error.kind(), ErrorKind::Manifest);
     /// ```
     pub fn from_slice(value: &[u8]) -> Result<Self> {
-        rmp_serde::from_slice(value).map_err(|e| ManifestError::new(e.into()).into())
+        let manifest: Self = rmp_serde::from_slice(value).map_err(|e| {
+            tracing::debug!(bytes = value.len(), error = ?e, "cannot deserialize manifest");
+            ManifestError::new(e.into())
+        })?;
+        tracing::debug!(bytes = value.len(), entries = manifest.len(), "deserialized manifest");
+
+        Ok(manifest)
     }
 }
 

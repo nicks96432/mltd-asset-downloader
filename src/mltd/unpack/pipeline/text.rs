@@ -29,6 +29,7 @@ pub(super) fn extract(
 
     let (output_path, data) = if !ENCRYPTED_TEXT_EXTENSIONS.contains(&file_ext) {
         if AUDIO_EXTENSIONS.contains(&file_ext) {
+            tracing::debug!(path = %stripped_path.display(), "found audio file to decode later");
             audio_path = Some(stripped_path.clone());
         }
 

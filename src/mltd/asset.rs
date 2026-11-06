@@ -110,6 +110,7 @@ impl Asset<'_> {
         );
 
         let url = asset_info.to_url();
+        tracing::debug!(%url, platform = ?asset_info.platform, "requesting asset");
         let res = CLIENT
             .get(url.clone())
             .headers(headers)
@@ -117,6 +118,7 @@ impl Asset<'_> {
             .await
             .map_err(|e| NetworkError::request(url.clone(), Some(e)))?;
 
+        tracing::trace!(%url, status = %res.status(), length = ?res.content_length(), "got response");
         if !res.status().is_success() {
             return Err(NetworkError::status(url, res.status().as_u16()).into());
         }
@@ -172,6 +174,7 @@ impl Asset<'_> {
         tokio::io::copy(&mut stream_reader, &mut buf)
             .await
             .map_err(|e| Repr::io("download asset", None, e))?;
+        tracing::debug!(filename = asset_info.filename, bytes = buf.get_ref().len(), "downloaded");
 
         Ok(Self { data: Cow::from(buf.into_inner()), info: asset_info })
     }
@@ -247,6 +250,7 @@ impl Asset<'_> {
         .await;
 
         if let Err(e) = result {
+            tracing::debug!(part_path = %part_path.display(), error = ?e, "download failed, removing partial file");
             let _ = tokio::fs::remove_file(&part_path).await;
             return Err(Repr::io("download asset to", Some(output), e).into());
         }
