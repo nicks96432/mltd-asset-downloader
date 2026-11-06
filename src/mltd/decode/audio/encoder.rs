@@ -125,8 +125,7 @@ impl<'a> Encoder<'a> {
     /// };
     ///
     /// // opens the first subsong of the file
-    /// let encoder =
-    ///     Encoder::open(Path::new("test.acb"), 0, Path::new("output"), &options).unwrap();
+    /// let encoder = Encoder::open(Path::new("test.acb"), 0, Path::new("output"), &options).unwrap();
     /// ```
     pub fn open<P>(
         input_file: P,

@@ -84,13 +84,8 @@ impl Drop for KeyFiles {
 /// use mltd::decode::audio::{AudioOptions, KeyFiles, decode};
 ///
 /// let key_files = KeyFiles::default();
-/// decode(
-///     Path::new("test.acb"),
-///     Path::new("output"),
-///     &AudioOptions::default(),
-///     &key_files,
-/// )
-/// .unwrap();
+/// decode(Path::new("test.acb"), Path::new("output"), &AudioOptions::default(), &key_files)
+///     .unwrap();
 /// ```
 pub fn decode(
     path: &Path,
