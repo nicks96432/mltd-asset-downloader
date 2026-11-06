@@ -23,7 +23,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 use image::ImageFormat;
 
 #[cfg(feature = "decode")]
-pub use crate::decode::audio::{AudioOptions, KeyFiles, decode as decode_audio};
+pub use crate::decode::audio::{AudioOptions, decode as decode_audio};
 use crate::error::{Error, Repr, Result};
 use crate::unity::{Bundle, Class, Extractor};
 use crate::util::safe_join;
@@ -101,8 +101,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 /// Unpacks the files with the given extractors, each of them handles one file at a time.
 ///
-/// Returns the files that failed to unpack, with the reasons. The temporary files made
-/// for decoding audio are removed before returning, even if a worker panics.
+/// Returns the files that failed to unpack, with the reasons.
 ///
 /// # Example
 ///
@@ -132,15 +131,10 @@ where
 
     let files = Mutex::new(files);
     let failures = Mutex::new(Vec::new());
-    // dropped after all the workers have finished decoding
-    #[cfg(feature = "decode")]
-    let key_files = KeyFiles::default();
 
     std::thread::scope(|scope| {
         for mut extractor in extractors {
             let (files, failures) = (&files, &failures);
-            #[cfg(feature = "decode")]
-            let key_files = &key_files;
 
             scope.spawn(move || {
                 loop {
@@ -151,8 +145,6 @@ where
                         &mut extractor,
                         &path,
                         options,
-                        #[cfg(feature = "decode")]
-                        key_files,
                     ) {
                         tracing::warn!(input_path = %path.display(), error = ?e, "failed to unpack file");
                         lock(failures).push((path, e));
@@ -177,26 +169,15 @@ where
 /// # Example
 ///
 /// ```no_run
-/// # #[cfg(feature = "decode")]
-/// # {
 /// use std::path::Path;
 ///
 /// use mltd::unity::RabexExtractor;
-/// use mltd::unpack::pipeline::{KeyFiles, Options, unpack_file};
+/// use mltd::unpack::pipeline::{Options, unpack_file};
 ///
 /// let mut extractor = RabexExtractor::new();
-/// let key_files = KeyFiles::default();
-///
-/// unpack_file(&mut extractor, Path::new("a.unity3d"), &Options::new("output"), &key_files)
-///     .unwrap();
-/// # }
+/// unpack_file(&mut extractor, Path::new("a.unity3d"), &Options::new("output")).unwrap();
 /// ```
-pub fn unpack_file<E>(
-    extractor: &mut E,
-    path: &Path,
-    options: &Options,
-    #[cfg(feature = "decode")] key_files: &KeyFiles,
-) -> Result<()>
+pub fn unpack_file<E>(extractor: &mut E, path: &Path, options: &Options) -> Result<()>
 where
     E: Extractor,
 {
@@ -269,7 +250,7 @@ where
             let output_dir = audio_path
                 .parent()
                 .ok_or_else(|| Repr::UnsafePath(audio_path.display().to_string()))?;
-            decode_audio(&audio_path, output_dir, &options.audio, key_files)?;
+            decode_audio(&audio_path, output_dir, &options.audio)?;
         }
     }
 

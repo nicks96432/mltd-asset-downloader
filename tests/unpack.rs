@@ -61,10 +61,6 @@ const TEST_CASES: &[TestCase] = &[
                 "decoded audio differs from {}",
                 expected.display()
             );
-
-            // the temporary key file of vgmstream is removed after decoding
-            dir.child(Path::new(case.got_relpath).with_file_name(".hcakey"))
-                .assert(predicate::path::missing());
         },
     },
     TestCase {

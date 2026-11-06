@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
 use clap::Args;
-use mltd::decode::audio::{AudioOptions, KeyFiles, decode as decode_audio};
+use mltd::decode::audio::{AudioOptions, decode as decode_audio};
 use mltd::decode::text::decrypt_file;
 use mltd::decode::{AUDIO_EXTENSIONS, ENCRYPTED_TEXT_EXTENSIONS};
 
@@ -68,12 +68,7 @@ fn classify(input: &Path, output_dir: Option<&Path>) -> Option<Task> {
     Some(Task::Text(output))
 }
 
-fn decode_file(
-    input: &Path,
-    output_dir: Option<&Path>,
-    audio: &AudioOptions,
-    key_files: &KeyFiles,
-) -> Result<()> {
+fn decode_file(input: &Path, output_dir: Option<&Path>, audio: &AudioOptions) -> Result<()> {
     let Some(task) = classify(input, output_dir) else {
         tracing::warn!(input_path = %input.display(), "not an encrypted text or audio file, skipped");
         return Ok(());
@@ -96,7 +91,7 @@ fn decode_file(
                 .or_else(|| input.parent())
                 .ok_or_else(|| anyhow!("`{}` has no parent directory", input.display()))?;
 
-            decode_audio(input, output_dir, audio, key_files)?;
+            decode_audio(input, output_dir, audio)?;
         }
     }
 
@@ -109,12 +104,10 @@ pub fn decode_files(args: &DecoderArgs) -> Result<()> {
     }
 
     let audio = AudioOptions::from(&args.audio);
-    // dropped after all the files are decoded
-    let key_files = KeyFiles::default();
     let mut failed = 0_usize;
 
     for input in glob_files(&args.input_paths) {
-        if let Err(e) = decode_file(&input, args.output.as_deref(), &audio, &key_files) {
+        if let Err(e) = decode_file(&input, args.output.as_deref(), &audio) {
             tracing::warn!(input_path = %input.display(), error = ?e, "failed to decode file");
             failed += 1;
         }
