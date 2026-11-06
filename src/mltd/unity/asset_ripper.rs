@@ -302,14 +302,14 @@ impl AssetRipper {
         }
 
         let class = Class::from_name(&info_nodes[3].inner_html());
-        let orig_path = match class {
-            // asset bundles contains bundle information only
-            Class::AssetBundle => None,
-            // the Windows version of Asset Ripper uses backslashes and exports under `Assets`,
-            // but the paths are kept lowercase for case-sensitive file systems,
-            // see `read_exported`
-            _ => Some(info_nodes[4].inner_html().replace('\\', "/").to_lowercase()),
-        };
+        // asset bundles contains bundle information only
+        let orig_path = (class != Class::AssetBundle).then(|| {
+            // the Windows version of Asset Ripper uses backslashes, and Asset Ripper shows the
+            // paths under `Assets` while the bundle has them under `assets`, see `read_exported`
+            let path = info_nodes[4].inner_html().replace('\\', "/");
+            path.strip_prefix("Assets/")
+                .map_or_else(|| path.clone(), |rest| format!("assets/{rest}"))
+        });
 
         Ok(Object::new(slot, path_id, class, name, orig_path))
     }
