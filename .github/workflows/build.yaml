@@ -13,6 +13,12 @@ jobs:
     name: Build project
     runs-on: ${{ matrix.os }}
 
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+
     strategy:
       matrix:
         os: 
@@ -53,6 +59,11 @@ jobs:
           echo "name=$name" >> $GITHUB_OUTPUT
 
         shell: bash
+
+      - name: attest
+        uses: actions/attest@v4.2.2
+        with:
+          subject-path: target/release/${{ steps.build.outputs.name }}
 
       - name: Publish artifact
         uses: actions/upload-artifact@v7.0.2

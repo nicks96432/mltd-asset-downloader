@@ -4,16 +4,20 @@
 version: 'v0.0.3'
 workflows:
     '.github/workflows/build.yaml':
+        - 'actions/attest@v4.2.2'
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
-        - 'dtolnay/rust-toolchain@master'
         - 'swatinem/rust-cache@v2.9.3'
     '.github/workflows/ci.yaml':
         - 'actions/checkout@v7.0.1'
         - 'cargo-bins/cargo-binstall@main'
-        - 'dtolnay/rust-toolchain@master'
         - 'swatinem/rust-cache@v2.9.3'
 dependencies:
+    'actions/attest@v4.2.2':
+        ref: 'v4.2.2'
+        commit: 'sha1-1e69f48acb82d1966a394da916b4c1698aa569d6'
+        owner_id: 44036562
+        repo_id: 760701061
     'actions/checkout@v7.0.1':
         ref: 'v7.0.1'
         commit: 'sha1-3d3c42e5aac5ba805825da76410c181273ba90b1'
@@ -29,11 +33,6 @@ dependencies:
         commit: 'sha1-81df5c23b0dc775b009efdfc9895c5965b7a4e40'
         owner_id: 110581826
         repo_id: 321270638
-    'dtolnay/rust-toolchain@master':
-        ref: 'master'
-        commit: 'sha1-683b588c487a69d01f6c6ddf40f036ff682cc2c8'
-        owner_id: 1940490
-        repo_id: 260749683
     'swatinem/rust-cache@v2.9.3':
         ref: 'v2.9.3'
         commit: 'sha1-d1527c8f67ef9af357290475d4af4b0fab8f12e0'
