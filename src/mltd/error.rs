@@ -25,6 +25,19 @@ pub struct Error {
 pub(crate) type Result<T, E = Error> = std::result::Result<T, E>;
 
 impl Error {
+    /// Returns the [`ErrorKind`] of the error.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use std::path::Path;
+    ///
+    /// use mltd::ErrorKind;
+    /// use mltd::util::safe_join;
+    ///
+    /// let error = safe_join(Path::new("out"), "../escape").unwrap_err();
+    /// assert_eq!(error.kind(), ErrorKind::UnsafePath);
+    /// ```
     #[must_use]
     pub fn kind(&self) -> ErrorKind {
         self.repr.as_ref().into()

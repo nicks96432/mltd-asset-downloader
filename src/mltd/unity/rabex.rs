@@ -235,12 +235,29 @@ impl Default for RabexExtractor {
 
 impl RabexExtractor {
     /// Creates a new extractor with the embedded type tree database.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use mltd::unity::RabexExtractor;
+    ///
+    /// let extractor = RabexExtractor::new();
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Self { type_trees: Arc::new(TypeTreeCache::new(TpkTypeTreeBlob::embedded())) }
     }
 
     /// Creates `count` extractors sharing one type tree database.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use mltd::unity::RabexExtractor;
+    ///
+    /// let extractors = RabexExtractor::pool(4);
+    /// assert_eq!(extractors.len(), 4);
+    /// ```
     #[must_use]
     pub fn pool(count: usize) -> Vec<Self> {
         let type_trees = Arc::new(TypeTreeCache::new(TpkTypeTreeBlob::embedded()));

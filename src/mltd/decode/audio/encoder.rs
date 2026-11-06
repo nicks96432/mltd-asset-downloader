@@ -109,6 +109,25 @@ impl<'a> Encoder<'a> {
     ///
     /// Returns [`crate::ErrorKind::AudioDecode`] if vgmstream cannot identify the input file
     /// format, or ffmpeg encoder initialization failed.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use std::path::Path;
+    ///
+    /// use mltd::decode::audio::encoder::{Encoder, EncoderOutputOptions};
+    ///
+    /// let options = EncoderOutputOptions {
+    ///     prefix: "test",
+    ///     codec: "pcm_s16le",
+    ///     format: "wav",
+    ///     ffmpeg_options: None,
+    /// };
+    ///
+    /// // opens the first subsong of the file
+    /// let encoder =
+    ///     Encoder::open(Path::new("test.acb"), 0, Path::new("output"), &options).unwrap();
+    /// ```
     pub fn open<P>(
         input_file: P,
         subsong_index: usize,
@@ -368,6 +387,25 @@ impl<'a> Encoder<'a> {
     /// # Errors
     ///
     /// Returns [`crate::ErrorKind::AudioDecode`] if encoding failed.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use std::path::Path;
+    ///
+    /// use mltd::decode::audio::encoder::{Encoder, EncoderOutputOptions};
+    ///
+    /// let options = EncoderOutputOptions {
+    ///     prefix: "test",
+    ///     codec: "pcm_s16le",
+    ///     format: "wav",
+    ///     ffmpeg_options: None,
+    /// };
+    ///
+    /// let mut encoder =
+    ///     Encoder::open(Path::new("test.acb"), 0, Path::new("output"), &options).unwrap();
+    /// encoder.encode().unwrap();
+    /// ```
     pub fn encode(&mut self) -> Result<()> {
         match self.options {
             Some(ref o) => {

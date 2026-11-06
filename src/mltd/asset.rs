@@ -45,6 +45,20 @@ impl AssetInfo {
     /// # Errors
     ///
     /// - [`crate::ErrorKind::Network`]: if it cannot send request.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use mltd::asset::{AssetInfo, Platform};
+    ///
+    /// tokio_test::block_on(async {
+    ///     let latest = AssetInfo::manifest(Platform::Android, None).await.unwrap();
+    ///     println!("latest manifest: {}", latest.filename);
+    ///
+    ///     let v1 = AssetInfo::manifest(Platform::IOS, Some(1)).await.unwrap();
+    ///     assert_eq!(v1.version.version, 1);
+    /// });
+    /// ```
     pub async fn manifest(platform: Platform, version: Option<u64>) -> Result<Self> {
         let client = MatsuriApiClient::new();
         let version = match version {
@@ -256,6 +270,15 @@ pub enum Platform {
 
 impl Platform {
     /// Returns the string representation of the [`Platform`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use mltd::asset::Platform;
+    ///
+    /// assert_eq!(Platform::Android.as_str(), "Android");
+    /// assert_eq!(Platform::IOS.as_str(), "iOS");
+    /// ```
     #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
@@ -265,6 +288,15 @@ impl Platform {
     }
 
     /// Returns the `User-Agent` string of the [`Platform`] in HTTP request.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use mltd::asset::Platform;
+    ///
+    /// assert!(Platform::Android.user_agent().starts_with("UnityPlayer/"));
+    /// assert!(Platform::IOS.user_agent().contains("CFNetwork"));
+    /// ```
     #[must_use]
     pub fn user_agent(&self) -> &str {
         match self {

@@ -131,6 +131,21 @@ pub fn decrypt_text(cipher: &[u8]) -> Result<Vec<u8>> {
 /// # Errors
 ///
 /// This function fails if the file cannot be read or written, or the content cannot be decrypted.
+///
+/// # Example
+///
+/// ```
+/// use mltd::decode::text::{decrypt_file, encrypt_text};
+///
+/// let dir = assert_fs::TempDir::new().unwrap();
+/// let input = dir.path().join("hello.gtx");
+/// let output = dir.path().join("hello.txt");
+///
+/// std::fs::write(&input, encrypt_text(b"Hello, world!")).unwrap();
+/// decrypt_file(&input, &output).unwrap();
+///
+/// assert_eq!(std::fs::read(&output).unwrap(), b"Hello, world!");
+/// ```
 pub fn decrypt_file(input: &Path, output: &Path) -> Result<()> {
     let cipher = std::fs::read(input).map_err(|e| Repr::io("read text", Some(input), e))?;
     let plaintext = decrypt_text(&cipher)?;

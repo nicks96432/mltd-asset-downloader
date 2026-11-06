@@ -58,6 +58,18 @@ pub struct Options {
 
 impl Options {
     /// Creates options that write to `output` with the default formats.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use image::ImageFormat;
+    /// use mltd::unpack::pipeline::Options;
+    ///
+    /// let mut options = Options::new("output");
+    /// assert_eq!(options.image_format, ImageFormat::Png);
+    ///
+    /// options.image_format = ImageFormat::WebP;
+    /// ```
     #[must_use]
     pub fn new(output: impl Into<PathBuf>) -> Self {
         Self {
@@ -91,6 +103,23 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 ///
 /// Returns the files that failed to unpack, with the reasons. The temporary files made
 /// for decoding audio are removed before returning, even if a worker panics.
+///
+/// # Example
+///
+/// ```no_run
+/// use std::path::PathBuf;
+///
+/// use mltd::unity::RabexExtractor;
+/// use mltd::unpack::pipeline::{Options, unpack_all};
+///
+/// let files = vec![PathBuf::from("a.unity3d"), PathBuf::from("b.unity3d")];
+///
+/// // two workers, each of them unpacks one file at a time
+/// let failures = unpack_all(RabexExtractor::pool(2), files.into_iter(), &Options::new("output"));
+/// for (path, error) in failures {
+///     eprintln!("{}: {error}", path.display());
+/// }
+/// ```
 pub fn unpack_all<E>(
     extractors: Vec<E>,
     files: impl Iterator<Item = PathBuf> + Send,
@@ -139,6 +168,24 @@ where
 /// # Errors
 ///
 /// This method fails if the file cannot be loaded, or any of the assets cannot be unpacked.
+///
+/// # Example
+///
+/// ```no_run
+/// # #[cfg(feature = "decode")]
+/// # {
+/// use std::path::Path;
+///
+/// use mltd::unity::RabexExtractor;
+/// use mltd::unpack::pipeline::{KeyFiles, Options, unpack_file};
+///
+/// let mut extractor = RabexExtractor::new();
+/// let key_files = KeyFiles::default();
+///
+/// unpack_file(&mut extractor, Path::new("a.unity3d"), &Options::new("output"), &key_files)
+///     .unwrap();
+/// # }
+/// ```
 pub fn unpack_file<E>(
     extractor: &mut E,
     path: &Path,

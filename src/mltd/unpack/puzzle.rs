@@ -47,6 +47,21 @@ impl From<Error> for CrateError {
 /// # Errors
 ///
 /// Returns [`crate::Error`] with [`crate::ErrorKind::Puzzle`] if the puzzle cannot be solved.
+///
+/// # Example
+///
+/// ```
+/// use image::{DynamicImage, GenericImageView};
+/// use mltd::unpack::puzzle::solve_puzzle;
+///
+/// // a 16:9 image cut into a 1022x720 main piece and a 720x258 strip in a 1024x1024 texture
+/// let texture = DynamicImage::new_rgba8(1024, 1024);
+/// let pieces = [texture.view(1, 303, 1022, 720), texture.view(1, 1, 720, 258)];
+///
+/// let images = solve_puzzle("bg2d_t0084", &texture, &pieces).unwrap();
+/// assert_eq!(images.len(), 1);
+/// assert_eq!((images[0].width(), images[0].height()), (1280, 720));
+/// ```
 pub fn solve_puzzle(
     texture_name: &str,
     img: &DynamicImage,
@@ -130,6 +145,15 @@ fn solve_simple_puzzle(
 
 /// Gets the name of the image and the position of a texture that is one of its strips, e.g.
 /// `("ex4c_00001", 3)` for `ex4c_00001_3`.
+///
+/// # Example
+///
+/// ```
+/// use mltd::unpack::puzzle::ex4c_name;
+///
+/// assert_eq!(ex4c_name("ex4c_00001_3"), Some(("ex4c_00001", 3)));
+/// assert_eq!(ex4c_name("bg2d_t0084"), None);
+/// ```
 #[must_use]
 pub fn ex4c_name(texture_name: &str) -> Option<(&str, u32)> {
     static EX4C_REGEX: LazyLock<regex::Regex> =
@@ -144,6 +168,18 @@ pub fn ex4c_name(texture_name: &str) -> Option<(&str, u32)> {
 ///
 /// If the strips are not equally wide, they are aligned to the left, and the rest of the
 /// narrower ones is transparent.
+///
+/// # Example
+///
+/// ```
+/// use image::DynamicImage;
+/// use mltd::unpack::puzzle::stack_strips;
+///
+/// let strips = [DynamicImage::new_rgba8(4, 2), DynamicImage::new_rgba8(3, 1)];
+///
+/// let stacked = stack_strips(&strips);
+/// assert_eq!((stacked.width(), stacked.height()), (4, 3));
+/// ```
 #[must_use]
 pub fn stack_strips(strips: &[DynamicImage]) -> DynamicImage {
     let width = strips.iter().map(DynamicImage::width).max().unwrap_or(0);

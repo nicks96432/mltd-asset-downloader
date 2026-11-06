@@ -67,6 +67,14 @@ impl MatsuriApiClient {
     /// # Panics
     ///
     /// This function will panic if the client cannot be built.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mltd::net::MatsuriApiClient;
+    ///
+    /// let client = MatsuriApiClient::new();
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         let client = ClientBuilder::new().zstd(true).https_only(true).build().unwrap();
@@ -99,6 +107,17 @@ impl MatsuriApiClient {
     /// # Errors
     ///
     /// This method fails if it cannot send request to `api.matsurihi.me`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use mltd::net::MatsuriApiClient;
+    ///
+    /// tokio_test::block_on(async {
+    ///     let versions = MatsuriApiClient::new().get_all_asset_versions().await.unwrap();
+    ///     println!("{} asset versions", versions.len());
+    /// });
+    /// ```
     pub async fn get_all_asset_versions(&self) -> Result<Vec<AssetVersion>> {
         let url = concat!(matsuri_api_endpoint!(), "/version/assets");
         let versions: Vec<AssetVersion> = self.send_request(url).await?;

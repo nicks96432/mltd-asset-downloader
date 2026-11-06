@@ -77,6 +77,14 @@ impl AssetRipper {
     /// # Errors
     ///
     /// This method fails if the process fails to start.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use mltd::unity::AssetRipper;
+    ///
+    /// let ripper = AssetRipper::new("AssetRipper/AssetRipper.GUI.Free", 50000).unwrap();
+    /// ```
     pub fn new<P>(path: P, port: u16) -> Result<Self>
     where
         P: AsRef<Path>,
@@ -137,6 +145,15 @@ impl AssetRipper {
     /// # Errors
     ///
     /// This method fails if the process cannot be started, or there are too many ports in use.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use mltd::unity::AssetRipper;
+    ///
+    /// let rippers = AssetRipper::pool("AssetRipper/AssetRipper.GUI.Free", 4).unwrap();
+    /// assert_eq!(rippers.len(), 4);
+    /// ```
     pub fn pool<P>(path: P, count: usize) -> Result<Vec<Self>>
     where
         P: AsRef<Path>,
@@ -175,6 +192,14 @@ impl AssetRipper {
     /// # Errors
     ///
     /// This method fails if the network request to the host fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use mltd::unity::AssetRipper;
+    ///
+    /// let ripper = AssetRipper::connect("localhost", 50000).unwrap();
+    /// ```
     pub fn connect(host: &str, port: u16) -> Result<Self> {
         let client = Client::new();
         let this = Self { base_url: format!("http://{host}:{port}"), client, process: None };
@@ -284,6 +309,15 @@ impl AssetRipper {
     /// # Errors
     ///
     /// This method fails if the export request fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use mltd::unity::AssetRipper;
+    ///
+    /// let ripper = AssetRipper::connect("localhost", 50000).unwrap();
+    /// ripper.export_primary("output").unwrap();
+    /// ```
     pub fn export_primary<P>(&self, path: P) -> Result<()>
     where
         P: AsRef<Path>,
@@ -302,6 +336,20 @@ impl AssetRipper {
     /// # Errors
     ///
     /// This method fails if the update request fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use std::collections::HashMap;
+    ///
+    /// use mltd::unity::AssetRipper;
+    ///
+    /// let ripper = AssetRipper::connect("localhost", 50000).unwrap();
+    ///
+    /// let mut form = HashMap::default();
+    /// form.insert("ImageExportFormat".to_owned(), "Png".to_owned());
+    /// ripper.set(&form).unwrap();
+    /// ```
     pub fn set(&self, form: &HashMap<String, String>) -> Result<()> {
         let url = self.full_url("Settings/update");
 
