@@ -1,4 +1,5 @@
 use std::ffi::OsStr;
+use std::fs::canonicalize;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
@@ -68,6 +69,13 @@ fn classify(input: &Path, output_dir: Option<&Path>) -> Option<Task> {
     Some(Task::Text(output))
 }
 
+/// Checks if `a` and `b` are the same file.
+///
+/// A file that does not exist is not the same as any other.
+fn is_same_file(a: &Path, b: &Path) -> bool {
+    matches!((canonicalize(a), canonicalize(b)), (Ok(a), Ok(b)) if a == b)
+}
+
 fn decode_file(input: &Path, output_dir: Option<&Path>, audio: &AudioOptions) -> Result<()> {
     let Some(task) = classify(input, output_dir) else {
         tracing::warn!(input_path = %input.display(), "not an encrypted text or audio file, skipped");
@@ -76,7 +84,7 @@ fn decode_file(input: &Path, output_dir: Option<&Path>, audio: &AudioOptions) ->
 
     match task {
         Task::Text(output) => {
-            if output == input {
+            if is_same_file(input, &output) {
                 return Err(anyhow!(
                     "`{}` would be decrypted in place, use --output to write it elsewhere",
                     input.display()
