@@ -11,6 +11,22 @@ use thiserror::Error as ThisError;
 
 use crate::error::{Error as CrateError, Repr, Result};
 
+/// Names of the textures of four-panel comics, each of which is a horizontal strip.
+const EX4C_PATTERN: &str = r"^(ex4c_[0-9]{5})_([0-9]+)$";
+
+/// Names of the textures of cards.
+const CARD_PATTERN: &str = r"^[0-9]{3}[a-z]{3}[0-9]{4}_[0-9]$";
+
+/// A texture of a card has the pieces of 2 images.
+const CARD_IMG_COUNT: usize = 2;
+
+/// Size `(width, height)` of an image of a card.
+const CARD_SIZE: (u32, u32) = (640, 800);
+
+/// Positions `(x, y)` of the pieces of an image of a card.
+const CARD_PIECES: [(i64, i64); 6] =
+    [(0, 0), (0, 510), (380, 510), (380, 728), (498, 728), (616, 728)];
+
 #[derive(Debug, ThisError)]
 pub(crate) enum Error {
     #[error("puzzle not found for texture {0}")]
@@ -47,27 +63,18 @@ pub fn solve_puzzle(
         return Err(Error::PuzzleNotFound(texture_name.to_string()).into());
     }
 
-    let puzzle = CARD_PUZZLE;
+    let (width, height) = CARD_SIZE;
+    let piece_count = pieces.len() / CARD_IMG_COUNT;
     let mut puzzle_imgs = Vec::new();
 
-    for i in 0..puzzle.img_count {
-        let piece_count = pieces.len() / puzzle.img_count;
-        let mut puzzle_img = DynamicImage::new_rgba8(puzzle.width, puzzle.height);
+    for i in 0..CARD_IMG_COUNT {
+        let mut puzzle_img = DynamicImage::new_rgba8(width, height);
 
-        for j in 0..piece_count {
+        for (j, &(x, y)) in CARD_PIECES.iter().enumerate().take(piece_count) {
             let piece_idx = i * piece_count + j;
             let piece = pieces.get(piece_idx).ok_or(Repr::OutOfRange(piece_idx, pieces.len()))?;
 
-            let mut piece = crop_piece(img, piece);
-
-            match puzzle.pieces[j].rotate {
-                90 => piece = piece.rotate90(),
-                180 => piece = piece.rotate180(),
-                270 => piece = piece.rotate270(),
-                _ => (),
-            }
-
-            imageops::overlay(&mut puzzle_img, &piece, puzzle.pieces[j].x, puzzle.pieces[j].y);
+            imageops::overlay(&mut puzzle_img, &crop_piece(img, piece), x, y);
         }
 
         puzzle_imgs.push(puzzle_img);
@@ -151,42 +158,6 @@ pub fn stack_strips(strips: &[DynamicImage]) -> DynamicImage {
 
     stacked
 }
-
-/// Names of the textures of four-panel comics, each of which is a horizontal strip.
-const EX4C_PATTERN: &str = r"^(ex4c_[0-9]{5})_([0-9]+)$";
-
-/// Names of the textures of cards.
-const CARD_PATTERN: &str = r"^[0-9]{3}[a-z]{3}[0-9]{4}_[0-9]$";
-
-#[derive(Debug, Clone)]
-struct Piece {
-    x: i64,
-    y: i64,
-    rotate: u32,
-}
-
-#[derive(Debug, Clone)]
-struct Puzzle {
-    width: u32,
-    height: u32,
-    pieces: &'static [Piece],
-    img_count: usize,
-}
-
-/// A texture of a card has the pieces of 2 images.
-const CARD_PUZZLE: Puzzle = Puzzle {
-    width: 640,
-    height: 800,
-    pieces: &[
-        Piece { x: 0, y: 0, rotate: 0 },
-        Piece { x: 0, y: 510, rotate: 0 },
-        Piece { x: 380, y: 510, rotate: 0 },
-        Piece { x: 380, y: 728, rotate: 0 },
-        Piece { x: 498, y: 728, rotate: 0 },
-        Piece { x: 616, y: 728, rotate: 0 },
-    ],
-    img_count: 2,
-};
 
 #[cfg(test)]
 mod tests {
