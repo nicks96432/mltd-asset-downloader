@@ -2,6 +2,7 @@
 
 #[cfg(feature = "decode-audio")]
 pub mod audio;
+
 #[cfg(feature = "decrypt-text")]
 pub mod text;
 

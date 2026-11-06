@@ -10,8 +10,7 @@ use crate::unity::{Bundle, Object};
 /// Writes a [`Class::TextAsset`](crate::unity::Class::TextAsset) to `output_path`,
 /// removes `.bytes` extension, and decrypts it if it's encrypted and `decrypt` is `true`.
 ///
-/// Encrypted text that is not decrypted is written as it is, and keeps the `.bytes` extension
-/// so that it can be told apart from the decrypted one.
+/// Encrypted text that is not decrypted is written as it is, and keeps the `.bytes` extension.
 ///
 /// Returns the output path if it's an audio file.
 pub(super) fn extract(
@@ -49,7 +48,7 @@ pub(super) fn extract(
     Ok(audio_path)
 }
 
-#[cfg(feature = "decode")]
+#[cfg(feature = "decrypt-text")]
 fn decrypt_data(data: &[u8]) -> Result<Vec<u8>> {
     let decrypted = crate::decode::text::decrypt_text(data)?;
     tracing::trace!(decrypted = %String::from_utf8_lossy(&decrypted));
@@ -57,8 +56,7 @@ fn decrypt_data(data: &[u8]) -> Result<Vec<u8>> {
     Ok(decrypted)
 }
 
-/// Text is never decrypted without the `decode` feature, so this is never called.
-#[cfg(not(feature = "decode"))]
+#[cfg(not(feature = "decrypt-text"))]
 #[allow(clippy::unnecessary_wraps)]
 fn decrypt_data(data: &[u8]) -> Result<Vec<u8>> {
     Ok(data.to_vec())

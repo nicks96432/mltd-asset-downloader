@@ -22,7 +22,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use image::ImageFormat;
 
-#[cfg(feature = "decode")]
+#[cfg(feature = "decode-audio")]
 pub use crate::decode::audio::{AudioOptions, decode as decode_audio};
 use crate::error::{Error, Repr, Result};
 use crate::unity::{Bundle, Class, Extractor};
@@ -30,6 +30,7 @@ use crate::util::safe_join;
 
 /// Options of the unpacking.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct Options {
     /// The output directory.
     pub output: PathBuf,
@@ -39,20 +40,18 @@ pub struct Options {
 
     /// Whether to decrypt the encrypted text assets.
     ///
-    /// If it is `false`, they are written as is, and can be decrypted later by
-    /// [`decrypt_file`](crate::decode::text::decrypt_file).
-    #[cfg(feature = "decode")]
+    /// If it is `false`, texts are written as is.
+    #[cfg(feature = "decrypt-text")]
     pub decrypt_text: bool,
 
     /// Whether to decode the audio assets.
     ///
-    /// If it is `false`, they are written as is, and can be decoded later by
-    /// [`decode_audio`].
-    #[cfg(feature = "decode")]
+    /// If it is `false`, audios are written as is.
+    #[cfg(feature = "decode-audio")]
     pub decode_audio: bool,
 
     /// Options of the audio output.
-    #[cfg(feature = "decode")]
+    #[cfg(feature = "decode-audio")]
     pub audio: AudioOptions,
 }
 
@@ -75,22 +74,22 @@ impl Options {
         Self {
             output: output.into(),
             image_format: ImageFormat::Png,
-            #[cfg(feature = "decode")]
+            #[cfg(feature = "decrypt-text")]
             decrypt_text: true,
-            #[cfg(feature = "decode")]
+            #[cfg(feature = "decode-audio")]
             decode_audio: true,
-            #[cfg(feature = "decode")]
+            #[cfg(feature = "decode-audio")]
             audio: AudioOptions::default(),
         }
     }
 
     /// Whether the encrypted text assets should be decrypted.
-    #[cfg_attr(not(feature = "decode"), allow(clippy::unused_self))]
+    #[cfg_attr(not(feature = "decrypt-text"), allow(clippy::unused_self))]
     fn decrypts_text(&self) -> bool {
-        #[cfg(feature = "decode")]
+        #[cfg(feature = "decrypt-text")]
         return self.decrypt_text;
 
-        #[cfg(not(feature = "decode"))]
+        #[cfg(not(feature = "decrypt-text"))]
         return false;
     }
 }
@@ -243,7 +242,7 @@ where
 
     // we should handle audio files after all of them are unpacked because some files may
     // contain informations (Ex: filename) about others
-    #[cfg(feature = "decode")]
+    #[cfg(feature = "decode-audio")]
     if options.decode_audio {
         tracing::debug!(count = audio_paths.len(), "decoding audio files");
         for audio_path in audio_paths {
