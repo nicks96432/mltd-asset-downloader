@@ -1,4 +1,4 @@
-#[cfg(feature = "decode")]
+#[cfg(feature = "decode-audio")]
 mod audio;
 #[cfg(feature = "decode")]
 mod decode;
