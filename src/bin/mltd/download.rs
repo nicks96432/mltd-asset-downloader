@@ -106,20 +106,9 @@ async fn select_entries<'a>(
     if args.skip_existing {
         let before = entries.len();
 
-        // checks all the files in one blocking task, instead of a task for each file
-        let output_dir = args.output_dir.clone();
-        let files: Vec<_> =
-            entries.iter().map(|(name, entry)| ((*name).clone(), entry.2 as u64)).collect();
-        let up_to_date: Vec<_> = tokio::task::spawn_blocking(move || {
-            files.iter().map(|(name, size)| is_up_to_date(&output_dir, name, *size)).collect()
-        })
-        .await?;
-
-        entries = entries
-            .into_iter()
-            .zip(up_to_date)
-            .filter_map(|(entry, up_to_date)| (!up_to_date).then_some(entry))
-            .collect();
+        tokio::task::block_in_place(|| {
+            entries.retain(|(name, entry)| !is_up_to_date(&args.output_dir, name, entry.2 as u64));
+        });
 
         tracing::info!(skipped = before - entries.len(), "skipped existing assets");
     }
