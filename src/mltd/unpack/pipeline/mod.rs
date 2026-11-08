@@ -6,12 +6,13 @@
 //! - text assets are written as is, with the `.bytes` extension removed
 //! - textures are written as images, with the puzzles solved
 //!
-//! If the `decode` feature is enabled, the following steps are also done unless they are
-//! disabled by the options:
+//! The following steps are also done if their features are enabled, unless they are disabled by
+//! the options:
 //!
-//! - encrypted text assets are decrypted, unless `Options::decrypt_text` is `false`
-//! - audio assets are decoded after all the files of the bundle are written, unless
-//!   `Options::decode_audio` is `false`
+//! - with the `decrypt-text` feature, encrypted text assets are decrypted, unless
+//!   `Options::decrypt_text` is `false`
+//! - with the `decode-audio` feature, audio assets are decoded after all the files of the bundle
+//!   are written, unless `Options::decode_audio` is `false`
 
 mod text;
 mod texture;
@@ -140,12 +141,9 @@ where
                     let next = lock(files).next();
                     let Some(path) = next else { break };
 
-                    if let Err(e) = unpack_file(
-                        &mut extractor,
-                        &path,
-                        options,
-                    ) {
-                        tracing::warn!(input_path = %path.display(), error = ?e, "failed to unpack file");
+                    if let Err(e) = unpack_file(&mut extractor, &path, options) {
+                        let input_path = path.display();
+                        tracing::warn!(%input_path, error = ?e, "failed to unpack file");
                         lock(failures).push((path, e));
                     }
                 }
