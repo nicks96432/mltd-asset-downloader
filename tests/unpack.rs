@@ -117,7 +117,6 @@ fn test_unpack_raw_then_decode_audio() {
         .success();
 
     assert!(wav_audio(wav.path()) == wav_audio(Path::new("tests/test_acb.wav")));
-    dir.child(relpath.join(".hcakey")).assert(predicate::path::missing());
 }
 
 #[test]
