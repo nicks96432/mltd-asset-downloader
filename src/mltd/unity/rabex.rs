@@ -572,7 +572,7 @@ mod tests {
     }
 
     #[test]
-    fn test_texture_corrupted() {
+    fn test_corrupted() {
         init_test_logger();
 
         let case = &test_cases()[1];
