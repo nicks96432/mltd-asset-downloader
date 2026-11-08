@@ -2,7 +2,7 @@
 
 use std::cell::OnceCell;
 use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::time::Duration;
@@ -272,13 +272,15 @@ impl AssetRipper {
 
     /// Reads the object `path_id` of the collection numbered `collection_no` of the bundle
     /// numbered `bundle_no`, which is the `slot`-th collection of the loaded file.
+    ///
+    /// Returns the object and the path Asset Ripper shows for it.
     fn load_object(
         &self,
         slot: usize,
         bundle_no: usize,
         collection_no: usize,
         path_id: i64,
-    ) -> Result<Object> {
+    ) -> Result<(Object, Option<String>)> {
         let path = format!(
             r#"{{"C":{{"B":{{"P":[{}]}},"I":{}}},"D":{}}}"#,
             bundle_no, collection_no, path_id
@@ -305,15 +307,15 @@ impl AssetRipper {
         }
 
         let class = Class::from_name(&info_nodes[3].text().collect::<String>());
-        // asset bundles contains bundle information only
-        let orig_path = (class != Class::AssetBundle).then(|| {
-            // the Windows version of Asset Ripper uses backslashes, and Asset Ripper shows the
-            // paths under `Assets` with the original case, while the bundle has them lowercase
-            // under `assets`, see `read_exported`
-            info_nodes[4].text().collect::<String>().replace('\\', "/").to_lowercase()
-        });
+        // asset bundles contains bundle information only, and the Windows version of Asset
+        // Ripper uses backslashes
+        let export_path = (class != Class::AssetBundle)
+            .then(|| info_nodes[4].text().collect::<String>().replace('\\', "/"));
+        // Asset Ripper shows the paths under `Assets` with the original case, while the bundle
+        // has them lowercase under `assets`
+        let orig_path = export_path.as_deref().map(str::to_lowercase);
 
-        Ok(Object::new(slot, path_id, class, name, orig_path))
+        Ok((Object::new(slot, path_id, class, name, orig_path), export_path))
     }
 
     /// Exports the primary contents in the Asset Ripper.
@@ -422,6 +424,7 @@ impl Extractor for AssetRipper {
             ripper: self,
             slots: Vec::new(),
             objects: Vec::new(),
+            export_paths: HashMap::default(),
             export: OnceCell::new(),
         };
         bundle.list_objects()?;
@@ -442,6 +445,10 @@ pub struct AssetRipperBundle<'a> {
     slots: Vec<(usize, usize)>,
 
     objects: Vec<Object>,
+
+    /// Paths of the exported files of the objects relative to the export directory, keyed by
+    /// `(Object::collection, Object::path_id)`.
+    export_paths: HashMap<(usize, i64), String>,
 
     /// Primary contents exported by Asset Ripper, which is done at most once.
     export: OnceCell<TempDir>,
@@ -466,8 +473,11 @@ impl AssetRipperBundle<'_> {
                 );
 
                 for path_id in path_ids {
-                    let object =
+                    let (object, export_path) =
                         self.ripper.load_object(slot, bundle_no, collection_no, path_id)?;
+                    if let Some(export_path) = export_path {
+                        self.export_paths.insert((slot, path_id), export_path);
+                    }
                     tracing::trace!(
                         path_id,
                         name = object.name,
@@ -507,10 +517,11 @@ impl AssetRipperBundle<'_> {
 
     /// Reads the exported file of the object.
     fn read_exported(&self, object: &Object) -> Result<Vec<u8>> {
-        let orig_path = object.orig_path.as_deref().ok_or(UnityError::NoOriginalPath)?;
-        // Asset Ripper exports to `Assets` with the original case, while the original path is
-        // lowercase, so each component is matched case-insensitively
-        let path = resolve_case_insensitive(self.export_dir()?, orig_path)?;
+        let export_path = self
+            .export_paths
+            .get(&(object.collection, object.path_id))
+            .ok_or(UnityError::NoOriginalPath)?;
+        let path = self.export_dir()?.join(export_path);
         tracing::trace!(path = %path.display(), "reading exported file");
 
         std::fs::read(&path).map_err(|e| Repr::io("read exported file", Some(&path), e).into())
@@ -539,29 +550,6 @@ impl AssetRipperBundle<'_> {
 
         Ok(value)
     }
-}
-
-/// Joins the lowercase `relpath` to `root`, matching each component against the existing entries
-/// case-insensitively.
-fn resolve_case_insensitive(root: &Path, relpath: &str) -> Result<PathBuf> {
-    let mut path = root.to_path_buf();
-
-    for component in relpath.split('/').filter(|c| !c.is_empty()) {
-        let exact = path.join(component);
-        if exact.exists() {
-            path = exact;
-            continue;
-        }
-
-        let entries = std::fs::read_dir(&path)
-            .map_err(|e| Repr::io("read exported directory", Some(&path), e))?;
-        let found = entries
-            .filter_map(std::result::Result::ok)
-            .find(|entry| entry.file_name().to_string_lossy().to_lowercase() == component);
-        path = found.map_or(exact, |entry| entry.path());
-    }
-
-    Ok(path)
 }
 
 /// Reads a rectangle field of a serialized sprite.
