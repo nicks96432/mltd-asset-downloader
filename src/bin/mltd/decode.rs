@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
 use clap::Args;
-
 use mltd::decode::audio::{AudioOptions, decode as decode_audio, is_awb_companion};
 use mltd::decode::text::decrypt_file;
 use mltd::decode::{AUDIO_EXTENSIONS, ENCRYPTED_TEXT_EXTENSIONS};

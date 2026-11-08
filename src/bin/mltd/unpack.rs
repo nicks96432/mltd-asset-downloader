@@ -3,7 +3,6 @@ use std::path::PathBuf;
 
 use anyhow::{Result, anyhow};
 use clap::{Args, ValueEnum};
-
 #[cfg(feature = "decode-audio")]
 use mltd::decode::audio::AudioOptions;
 use mltd::unpack::pipeline::{Options, unpack_all};

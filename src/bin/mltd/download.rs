@@ -8,13 +8,12 @@ use clap::Args;
 use futures_util::StreamExt;
 use human_bytes::human_bytes;
 use indicatif::{MultiProgress, MultiProgressAlignment, ProgressDrawTarget};
-use tokio::fs::create_dir_all;
-
 use mltd::Error;
 use mltd::asset::{Asset, AssetInfo};
 use mltd::manifest::{Manifest, ManifestEntry};
 use mltd::net::AssetVersion;
 use mltd::util::safe_join;
+use tokio::fs::create_dir_all;
 
 use crate::util::{BarProgress, ManifestSource, PlatformArg, create_progress_bar, fetch_manifest};
 
