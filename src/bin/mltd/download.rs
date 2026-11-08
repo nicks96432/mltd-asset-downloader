@@ -1,3 +1,4 @@
+use std::fs::create_dir_all;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -8,12 +9,12 @@ use clap::Args;
 use futures_util::StreamExt;
 use human_bytes::human_bytes;
 use indicatif::{MultiProgress, MultiProgressAlignment, ProgressDrawTarget};
+
 use mltd::Error;
 use mltd::asset::{Asset, AssetInfo};
 use mltd::manifest::{Manifest, ManifestEntry};
 use mltd::net::AssetVersion;
 use mltd::util::safe_join;
-use tokio::fs::create_dir_all;
 
 use crate::util::{BarProgress, ManifestSource, PlatformArg, create_progress_bar, fetch_manifest};
 
@@ -105,28 +106,35 @@ async fn select_entries<'a>(
 
     if args.skip_existing {
         let before = entries.len();
-        let mut remaining = Vec::with_capacity(before);
 
-        for (name, entry) in entries {
-            if !is_up_to_date(&args.output_dir, name, entry).await {
-                remaining.push((name, entry));
-            }
-        }
+        // checks all the files in one blocking task, instead of a task for each file
+        let output_dir = args.output_dir.clone();
+        let files: Vec<_> =
+            entries.iter().map(|(name, entry)| ((*name).clone(), entry.2 as u64)).collect();
+        let up_to_date: Vec<_> = tokio::task::spawn_blocking(move || {
+            files.iter().map(|(name, size)| is_up_to_date(&output_dir, name, *size)).collect()
+        })
+        .await?;
 
-        tracing::info!(skipped = before - remaining.len(), "skipped existing assets");
-        entries = remaining;
+        entries = entries
+            .into_iter()
+            .zip(up_to_date)
+            .filter_map(|(entry, up_to_date)| (!up_to_date).then_some(entry))
+            .collect();
+
+        tracing::info!(skipped = before - entries.len(), "skipped existing assets");
     }
 
     Ok(entries)
 }
 
 /// Checks if the asset already exists in `output_dir` with the size recorded in the manifest.
-async fn is_up_to_date(output_dir: &Path, name: &str, entry: &ManifestEntry) -> bool {
+fn is_up_to_date(output_dir: &Path, name: &str, size: u64) -> bool {
     let Ok(path) = safe_join(output_dir, name) else {
         return false;
     };
 
-    tokio::fs::metadata(path).await.is_ok_and(|m| m.is_file() && m.len() == entry.2 as u64)
+    std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() == size)
 }
 
 async fn download_task<P>(
@@ -156,7 +164,7 @@ where
 
 pub async fn download_assets(args: &DownloaderArgs) -> Result<()> {
     tracing::debug!(output_dir = %args.output_dir.display(), "creating output directory");
-    create_dir_all(&args.output_dir).await?;
+    create_dir_all(&args.output_dir)?;
 
     let (manifest, manifest_info) = match &args.manifest {
         Some(path) => {
