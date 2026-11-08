@@ -1,9 +1,8 @@
 //! Unpacks `TextAssets`.
 
-use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
-use crate::decode::{AUDIO_EXTENSIONS, ENCRYPTED_TEXT_EXTENSIONS};
+use crate::decode::{AssetKind, asset_kind};
 use crate::error::{Repr, Result};
 use crate::unity::{Bundle, Object};
 
@@ -21,25 +20,29 @@ pub(super) fn extract(
 ) -> Result<Option<PathBuf>> {
     // remove .bytes
     let stripped_path = output_path.with_extension("");
-    let file_ext = stripped_path.extension().and_then(OsStr::to_str).unwrap_or_default();
+    let kind = asset_kind(&stripped_path);
 
     let data = bundle.text(object)?;
     let mut audio_path = None;
 
-    let (output_path, data) = if !ENCRYPTED_TEXT_EXTENSIONS.contains(&file_ext) {
-        if AUDIO_EXTENSIONS.contains(&file_ext) {
-            tracing::debug!(path = %stripped_path.display(), "found audio file to decode later");
-            audio_path = Some(stripped_path.clone());
+    let (output_path, data) = match kind {
+        Some(AssetKind::EncryptedText) if decrypt => {
+            tracing::info!(output_path = %stripped_path.display(), "decrypting text");
+            (stripped_path, decrypt_data(&data)?)
         }
+        Some(AssetKind::EncryptedText) => {
+            tracing::info!(output_path = %output_path.display(), "unpacking encrypted text");
+            (output_path.to_path_buf(), data)
+        }
+        Some(AssetKind::Audio) | None => {
+            if kind == Some(AssetKind::Audio) {
+                tracing::debug!(path = %stripped_path.display(), "found audio file to decode later");
+                audio_path = Some(stripped_path.clone());
+            }
 
-        tracing::info!(output_path = %stripped_path.display(), "unpacking text");
-        (stripped_path, data)
-    } else if decrypt {
-        tracing::info!(output_path = %stripped_path.display(), "decrypting text");
-        (stripped_path, decrypt_data(&data)?)
-    } else {
-        tracing::info!(output_path = %output_path.display(), "unpacking encrypted text");
-        (output_path.to_path_buf(), data)
+            tracing::info!(output_path = %stripped_path.display(), "unpacking text");
+            (stripped_path, data)
+        }
     };
 
     std::fs::write(&output_path, data)
