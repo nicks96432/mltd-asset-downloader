@@ -89,7 +89,10 @@ pub fn solve_puzzle(
 
     let (width, height) = CARD_SIZE;
     let piece_count = pieces.len() / CARD_IMG_COUNT;
-    if pieces.len() % CARD_IMG_COUNT != 0 || piece_count == 0 || piece_count > CARD_PIECES.len() {
+    if !pieces.len().is_multiple_of(CARD_IMG_COUNT)
+        || piece_count == 0
+        || piece_count > CARD_PIECES.len()
+    {
         return Err(
             Error::PieceCount { texture: texture_name.to_owned(), pieces: pieces.len() }.into()
         );
