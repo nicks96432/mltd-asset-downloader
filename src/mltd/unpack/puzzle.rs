@@ -31,6 +31,9 @@ const CARD_PIECES: [(i64, i64); 6] =
 pub(crate) enum Error {
     #[error("puzzle not found for texture {0}")]
     PuzzleNotFound(String),
+
+    #[error("texture {texture} has {pieces} pieces, which do not fit the puzzle")]
+    PieceCount { texture: String, pieces: usize },
 }
 
 impl From<Error> for CrateError {
@@ -86,6 +89,11 @@ pub fn solve_puzzle(
 
     let (width, height) = CARD_SIZE;
     let piece_count = pieces.len() / CARD_IMG_COUNT;
+    if !pieces.len().is_multiple_of(CARD_IMG_COUNT) || piece_count > CARD_PIECES.len() {
+        return Err(
+            Error::PieceCount { texture: texture_name.to_owned(), pieces: pieces.len() }.into()
+        );
+    }
     tracing::debug!(texture_name, pieces = pieces.len(), piece_count, "solving as a card puzzle");
     let mut puzzle_imgs = Vec::new();
 
@@ -295,6 +303,16 @@ mod tests {
         assert!(solve_puzzle("jacket_harm4u", &texture, &views(&texture, &single)).is_err());
         let many = [(1, 1, 50, 50), (60, 1, 50, 50), (120, 1, 50, 50)];
         assert!(solve_puzzle("icon_014mir0123", &texture, &views(&texture, &many)).is_err());
+
+        // cards with an odd number of pieces or too many pieces are not solved
+        let texture = pattern(1024, 1024);
+        let odd = [(1, 1, 50, 50), (60, 1, 50, 50), (120, 1, 50, 50)];
+        let error = solve_puzzle("014mir0011_0", &texture, &views(&texture, &odd)).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::Puzzle);
+        let too_many: Vec<_> = (0..14).map(|i| (1 + i * 60, 1, 50, 50)).collect();
+        let error =
+            solve_puzzle("014mir0011_0", &texture, &views(&texture, &too_many)).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::Puzzle);
     }
 
     /// Opens an image in the `tests` directory.
