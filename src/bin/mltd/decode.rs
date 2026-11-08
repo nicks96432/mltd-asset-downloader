@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
 use clap::Args;
-use mltd::decode::audio::{AudioOptions, decode as decode_audio, is_awb_companion};
+use mltd::decode::audio::{AudioOptions, decode as decode_audio};
 use mltd::decode::text::decrypt_file;
 use mltd::decode::{AUDIO_EXTENSIONS, ENCRYPTED_TEXT_EXTENSIONS};
 
@@ -36,12 +36,6 @@ enum Task {
 
     /// Decode an audio file.
     Audio,
-
-    /// An audio file with the `.bytes` extension, which vgmstream cannot recognize.
-    AudioWithBytesExt,
-
-    /// An `.awb` file whose `.acb` is next to it, which is decoded with the `.acb`.
-    AwbCompanion,
 }
 
 /// Returns the extension of `path` if it is valid UTF-8.
@@ -55,21 +49,13 @@ fn extension(path: &Path) -> &str {
 /// output directory is different from the input's, because the encrypted and decrypted files
 /// cannot be told apart.
 fn classify(input: &Path, output_dir: Option<&Path>) -> Option<Task> {
-    let has_bytes = extension(input) == "bytes";
-    let text = if has_bytes { input.with_extension("") } else { input.to_owned() };
+    let ext = extension(input);
 
-    if AUDIO_EXTENSIONS.contains(&extension(&text)) {
-        let task = if has_bytes {
-            Task::AudioWithBytesExt
-        } else if is_awb_companion(input) {
-            Task::AwbCompanion
-        } else {
-            Task::Audio
-        };
-
-        return Some(task);
+    if AUDIO_EXTENSIONS.contains(&ext) {
+        return Some(Task::Audio);
     }
 
+    let text = if ext == "bytes" { input.with_extension("") } else { input.to_owned() };
     if !ENCRYPTED_TEXT_EXTENSIONS.contains(&extension(&text)) {
         return None;
     }
@@ -114,15 +100,6 @@ fn decode_file(input: &Path, output_dir: Option<&Path>, audio: &AudioOptions) ->
                 .ok_or_else(|| anyhow!("`{}` has no parent directory", input.display()))?;
 
             decode_audio(input, output_dir, audio)?;
-        }
-        Task::AudioWithBytesExt => {
-            return Err(anyhow!(
-                "`{}` cannot be recognized by vgmstream, remove the `.bytes` extension and try again",
-                input.display()
-            ));
-        }
-        Task::AwbCompanion => {
-            tracing::info!(input_path = %input.display(), "decoded with the .acb next to it, skipped");
         }
     }
 
