@@ -3,10 +3,13 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
 use clap::Args;
-use mltd::decode::audio::{AudioOptions, KeyFiles, decode as decode_audio};
+#[cfg(feature = "decode-audio")]
+use mltd::decode::audio::{AudioOptions, decode as decode_audio};
+#[cfg(feature = "decrypt-text")]
 use mltd::decode::text::decrypt_file;
-use mltd::decode::{AUDIO_EXTENSIONS, ENCRYPTED_TEXT_EXTENSIONS};
+use mltd::decode::{AssetKind, asset_kind};
 
+#[cfg(feature = "decode-audio")]
 use crate::audio::AudioArgs;
 use crate::util::glob_files;
 
@@ -16,7 +19,8 @@ pub struct DecoderArgs {
     /// The unpacked assets, supports glob patterns.
     ///
     /// Encrypted text files (.gtx.bytes, .mld.bytes) are decrypted, and audio files (.acb, .awb)
-    /// are decoded. Other files are skipped.
+    /// are decoded, if this build supports them. Other files are skipped, and so are audio files
+    /// with the .bytes extension, which vgmstream cannot recognize.
     #[arg(value_name = "PATH", num_args = 1..)]
     pub input_paths: Vec<String>,
 
@@ -24,6 +28,7 @@ pub struct DecoderArgs {
     #[arg(short, long, value_name = "DIR")]
     pub output: Option<PathBuf>,
 
+    #[cfg(feature = "decode-audio")]
     #[clap(flatten)]
     pub audio: AudioArgs,
 }
@@ -31,76 +36,97 @@ pub struct DecoderArgs {
 /// What to do with an input file.
 enum Task {
     /// Decrypt a text file to the given file name.
+    #[cfg(feature = "decrypt-text")]
     Text(PathBuf),
 
     /// Decode an audio file.
+    #[cfg(feature = "decode-audio")]
     Audio,
+
+    /// Skip the file for the given reason.
+    Skip(&'static str),
 }
 
-/// Returns the extension of `path` if it is valid UTF-8.
-fn extension(path: &Path) -> &str {
-    path.extension().and_then(OsStr::to_str).unwrap_or_default()
+/// Decodes the input files with the same options.
+struct Decoder<'a> {
+    /// The output directory, the output files are written next to the inputs if [`None`].
+    output_dir: Option<&'a Path>,
+
+    #[cfg(feature = "decode-audio")]
+    audio: AudioOptions,
 }
 
-/// Decides what to do with `input`.
+/// Checks if `a` and `b` are the same file.
 ///
-/// `x.gtx.bytes` is decrypted to `x.gtx`. Text without `.bytes` is not decrypted unless the
-/// output directory is different from the input's, because the encrypted and decrypted files
-/// cannot be told apart.
-fn classify(input: &Path, output_dir: Option<&Path>) -> Option<Task> {
-    let ext = extension(input);
+/// The paths are compared as they are if they cannot be canonicalized, e.g. a file that does not
+/// exist yet.
+#[cfg(feature = "decrypt-text")]
+fn is_same_file(a: &Path, b: &Path) -> bool {
+    use std::fs::canonicalize;
 
-    if AUDIO_EXTENSIONS.contains(&ext) {
-        return Some(Task::Audio);
-    }
-
-    let text = if ext == "bytes" { input.with_extension("") } else { input.to_owned() };
-    if !ENCRYPTED_TEXT_EXTENSIONS.contains(&extension(&text)) {
-        return None;
-    }
-
-    let name = text.file_name()?;
-    let output = match output_dir {
-        Some(dir) => dir.join(name),
-        None => text,
-    };
-
-    Some(Task::Text(output))
+    a == b || matches!((canonicalize(a), canonicalize(b)), (Ok(a), Ok(b)) if a == b)
 }
 
-fn decode_file(
-    input: &Path,
-    output_dir: Option<&Path>,
-    audio: &AudioOptions,
-    key_files: &KeyFiles,
-) -> Result<()> {
-    let Some(task) = classify(input, output_dir) else {
-        tracing::warn!(input_path = %input.display(), "not an encrypted text or audio file, skipped");
-        return Ok(());
-    };
+impl Decoder<'_> {
+    /// Decides what to do with `input`.
+    ///
+    /// `x.gtx.bytes` is decrypted to `x.gtx`. Text without `.bytes` is decrypted to the same
+    /// name, which is refused later unless the output directory is different from the input's,
+    /// because the encrypted and decrypted files cannot be told apart.
+    fn classify(&self, input: &Path) -> Task {
+        let has_bytes = input.extension() == Some(OsStr::new("bytes"));
 
-    match task {
-        Task::Text(output) => {
-            if output == input {
-                return Err(anyhow!(
-                    "`{}` would be decrypted in place, use --output to write it elsewhere",
-                    input.display()
-                ));
+        match asset_kind(input) {
+            Some(AssetKind::Audio) if has_bytes => {
+                Task::Skip("vgmstream cannot recognize audio with the .bytes extension, remove it")
             }
+            #[cfg(feature = "decode-audio")]
+            Some(AssetKind::Audio) => Task::Audio,
+            #[cfg(feature = "decrypt-text")]
+            Some(AssetKind::EncryptedText) => {
+                let text = if has_bytes { input.with_extension("") } else { input.to_owned() };
+                let Some(name) = text.file_name() else {
+                    return Task::Skip("no file name");
+                };
 
-            tracing::info!(input_path = %input.display(), output_path = %output.display(), "decrypting text");
-            decrypt_file(input, &output)?;
-        }
-        Task::Audio => {
-            let output_dir = output_dir
-                .or_else(|| input.parent())
-                .ok_or_else(|| anyhow!("`{}` has no parent directory", input.display()))?;
-
-            decode_audio(input, output_dir, audio, key_files)?;
+                Task::Text(self.output_dir.map_or_else(|| text.clone(), |dir| dir.join(name)))
+            }
+            #[cfg(not(all(feature = "decrypt-text", feature = "decode-audio")))]
+            Some(_) => Task::Skip("this build cannot decode this kind of file"),
+            None => Task::Skip("not an encrypted text or audio file"),
         }
     }
 
-    Ok(())
+    fn decode_file(&self, input: &Path) -> Result<()> {
+        match self.classify(input) {
+            #[cfg(feature = "decrypt-text")]
+            Task::Text(output) => {
+                if is_same_file(input, &output) {
+                    return Err(anyhow!(
+                        "`{}` would be decrypted in place, use --output to write it elsewhere",
+                        input.display()
+                    ));
+                }
+
+                tracing::info!(input_path = %input.display(), output_path = %output.display(), "decrypting text");
+                decrypt_file(input, &output)?;
+            }
+            #[cfg(feature = "decode-audio")]
+            Task::Audio => {
+                let output_dir = self
+                    .output_dir
+                    .or_else(|| input.parent())
+                    .ok_or_else(|| anyhow!("`{}` has no parent directory", input.display()))?;
+
+                decode_audio(input, output_dir, &self.audio)?;
+            }
+            Task::Skip(reason) => {
+                tracing::warn!(input_path = %input.display(), reason, "skipped");
+            }
+        }
+
+        Ok(())
+    }
 }
 
 pub fn decode_files(args: &DecoderArgs) -> Result<()> {
@@ -108,13 +134,15 @@ pub fn decode_files(args: &DecoderArgs) -> Result<()> {
         std::fs::create_dir_all(output)?;
     }
 
-    let audio = AudioOptions::from(&args.audio);
-    // dropped after all the files are decoded
-    let key_files = KeyFiles::default();
+    let decoder = Decoder {
+        output_dir: args.output.as_deref(),
+        #[cfg(feature = "decode-audio")]
+        audio: AudioOptions::from(&args.audio),
+    };
     let mut failed = 0_usize;
 
     for input in glob_files(&args.input_paths) {
-        if let Err(e) = decode_file(&input, args.output.as_deref(), &audio, &key_files) {
+        if let Err(e) = decoder.decode_file(&input) {
             tracing::warn!(input_path = %input.display(), error = ?e, "failed to decode file");
             failed += 1;
         }

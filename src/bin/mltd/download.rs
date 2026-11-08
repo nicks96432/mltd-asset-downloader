@@ -105,28 +105,24 @@ async fn select_entries<'a>(
 
     if args.skip_existing {
         let before = entries.len();
-        let mut remaining = Vec::with_capacity(before);
 
-        for (name, entry) in entries {
-            if !is_up_to_date(&args.output_dir, name, entry).await {
-                remaining.push((name, entry));
-            }
-        }
+        tokio::task::block_in_place(|| {
+            entries.retain(|(name, entry)| !is_up_to_date(&args.output_dir, name, entry.2 as u64));
+        });
 
-        tracing::info!(skipped = before - remaining.len(), "skipped existing assets");
-        entries = remaining;
+        tracing::info!(skipped = before - entries.len(), "skipped existing assets");
     }
 
     Ok(entries)
 }
 
 /// Checks if the asset already exists in `output_dir` with the size recorded in the manifest.
-async fn is_up_to_date(output_dir: &Path, name: &str, entry: &ManifestEntry) -> bool {
+fn is_up_to_date(output_dir: &Path, name: &str, size: u64) -> bool {
     let Ok(path) = safe_join(output_dir, name) else {
         return false;
     };
 
-    tokio::fs::metadata(path).await.is_ok_and(|m| m.is_file() && m.len() == entry.2 as u64)
+    std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() == size)
 }
 
 async fn download_task<P>(

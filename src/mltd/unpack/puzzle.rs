@@ -31,6 +31,9 @@ const CARD_PIECES: [(i64, i64); 6] =
 pub(crate) enum Error {
     #[error("puzzle not found for texture {0}")]
     PuzzleNotFound(String),
+
+    #[error("texture {texture} has {pieces} pieces, which do not fit the puzzle")]
+    PieceCount { texture: String, pieces: usize },
 }
 
 impl From<Error> for CrateError {
@@ -84,23 +87,28 @@ pub fn solve_puzzle(
         return Err(Error::PuzzleNotFound(texture_name.to_string()).into());
     }
 
-    let (width, height) = CARD_SIZE;
-    let piece_count = pieces.len() / CARD_IMG_COUNT;
-    tracing::debug!(texture_name, pieces = pieces.len(), piece_count, "solving as a card puzzle");
-    let mut puzzle_imgs = Vec::new();
-
-    for i in 0..CARD_IMG_COUNT {
-        let mut puzzle_img = DynamicImage::new_rgba8(width, height);
-
-        for (j, &(x, y)) in CARD_PIECES.iter().enumerate().take(piece_count) {
-            let piece_idx = i * piece_count + j;
-            let piece = pieces.get(piece_idx).ok_or(Repr::OutOfRange(piece_idx, pieces.len()))?;
-
-            imageops::overlay(&mut puzzle_img, &crop_piece(img, piece), x, y);
-        }
-
-        puzzle_imgs.push(puzzle_img);
+    // every image of a card has all the pieces of the layout, otherwise the output is incomplete
+    if pieces.len() != CARD_IMG_COUNT * CARD_PIECES.len() {
+        return Err(
+            Error::PieceCount { texture: texture_name.to_owned(), pieces: pieces.len() }.into()
+        );
     }
+    tracing::debug!(texture_name, pieces = pieces.len(), "solving as a card puzzle");
+
+    let (width, height) = CARD_SIZE;
+    let puzzle_imgs = pieces
+        .as_chunks::<{ CARD_PIECES.len() }>()
+        .0
+        .iter()
+        .map(|image_pieces| {
+            let mut puzzle_img = DynamicImage::new_rgba8(width, height);
+            for (piece, &(x, y)) in image_pieces.iter().zip(&CARD_PIECES) {
+                imageops::overlay(&mut puzzle_img, &crop_piece(img, piece), x, y);
+            }
+
+            puzzle_img
+        })
+        .collect();
 
     Ok(puzzle_imgs)
 }
@@ -295,6 +303,14 @@ mod tests {
         assert!(solve_puzzle("jacket_harm4u", &texture, &views(&texture, &single)).is_err());
         let many = [(1, 1, 50, 50), (60, 1, 50, 50), (120, 1, 50, 50)];
         assert!(solve_puzzle("icon_014mir0123", &texture, &views(&texture, &many)).is_err());
+
+        // cards that do not have exactly 6 pieces for each of the 2 images are not solved
+        let texture = pattern(1024, 1024);
+        for count in [0, 1, 3, 4, 10, 11, 13, 14] {
+            let rects: Vec<_> = (0..count).map(|i| (1 + i * 60, 1, 50, 50)).collect();
+            let result = solve_puzzle("014mir0011_0", &texture, &views(&texture, &rects));
+            assert_eq!(result.unwrap_err().kind(), ErrorKind::Puzzle, "{count} pieces");
+        }
     }
 
     /// Opens an image in the `tests` directory.

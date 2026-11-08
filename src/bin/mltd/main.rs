@@ -1,6 +1,6 @@
-#[cfg(feature = "decode")]
+#[cfg(feature = "decode-audio")]
 mod audio;
-#[cfg(feature = "decode")]
+#[cfg(any(feature = "decrypt-text", feature = "decode-audio"))]
 mod decode;
 
 #[cfg(feature = "download")]
@@ -35,7 +35,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Decrypt text and audio assets
-    #[cfg(feature = "decode")]
+    #[cfg(any(feature = "decrypt-text", feature = "decode-audio"))]
     Decode(self::decode::DecoderArgs),
 
     /// Download assets from MLTD asset server
@@ -82,7 +82,7 @@ fn main() -> Result<()> {
     let runtime = tokio::runtime::Runtime::new()?;
 
     match args.command {
-        #[cfg(feature = "decode")]
+        #[cfg(any(feature = "decrypt-text", feature = "decode-audio"))]
         Command::Decode(d) => self::decode::decode_files(&d),
 
         #[cfg(feature = "download")]

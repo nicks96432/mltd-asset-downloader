@@ -2,7 +2,7 @@
 
 use std::cell::OnceCell;
 use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::time::Duration;
@@ -228,7 +228,8 @@ impl AssetRipper {
 
         let selector =
             scraper::Selector::parse("#app > ul:nth-child(3) a").expect("selector should be valid");
-        let mut bundles: Vec<_> = html.select(&selector).map(|node| node.inner_html()).collect();
+        let mut bundles: Vec<_> =
+            html.select(&selector).map(|node| node.text().collect::<String>()).collect();
 
         // Remove the last two items (Generated Engine Collections, Generated Hierarchy Assets)
         bundles.truncate(bundles.len().saturating_sub(2));
@@ -243,7 +244,7 @@ impl AssetRipper {
         let selector =
             scraper::Selector::parse("#app > ul:nth-child(5) a").expect("selector should be valid");
 
-        Ok(html.select(&selector).map(|node| node.inner_html()).collect())
+        Ok(html.select(&selector).map(|node| node.text().collect::<String>()).collect())
     }
 
     fn path_ids(&self, bundle_no: usize, collection_no: usize) -> Result<Vec<i64>> {
@@ -271,13 +272,15 @@ impl AssetRipper {
 
     /// Reads the object `path_id` of the collection numbered `collection_no` of the bundle
     /// numbered `bundle_no`, which is the `slot`-th collection of the loaded file.
+    ///
+    /// Returns the object and the path Asset Ripper shows for it.
     fn load_object(
         &self,
         slot: usize,
         bundle_no: usize,
         collection_no: usize,
         path_id: i64,
-    ) -> Result<Object> {
+    ) -> Result<(Object, Option<String>)> {
         let path = format!(
             r#"{{"C":{{"B":{{"P":[{}]}},"I":{}}},"D":{}}}"#,
             bundle_no, collection_no, path_id
@@ -289,29 +292,30 @@ impl AssetRipper {
         let info_selector =
             scraper::Selector::parse("#nav-information td").expect("selector should be valid");
 
-        let name = html
+        let name: String = html
             .select(&name_selector)
             .next()
             .ok_or(UnityError::PageLayout("asset name"))?
-            .inner_html();
+            .text()
+            .collect();
         let info_nodes = html.select(&info_selector).collect::<Vec<_>>();
         // asset bundles do not have the original path and bundle name
-        let is_bundle = info_nodes.get(3).is_some_and(|n| n.inner_html() == "AssetBundle");
+        let is_bundle =
+            info_nodes.get(3).is_some_and(|n| n.text().collect::<String>() == "AssetBundle");
         if info_nodes.len() < if is_bundle { 4 } else { 6 } {
             return Err(UnityError::PageLayout("asset information").into());
         }
 
-        let class = Class::from_name(&info_nodes[3].inner_html());
-        let orig_path = match class {
-            // asset bundles contains bundle information only
-            Class::AssetBundle => None,
-            // the Windows version of Asset Ripper uses backslashes and exports under `Assets`,
-            // but the paths are kept lowercase for case-sensitive file systems,
-            // see `read_exported`
-            _ => Some(info_nodes[4].inner_html().replace('\\', "/").to_lowercase()),
-        };
+        let class = Class::from_name(&info_nodes[3].text().collect::<String>());
+        // asset bundles contains bundle information only, and the Windows version of Asset
+        // Ripper uses backslashes
+        let export_path = (class != Class::AssetBundle)
+            .then(|| info_nodes[4].text().collect::<String>().replace('\\', "/"));
+        // Asset Ripper shows the paths under `Assets` with the original case, while the bundle
+        // has them lowercase under `assets`
+        let orig_path = export_path.as_deref().map(str::to_lowercase);
 
-        Ok(Object::new(slot, path_id, class, name, orig_path))
+        Ok((Object::new(slot, path_id, class, name, orig_path), export_path))
     }
 
     /// Exports the primary contents in the Asset Ripper.
@@ -420,6 +424,7 @@ impl Extractor for AssetRipper {
             ripper: self,
             slots: Vec::new(),
             objects: Vec::new(),
+            export_paths: HashMap::default(),
             export: OnceCell::new(),
         };
         bundle.list_objects()?;
@@ -440,6 +445,10 @@ pub struct AssetRipperBundle<'a> {
     slots: Vec<(usize, usize)>,
 
     objects: Vec<Object>,
+
+    /// Paths of the exported files of the objects relative to the export directory, keyed by
+    /// `(Object::collection, Object::path_id)`.
+    export_paths: HashMap<(usize, i64), String>,
 
     /// Primary contents exported by Asset Ripper, which is done at most once.
     export: OnceCell<TempDir>,
@@ -464,8 +473,11 @@ impl AssetRipperBundle<'_> {
                 );
 
                 for path_id in path_ids {
-                    let object =
+                    let (object, export_path) =
                         self.ripper.load_object(slot, bundle_no, collection_no, path_id)?;
+                    if let Some(export_path) = export_path {
+                        self.export_paths.insert((slot, path_id), export_path);
+                    }
                     tracing::trace!(
                         path_id,
                         name = object.name,
@@ -505,13 +517,11 @@ impl AssetRipperBundle<'_> {
 
     /// Reads the exported file of the object.
     fn read_exported(&self, object: &Object) -> Result<Vec<u8>> {
-        let orig_path = object.orig_path.as_deref().ok_or(UnityError::NoOriginalPath)?;
-        // Asset Ripper exports to `Assets`, while the original path is lowercase
-        let exported = match orig_path.strip_prefix("assets/") {
-            Some(rest) => format!("Assets/{rest}"),
-            None => orig_path.to_owned(),
-        };
-        let path: PathBuf = self.export_dir()?.join(exported);
+        let export_path = self
+            .export_paths
+            .get(&(object.collection, object.path_id))
+            .ok_or(UnityError::NoOriginalPath)?;
+        let path = self.export_dir()?.join(export_path);
         tracing::trace!(path = %path.display(), "reading exported file");
 
         std::fs::read(&path).map_err(|e| Repr::io("read exported file", Some(&path), e).into())

@@ -61,10 +61,6 @@ const TEST_CASES: &[TestCase] = &[
                 "decoded audio differs from {}",
                 expected.display()
             );
-
-            // the temporary key file of vgmstream is removed after decoding
-            dir.child(Path::new(case.got_relpath).with_file_name(".hcakey"))
-                .assert(predicate::path::missing());
         },
     },
     TestCase {
@@ -121,7 +117,6 @@ fn test_unpack_raw_then_decode_audio() {
         .success();
 
     assert!(wav_audio(wav.path()) == wav_audio(Path::new("tests/test_acb.wav")));
-    dir.child(relpath.join(".hcakey")).assert(predicate::path::missing());
 }
 
 #[test]

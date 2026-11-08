@@ -3,11 +3,11 @@ use std::path::PathBuf;
 
 use anyhow::{Result, anyhow};
 use clap::{Args, ValueEnum};
-#[cfg(feature = "decode")]
+#[cfg(feature = "decode-audio")]
 use mltd::decode::audio::AudioOptions;
 use mltd::unpack::pipeline::{Options, unpack_all};
 
-#[cfg(feature = "decode")]
+#[cfg(feature = "decode-audio")]
 use crate::audio::AudioArgs;
 use crate::util::glob_files;
 
@@ -50,11 +50,11 @@ pub struct UnpackerArgs {
     pub output: PathBuf,
 
     /// Write encrypted text and audio assets as is
-    #[cfg(feature = "decode")]
+    #[cfg(any(feature = "decrypt-text", feature = "decode-audio"))]
     #[arg(long, alias = "no-decrypt", display_order = 2)]
     pub raw: bool,
 
-    #[cfg(feature = "decode")]
+    #[cfg(feature = "decode-audio")]
     #[clap(flatten)]
     pub audio: AudioArgs,
 
@@ -100,16 +100,20 @@ fn default_asset_ripper_path() -> PathBuf {
 
 impl From<&UnpackerArgs> for Options {
     fn from(args: &UnpackerArgs) -> Self {
-        Self {
-            output: args.output.clone(),
-            image_format: args.image_ext,
-            #[cfg(feature = "decode")]
-            decrypt_text: !args.raw,
-            #[cfg(feature = "decode")]
-            decode_audio: !args.raw,
-            #[cfg(feature = "decode")]
-            audio: AudioOptions::from(&args.audio),
+        let mut options = Self::new(args.output.clone());
+        options.image_format = args.image_ext;
+
+        #[cfg(feature = "decrypt-text")]
+        {
+            options.decrypt_text = !args.raw;
         }
+        #[cfg(feature = "decode-audio")]
+        {
+            options.decode_audio = !args.raw;
+            options.audio = AudioOptions::from(&args.audio);
+        }
+
+        options
     }
 }
 

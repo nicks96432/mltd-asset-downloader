@@ -6,12 +6,13 @@
 //! - text assets are written as is, with the `.bytes` extension removed
 //! - textures are written as images, with the puzzles solved
 //!
-//! If the `decode` feature is enabled, the following steps are also done unless they are
-//! disabled by the options:
+//! The following steps are also done if their features are enabled, unless they are disabled by
+//! the options:
 //!
-//! - encrypted text assets are decrypted, unless `Options::decrypt_text` is `false`
-//! - audio assets are decoded after all the files of the bundle are written, unless
-//!   `Options::decode_audio` is `false`
+//! - with the `decrypt-text` feature, encrypted text assets are decrypted, unless
+//!   `Options::decrypt_text` is `false`
+//! - with the `decode-audio` feature, audio assets are decoded after all the files of the bundle
+//!   are written, unless `Options::decode_audio` is `false`
 
 mod text;
 mod texture;
@@ -22,14 +23,15 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use image::ImageFormat;
 
-#[cfg(feature = "decode")]
-pub use crate::decode::audio::{AudioOptions, KeyFiles, decode as decode_audio};
+#[cfg(feature = "decode-audio")]
+pub use crate::decode::audio::{AudioOptions, decode as decode_audio};
 use crate::error::{Error, Repr, Result};
 use crate::unity::{Bundle, Class, Extractor};
 use crate::util::safe_join;
 
 /// Options of the unpacking.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct Options {
     /// The output directory.
     pub output: PathBuf,
@@ -39,20 +41,18 @@ pub struct Options {
 
     /// Whether to decrypt the encrypted text assets.
     ///
-    /// If it is `false`, they are written as is, and can be decrypted later by
-    /// [`decrypt_file`](crate::decode::text::decrypt_file).
-    #[cfg(feature = "decode")]
+    /// If it is `false`, texts are written as is.
+    #[cfg(feature = "decrypt-text")]
     pub decrypt_text: bool,
 
     /// Whether to decode the audio assets.
     ///
-    /// If it is `false`, they are written as is, and can be decoded later by
-    /// [`decode_audio`].
-    #[cfg(feature = "decode")]
+    /// If it is `false`, audios are written as is.
+    #[cfg(feature = "decode-audio")]
     pub decode_audio: bool,
 
     /// Options of the audio output.
-    #[cfg(feature = "decode")]
+    #[cfg(feature = "decode-audio")]
     pub audio: AudioOptions,
 }
 
@@ -75,22 +75,22 @@ impl Options {
         Self {
             output: output.into(),
             image_format: ImageFormat::Png,
-            #[cfg(feature = "decode")]
+            #[cfg(feature = "decrypt-text")]
             decrypt_text: true,
-            #[cfg(feature = "decode")]
+            #[cfg(feature = "decode-audio")]
             decode_audio: true,
-            #[cfg(feature = "decode")]
+            #[cfg(feature = "decode-audio")]
             audio: AudioOptions::default(),
         }
     }
 
     /// Whether the encrypted text assets should be decrypted.
-    #[cfg_attr(not(feature = "decode"), allow(clippy::unused_self))]
+    #[cfg_attr(not(feature = "decrypt-text"), allow(clippy::unused_self))]
     fn decrypts_text(&self) -> bool {
-        #[cfg(feature = "decode")]
+        #[cfg(feature = "decrypt-text")]
         return self.decrypt_text;
 
-        #[cfg(not(feature = "decode"))]
+        #[cfg(not(feature = "decrypt-text"))]
         return false;
     }
 }
@@ -101,8 +101,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 /// Unpacks the files with the given extractors, each of them handles one file at a time.
 ///
-/// Returns the files that failed to unpack, with the reasons. The temporary files made
-/// for decoding audio are removed before returning, even if a worker panics.
+/// Returns the files that failed to unpack, with the reasons.
 ///
 /// # Example
 ///
@@ -132,29 +131,19 @@ where
 
     let files = Mutex::new(files);
     let failures = Mutex::new(Vec::new());
-    // dropped after all the workers have finished decoding
-    #[cfg(feature = "decode")]
-    let key_files = KeyFiles::default();
 
     std::thread::scope(|scope| {
         for mut extractor in extractors {
             let (files, failures) = (&files, &failures);
-            #[cfg(feature = "decode")]
-            let key_files = &key_files;
 
             scope.spawn(move || {
                 loop {
                     let next = lock(files).next();
                     let Some(path) = next else { break };
 
-                    if let Err(e) = unpack_file(
-                        &mut extractor,
-                        &path,
-                        options,
-                        #[cfg(feature = "decode")]
-                        key_files,
-                    ) {
-                        tracing::warn!(input_path = %path.display(), error = ?e, "failed to unpack file");
+                    if let Err(e) = unpack_file(&mut extractor, &path, options) {
+                        let input_path = path.display();
+                        tracing::warn!(%input_path, error = ?e, "failed to unpack file");
                         lock(failures).push((path, e));
                     }
                 }
@@ -177,26 +166,15 @@ where
 /// # Example
 ///
 /// ```no_run
-/// # #[cfg(feature = "decode")]
-/// # {
 /// use std::path::Path;
 ///
 /// use mltd::unity::RabexExtractor;
-/// use mltd::unpack::pipeline::{KeyFiles, Options, unpack_file};
+/// use mltd::unpack::pipeline::{Options, unpack_file};
 ///
 /// let mut extractor = RabexExtractor::new();
-/// let key_files = KeyFiles::default();
-///
-/// unpack_file(&mut extractor, Path::new("a.unity3d"), &Options::new("output"), &key_files)
-///     .unwrap();
-/// # }
+/// unpack_file(&mut extractor, Path::new("a.unity3d"), &Options::new("output")).unwrap();
 /// ```
-pub fn unpack_file<E>(
-    extractor: &mut E,
-    path: &Path,
-    options: &Options,
-    #[cfg(feature = "decode")] key_files: &KeyFiles,
-) -> Result<()>
+pub fn unpack_file<E>(extractor: &mut E, path: &Path, options: &Options) -> Result<()>
 where
     E: Extractor,
 {
@@ -262,14 +240,14 @@ where
 
     // we should handle audio files after all of them are unpacked because some files may
     // contain informations (Ex: filename) about others
-    #[cfg(feature = "decode")]
+    #[cfg(feature = "decode-audio")]
     if options.decode_audio {
         tracing::debug!(count = audio_paths.len(), "decoding audio files");
         for audio_path in audio_paths {
             let output_dir = audio_path
                 .parent()
                 .ok_or_else(|| Repr::UnsafePath(audio_path.display().to_string()))?;
-            decode_audio(&audio_path, output_dir, &options.audio, key_files)?;
+            decode_audio(&audio_path, output_dir, &options.audio)?;
         }
     }
 
