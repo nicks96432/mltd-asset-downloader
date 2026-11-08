@@ -29,6 +29,28 @@ impl Default for AudioOptions {
     }
 }
 
+/// Checks if `path` is an `.awb` file and has `.acb` next to it.
+///
+/// The streams of such an `.awb` file are decoded with the `.acb`, which also has their names,
+/// so the `.awb` file should not be decoded again.
+///
+/// # Example
+///
+/// ```
+/// use mltd::decode::audio::is_awb_companion;
+///
+/// let dir = assert_fs::TempDir::new().unwrap();
+/// std::fs::write(dir.path().join("a.acb"), b"").unwrap();
+///
+/// assert!(is_awb_companion(&dir.path().join("a.awb")));
+/// assert!(!is_awb_companion(&dir.path().join("b.awb")));
+/// assert!(!is_awb_companion(&dir.path().join("a.acb")));
+/// ```
+#[must_use]
+pub fn is_awb_companion(path: &Path) -> bool {
+    path.extension().is_some_and(|ext| ext == "awb") && path.with_extension("acb").is_file()
+}
+
 /// Decodes all the subsongs of the audio file `path` into `output_dir`.
 ///
 /// The decoded files are named after `path`.

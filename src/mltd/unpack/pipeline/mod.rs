@@ -23,6 +23,8 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 use image::ImageFormat;
 
 #[cfg(feature = "decode-audio")]
+use crate::decode::audio::is_awb_companion;
+#[cfg(feature = "decode-audio")]
 pub use crate::decode::audio::{AudioOptions, decode as decode_audio};
 use crate::error::{Error, Repr, Result};
 use crate::unity::{Bundle, Class, Extractor};
@@ -246,6 +248,11 @@ where
     if options.decode_audio {
         tracing::debug!(count = audio_paths.len(), "decoding audio files");
         for audio_path in audio_paths {
+            if is_awb_companion(&audio_path) {
+                tracing::debug!(path = %audio_path.display(), "decoded with the .acb next to it");
+                continue;
+            }
+
             let output_dir = audio_path
                 .parent()
                 .ok_or_else(|| Repr::UnsafePath(audio_path.display().to_string()))?;
