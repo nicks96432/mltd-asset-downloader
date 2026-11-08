@@ -228,7 +228,8 @@ impl AssetRipper {
 
         let selector =
             scraper::Selector::parse("#app > ul:nth-child(3) a").expect("selector should be valid");
-        let mut bundles: Vec<_> = html.select(&selector).map(|node| node.inner_html()).collect();
+        let mut bundles: Vec<_> =
+            html.select(&selector).map(|node| node.text().collect::<String>()).collect();
 
         // Remove the last two items (Generated Engine Collections, Generated Hierarchy Assets)
         bundles.truncate(bundles.len().saturating_sub(2));
@@ -243,7 +244,7 @@ impl AssetRipper {
         let selector =
             scraper::Selector::parse("#app > ul:nth-child(5) a").expect("selector should be valid");
 
-        Ok(html.select(&selector).map(|node| node.inner_html()).collect())
+        Ok(html.select(&selector).map(|node| node.text().collect::<String>()).collect())
     }
 
     fn path_ids(&self, bundle_no: usize, collection_no: usize) -> Result<Vec<i64>> {
@@ -289,24 +290,26 @@ impl AssetRipper {
         let info_selector =
             scraper::Selector::parse("#nav-information td").expect("selector should be valid");
 
-        let name = html
+        let name: String = html
             .select(&name_selector)
             .next()
             .ok_or(UnityError::PageLayout("asset name"))?
-            .inner_html();
+            .text()
+            .collect();
         let info_nodes = html.select(&info_selector).collect::<Vec<_>>();
         // asset bundles do not have the original path and bundle name
-        let is_bundle = info_nodes.get(3).is_some_and(|n| n.inner_html() == "AssetBundle");
+        let is_bundle =
+            info_nodes.get(3).is_some_and(|n| n.text().collect::<String>() == "AssetBundle");
         if info_nodes.len() < if is_bundle { 4 } else { 6 } {
             return Err(UnityError::PageLayout("asset information").into());
         }
 
-        let class = Class::from_name(&info_nodes[3].inner_html());
+        let class = Class::from_name(&info_nodes[3].text().collect::<String>());
         // asset bundles contains bundle information only
         let orig_path = (class != Class::AssetBundle).then(|| {
             // the Windows version of Asset Ripper uses backslashes, and Asset Ripper shows the
             // paths under `Assets` while the bundle has them under `assets`, see `read_exported`
-            let path = info_nodes[4].inner_html().replace('\\', "/");
+            let path = info_nodes[4].text().collect::<String>().replace('\\', "/");
             path.strip_prefix("Assets/")
                 .map_or_else(|| path.clone(), |rest| format!("assets/{rest}"))
         });
