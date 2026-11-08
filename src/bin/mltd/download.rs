@@ -1,4 +1,3 @@
-use std::fs::create_dir_all;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -9,6 +8,7 @@ use clap::Args;
 use futures_util::StreamExt;
 use human_bytes::human_bytes;
 use indicatif::{MultiProgress, MultiProgressAlignment, ProgressDrawTarget};
+use tokio::fs::create_dir_all;
 
 use mltd::Error;
 use mltd::asset::{Asset, AssetInfo};
@@ -164,7 +164,7 @@ where
 
 pub async fn download_assets(args: &DownloaderArgs) -> Result<()> {
     tracing::debug!(output_dir = %args.output_dir.display(), "creating output directory");
-    create_dir_all(&args.output_dir)?;
+    create_dir_all(&args.output_dir).await?;
 
     let (manifest, manifest_info) = match &args.manifest {
         Some(path) => {
