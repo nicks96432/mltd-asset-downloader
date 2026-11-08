@@ -133,7 +133,7 @@ impl From<&Repr> for ErrorKind {
             #[cfg(feature = "process-image")]
             Repr::Image(_) => ErrorKind::Image,
 
-            #[cfg(any(feature = "decode-audio", feature = "process-image"))]
+            #[cfg(feature = "decode-audio")]
             Repr::OutOfRange { .. } => ErrorKind::OutOfRange,
         }
     }
@@ -223,7 +223,7 @@ pub(crate) enum Repr {
     JSONDeserialize(#[from] serde_json::Error),
 
     /// Array index out of range error.
-    #[cfg(any(feature = "decode-audio", feature = "process-image"))]
+    #[cfg(feature = "decode-audio")]
     #[error("try to access index {0} but the length is {1}")]
     OutOfRange(usize, usize),
 }
