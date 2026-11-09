@@ -106,35 +106,35 @@ pub enum ErrorKind {
 impl From<&Repr> for ErrorKind {
     fn from(value: &Repr) -> Self {
         match value {
-            Repr::Io(_) => ErrorKind::Io,
-            Repr::Manifest(_) => ErrorKind::Manifest,
-            Repr::Network(_) => ErrorKind::Network,
-            Repr::UnknownPlatform(_) => ErrorKind::UnknownPlatform,
-            Repr::UnsafePath(_) => ErrorKind::UnsafePath,
+            Repr::Io(_) => Self::Io,
+            Repr::Manifest(_) => Self::Manifest,
+            Repr::Network(_) => Self::Network,
+            Repr::UnknownPlatform(_) => Self::UnknownPlatform,
+            Repr::UnsafePath(_) => Self::UnsafePath,
 
             #[cfg(feature = "asset-ripper")]
-            Repr::Process(_) => ErrorKind::Process,
+            Repr::Process(_) => Self::Process,
 
             #[cfg(any(feature = "rabex", feature = "asset-ripper"))]
-            Repr::Unity(_) => ErrorKind::Unity,
+            Repr::Unity(_) => Self::Unity,
 
             #[cfg(any(feature = "unpack", feature = "rabex", feature = "asset-ripper"))]
-            Repr::JSONDeserialize(_) => ErrorKind::Deserialize,
+            Repr::JSONDeserialize(_) => Self::Deserialize,
 
             #[cfg(feature = "decode-audio")]
-            Repr::AudioDecode(_) => ErrorKind::AudioDecode,
+            Repr::AudioDecode(_) => Self::AudioDecode,
 
             #[cfg(feature = "decrypt-text")]
-            Repr::Aes(_) => ErrorKind::Aes,
+            Repr::Aes(_) => Self::Aes,
 
             #[cfg(feature = "process-image")]
-            Repr::Puzzle(_) => ErrorKind::Puzzle,
+            Repr::Puzzle(_) => Self::Puzzle,
 
             #[cfg(feature = "process-image")]
-            Repr::Image(_) => ErrorKind::Image,
+            Repr::Image(_) => Self::Image,
 
             #[cfg(feature = "decode-audio")]
-            Repr::OutOfRange { .. } => ErrorKind::OutOfRange,
+            Repr::OutOfRange { .. } => Self::OutOfRange,
         }
     }
 }
@@ -158,10 +158,7 @@ struct PathDisplay<'a>(Option<&'a Path>);
 
 impl std::fmt::Display for PathDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.0 {
-            Some(path) => write!(f, " `{}`", path.display()),
-            None => Ok(()),
-        }
+        self.0.map_or(Ok(()), |path| write!(f, " `{}`", path.display()))
     }
 }
 

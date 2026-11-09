@@ -675,7 +675,7 @@ mod tests {
         let mut extractor = RabexExtractor::new();
         let (bundle, texture) = texture_bundle(&mut extractor);
 
-        let mut foreign = texture.clone();
+        let mut foreign = texture;
         foreign.collection = 99;
         assert!(bundle.texture(&foreign).is_err());
 

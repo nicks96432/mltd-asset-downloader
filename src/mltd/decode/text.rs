@@ -17,7 +17,8 @@ pub(crate) struct AesError {
 }
 
 impl AesError {
-    pub fn unpad() -> Self {
+    #[must_use]
+    pub const fn unpad() -> Self {
         Self { kind: AesErrorKind::Unpad }
     }
 }

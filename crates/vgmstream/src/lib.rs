@@ -41,7 +41,7 @@ impl TryFrom<vgmstream_sys::libvgmstream_sfmt_t> for SampleFormat {
 
 impl From<SampleFormat> for vgmstream_sys::libvgmstream_sfmt_t {
     fn from(value: SampleFormat) -> Self {
-        value as vgmstream_sys::libvgmstream_sfmt_t
+        value as Self
     }
 }
 
@@ -191,7 +191,7 @@ impl From<Config> for vgmstream_sys::libvgmstream_config_t {
 /// Rust version of [`vgmstream_sys::libvgmstream_format_t`].
 ///
 /// Current song info, may be copied around (values are info-only)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Format {
     /* main (always set) */
     /// output channels
@@ -383,11 +383,11 @@ impl VgmStream {
         }
     }
 
-    pub(crate) fn as_ref(&self) -> &vgmstream_sys::libvgmstream_t {
+    pub(crate) const fn as_ref(&self) -> &vgmstream_sys::libvgmstream_t {
         unsafe { self.inner.as_ref() }
     }
 
-    pub(crate) fn as_mut(&mut self) -> &mut vgmstream_sys::libvgmstream_t {
+    pub(crate) const fn as_mut(&mut self) -> &mut vgmstream_sys::libvgmstream_t {
         unsafe { self.inner.as_mut() }
     }
 
@@ -409,10 +409,10 @@ impl VgmStream {
     /// println!("{:?}", vgmstream.format().unwrap());
     /// ```
     pub fn format(&self) -> Result<Format, Error> {
-        match unsafe { self.as_ref().format.as_ref() } {
-            Some(f) => (*f).try_into(),
-            None => Err(Error::NullPointer("vgmstream->format".to_string())),
-        }
+        unsafe { self.as_ref().format.as_ref() }.map_or_else(
+            || Err(Error::NullPointer("vgmstream->format".to_string())),
+            |f| (*f).try_into(),
+        )
     }
 
     /// Decodes next batch of samples.
@@ -549,7 +549,7 @@ pub enum LogLevel {
 
 impl From<LogLevel> for vgmstream_sys::libvgmstream_loglevel_t {
     fn from(level: LogLevel) -> Self {
-        level as vgmstream_sys::libvgmstream_loglevel_t
+        level as Self
     }
 }
 

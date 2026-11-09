@@ -29,7 +29,7 @@ pub(crate) enum ManifestErrorKind {
 }
 
 impl ManifestError {
-    pub fn new(kind: ManifestErrorKind) -> Self {
+    pub const fn new(kind: ManifestErrorKind) -> Self {
         Self { kind }
     }
 }
@@ -80,7 +80,7 @@ impl Manifest {
     /// assert!(diff.removed.contains_key(&"a.unity3d".to_owned()));
     /// ```
     #[must_use]
-    pub fn diff<'a>(&'a self, other: &'a Manifest) -> ManifestDiff<'a> {
+    pub fn diff<'a>(&'a self, other: &'a Self) -> ManifestDiff<'a> {
         let mut diff = ManifestDiff::new();
 
         for (key, value) in other.iter() {

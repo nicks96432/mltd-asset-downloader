@@ -11,7 +11,7 @@ type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 /// A Unity asset bundle is invalid, or an object in it cannot be read.
 #[derive(Debug, ThisError)]
-pub(crate) enum Error {
+pub enum Error {
     /// The file does not start with the `UnityFS` signature.
     #[error("not a UnityFS bundle")]
     NotUnityFs,

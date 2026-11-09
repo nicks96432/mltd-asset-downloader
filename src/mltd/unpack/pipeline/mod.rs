@@ -86,7 +86,7 @@ impl Options {
 
     /// Whether the encrypted text assets should be decrypted.
     #[cfg_attr(not(feature = "decrypt-text"), allow(clippy::unused_self))]
-    fn decrypts_text(&self) -> bool {
+    const fn decrypts_text(&self) -> bool {
         #[cfg(feature = "decrypt-text")]
         return self.decrypt_text;
 

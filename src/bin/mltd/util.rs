@@ -13,7 +13,7 @@ use mltd::util::Progress;
 
 /// Platform variant accepted on the command line.
 #[derive(Debug, Clone, Copy, ValueEnum)]
-pub(crate) enum PlatformArg {
+pub enum PlatformArg {
     /// Android platform
     Android,
 
@@ -32,7 +32,7 @@ impl From<PlatformArg> for Platform {
 }
 
 /// Downloads the manifest of `version` (the latest if `None`), optionally saving the raw file.
-pub(crate) async fn fetch_manifest(
+pub async fn fetch_manifest(
     version: Option<u64>,
     platform: Platform,
     save_path: Option<&Path>,
@@ -68,7 +68,7 @@ pub fn format_size(bytes: usize) -> String {
 ///
 /// A plain number is treated as a version, use `./` to refer to a file.
 #[derive(Debug, Clone)]
-pub(crate) enum ManifestSource {
+pub enum ManifestSource {
     Version(u64),
     Path(PathBuf),
 }
@@ -110,7 +110,7 @@ impl Display for ManifestSource {
 }
 
 /// Reports the progress of a transfer to a [`ProgressBar`].
-pub(crate) struct BarProgress<'a>(pub &'a ProgressBar);
+pub struct BarProgress<'a>(pub &'a ProgressBar);
 
 impl Progress for BarProgress<'_> {
     fn set_length(&mut self, len: u64) {
@@ -124,7 +124,7 @@ impl Progress for BarProgress<'_> {
 
 /// Expands the glob `patterns` to the files they match, and warns about the other matches.
 #[cfg(any(feature = "unpack", feature = "decrypt-text", feature = "decode-audio"))]
-pub(crate) fn glob_files(patterns: &[String]) -> impl Iterator<Item = PathBuf> + '_ {
+pub fn glob_files(patterns: &[String]) -> impl Iterator<Item = PathBuf> + '_ {
     patterns
         .iter()
         .filter_map(|p| match glob::glob(p) {
@@ -153,7 +153,7 @@ pub(crate) fn glob_files(patterns: &[String]) -> impl Iterator<Item = PathBuf> +
 }
 
 #[inline]
-pub(crate) fn create_progress_bar() -> ProgressBar {
+pub fn create_progress_bar() -> ProgressBar {
     let template = "{msg:<60} {bytes:>12} {binary_bytes_per_sec:>12} {eta:>3} [{wide_bar:.cyan/blue}] {percent:>3}%";
 
     ProgressBar::new(0).with_finish(ProgressFinish::Abandon).with_style(

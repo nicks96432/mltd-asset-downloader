@@ -27,7 +27,7 @@ pub(crate) enum AudioDecodeError {
 }
 
 impl AudioDecodeError {
-    pub fn ffmpeg(reason: &'static str, source: Option<ffmpeg_next::Error>) -> Self {
+    pub const fn ffmpeg(reason: &'static str, source: Option<ffmpeg_next::Error>) -> Self {
         Self::FFmpeg { reason, source }
     }
 }
@@ -186,11 +186,14 @@ impl<'a> Encoder<'a> {
             );
         }
 
-        let mut output = match output_options.ffmpeg_options {
-            Some(ref o) => ffmpeg_next::format::output_with(&output_path, o.clone()),
-            None => ffmpeg_next::format::output(&output_path),
-        }
-        .map_err(|e| AudioDecodeError::ffmpeg("failed to open output", Some(e)))?;
+        let mut output = output_options
+            .ffmpeg_options
+            .as_ref()
+            .map_or_else(
+                || ffmpeg_next::format::output(&output_path),
+                |o| ffmpeg_next::format::output_with(&output_path, o.clone()),
+            )
+            .map_err(|e| AudioDecodeError::ffmpeg("failed to open output", Some(e)))?;
 
         if output.format().flags().contains(ffmpeg_next::format::Flags::GLOBAL_HEADER) {
             let flag = ffmpeg_next::codec::Flags::from_bits(
@@ -363,7 +366,7 @@ impl<'a> Encoder<'a> {
         }
 
         loop {
-            if let Ok(None) = self.resampler.flush(&mut self.frame) {
+            if self.resampler.flush(&mut self.frame) == Ok(None) {
                 break;
             }
 
@@ -433,7 +436,7 @@ impl<'a> Encoder<'a> {
     }
 }
 
-fn to_ffmpeg_sample(value: vgmstream::SampleFormat) -> Sample {
+const fn to_ffmpeg_sample(value: vgmstream::SampleFormat) -> Sample {
     match value {
         vgmstream::SampleFormat::Pcm16 => Sample::I16(ffmpeg_next::format::sample::Type::Packed),
         vgmstream::SampleFormat::Pcm24 | vgmstream::SampleFormat::Pcm32 => {
