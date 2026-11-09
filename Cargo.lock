@@ -2998,6 +2998,7 @@ name = "vgmstream"
 version = "0.2.1"
 dependencies = [
  "bitflags",
+ "tempfile",
  "thiserror",
  "vgmstream-sys",
 ]

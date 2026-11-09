@@ -9,3 +9,6 @@ license.workspace = true
 bitflags = "2.13.2"
 thiserror = "2.0.21"
 vgmstream-sys = { path = "../vgmstream-sys" }
+
+[dev-dependencies]
+tempfile = "3.27.0"

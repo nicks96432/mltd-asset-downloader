@@ -696,8 +696,7 @@ mod tests {
 
     #[test]
     fn test_vgmstream_fill() {
-        let mut f =
-            std::fs::File::create(concat!(env!("CARGO_MANIFEST_DIR"), "/test.wav")).unwrap();
+        let mut f = tempfile::tempfile().unwrap();
         let mut vgmstream = open_vgmstream();
         let mut buf = [0u8; 4096];
         let mut total_size = 0usize;
@@ -706,7 +705,7 @@ mod tests {
                 break;
             }
 
-            std::io::Write::write_all(&mut f, &buf).unwrap();
+            std::io::Write::write_all(&mut f, &buf[..size]).unwrap();
             total_size += size;
         }
 
