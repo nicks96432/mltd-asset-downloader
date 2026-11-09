@@ -29,7 +29,6 @@ runs:
         echo "name=$name" >> "$GITHUB_OUTPUT"
         echo "url=https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-28-19-47/$name.zip" >> "$GITHUB_OUTPUT"
 
-    # the GitHub release CDN sometimes fails, so the build is downloaded once for each name
     - name: Cache FFmpeg
       if: inputs.ffmpeg == 'true' && runner.os == 'Windows'
       id: ffmpeg-cache

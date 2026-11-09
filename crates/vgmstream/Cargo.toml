@@ -1,11 +1,14 @@
 [package]
-edition.workspace = true
-license.workspace = true
 name = "vgmstream"
+version = "0.2.1"
+edition.workspace = true
 repository.workspace = true
-version = "0.2.0"
+license.workspace = true
 
 [dependencies]
 bitflags = "2.13.2"
 thiserror = "2.0.21"
 vgmstream-sys = { path = "../vgmstream-sys" }
+
+[dev-dependencies]
+tempfile = "3.27.0"

@@ -22,13 +22,15 @@ impl StreamFile {
     /// ```no_run
     /// use vgmstream::StreamFile;
     ///
-    /// let stream = StreamFile::open(&vgmstream, "path/to/file").unwrap();
+    /// let stream = StreamFile::open("path/to/file").unwrap();
     /// ```
     pub fn open<P>(path: P) -> Result<Self, Error>
     where
         P: AsRef<Path>,
     {
-        let path = CString::new(path.as_ref().to_string_lossy().as_ref()).unwrap();
+        let Ok(path) = CString::new(path.as_ref().to_string_lossy().as_ref()) else {
+            return Err(Error::NullPointer("path".to_string()));
+        };
         let inner = unsafe { vgmstream_sys::libstreamfile_open_from_stdio(path.as_ptr()) };
 
         if inner.is_null() {
@@ -38,6 +40,11 @@ impl StreamFile {
         Ok(Self { inner: unsafe { NonNull::new_unchecked(inner) } })
     }
 
+    /// Wraps the stream in a buffered one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if vgmstream fails to create the buffered stream.
     pub fn buffered(mut self) -> Result<Self, Error> {
         let inner = unsafe { vgmstream_sys::libstreamfile_open_buffered(self.inner.as_ptr()) };
         if inner.is_null() {

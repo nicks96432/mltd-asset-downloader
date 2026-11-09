@@ -14,7 +14,7 @@ use crate::util::glob_files;
 /// Library used to read Unity asset bundles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum Backend {
-    /// External AssetRipper process
+    /// External `AssetRipper` process
     #[cfg(feature = "asset-ripper")]
     AssetRipper,
 
@@ -77,9 +77,8 @@ pub struct UnpackerArgs {
 
 /// Parses string to image format
 fn parse_image_format(s: &str) -> Result<image::ImageFormat> {
-    let image_format = match image::ImageFormat::from_extension(s) {
-        Some(f) => f,
-        None => return Err(anyhow!("invalid image format: {}", s)),
+    let Some(image_format) = image::ImageFormat::from_extension(s) else {
+        return Err(anyhow!("invalid image format: {}", s));
     };
 
     Ok(image_format)
@@ -90,10 +89,7 @@ fn parse_image_format(s: &str) -> Result<image::ImageFormat> {
 fn default_asset_ripper_path() -> PathBuf {
     let mut path = PathBuf::from("AssetRipper");
 
-    path.push(match cfg!(windows) {
-        true => "AssetRipper.GUI.Free.exe",
-        false => "AssetRipper.GUI.Free",
-    });
+    path.push(if cfg!(windows) { "AssetRipper.GUI.Free.exe" } else { "AssetRipper.GUI.Free" });
 
     path
 }

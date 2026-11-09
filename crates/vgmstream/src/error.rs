@@ -13,4 +13,7 @@ pub enum Error {
 
     #[error("{0} is null")]
     NullPointer(String),
+
+    #[error("{0} is out of range")]
+    OutOfRange(&'static str),
 }

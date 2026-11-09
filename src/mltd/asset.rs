@@ -213,7 +213,7 @@ impl Asset<'_> {
         output: Option<&Path>,
         mut progress: Option<&mut dyn Progress>,
     ) -> Result<()> {
-        let output = output.unwrap_or(asset_info.filename.as_ref());
+        let output = output.unwrap_or_else(|| asset_info.filename.as_ref());
 
         // send the request first so that a failed request does not leave an empty file behind
         let res = Self::send_request(asset_info).await?;
@@ -284,7 +284,7 @@ impl Platform {
     /// assert_eq!(Platform::IOS.as_str(), "iOS");
     /// ```
     #[must_use]
-    pub fn as_str(&self) -> &str {
+    pub const fn as_str(&self) -> &str {
         match self {
             Self::Android => "Android",
             Self::IOS => "iOS",
@@ -302,7 +302,7 @@ impl Platform {
     /// assert!(Platform::IOS.user_agent().contains("CFNetwork"));
     /// ```
     #[must_use]
-    pub fn user_agent(&self) -> &str {
+    pub const fn user_agent(&self) -> &str {
         match self {
             Self::Android => "UnityPlayer/2020.3.32f1 (UnityWebRequest/1.0, libcurl/7.80.0-DEV)",
             Self::IOS => "ProductName/5.2.000 CFNetwork/1333.0.4 Darwin/21.5.0",

@@ -6,7 +6,6 @@ use ahash::RandomState;
 use anyhow::{Result, anyhow};
 use clap::Args;
 use futures_util::StreamExt;
-use human_bytes::human_bytes;
 use indicatif::{MultiProgress, MultiProgressAlignment, ProgressDrawTarget};
 use mltd::Error;
 use mltd::asset::{Asset, AssetInfo};
@@ -15,7 +14,9 @@ use mltd::net::AssetVersion;
 use mltd::util::safe_join;
 use tokio::fs::create_dir_all;
 
-use crate::util::{BarProgress, ManifestSource, PlatformArg, create_progress_bar, fetch_manifest};
+use crate::util::{
+    BarProgress, ManifestSource, PlatformArg, create_progress_bar, fetch_manifest, format_size,
+};
 
 type HashSet<T> = std::collections::HashSet<T, RandomState>;
 
@@ -191,7 +192,7 @@ pub async fn download_assets(args: &DownloaderArgs) -> Result<()> {
         "downloading {} of {} asset(s), size {}",
         entries.len(),
         manifest.len(),
-        human_bytes(total_size as f64)
+        format_size(total_size)
     );
 
     tracing::trace!("create MultiProgress");

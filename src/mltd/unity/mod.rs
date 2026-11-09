@@ -117,7 +117,7 @@ pub struct Object {
 }
 
 impl Object {
-    pub(crate) fn new(
+    pub(crate) const fn new(
         collection: usize,
         path_id: i64,
         class: Class,

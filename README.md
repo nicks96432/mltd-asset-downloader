@@ -1,4 +1,4 @@
-# MLTD-asset-downloader
+# MLTD Tools
 
 [![GitHub Build Status](https://img.shields.io/github/actions/workflow/status/nicks96432/mltd-asset-downloader/build.yaml)][build status]
 ![GitHub Repo stars](https://img.shields.io/github/stars/nicks96432/mltd-asset-downloader)
@@ -7,8 +7,7 @@
 
 English | [繁體中文](README.zh-TW.md)
 
-Game asset downloader for THE iDOLM@STER® MILLION LIVE! THEATER DAYS (MLTD),
-written in Rust.
+A game asset downloader and extractor for THE iDOLM@STER® MILLION LIVE! THEATER DAYS (MLTD) written in Rust.
 
 ## Why
 
