@@ -1,4 +1,4 @@
-# MLTD 遊戲資源下載器
+# MLTD 小工具
 
 [![GitHub Build Status](https://img.shields.io/github/actions/workflow/status/nicks96432/mltd-asset-downloader/build.yaml)][build status]
 ![GitHub Repo stars](https://img.shields.io/github/stars/nicks96432/mltd-asset-downloader)
@@ -7,7 +7,7 @@
 
 [English](README.md) | 繁體中文
 
-用Rust寫的偶像大師 百萬人演唱會！ 劇場時光 (MLTD) 遊戲資源下載器
+用Rust寫的偶像大師 百萬人演唱會！ 劇場時光 (MLTD) 遊戲資源下載和提取器
 
 ## 用法
 
