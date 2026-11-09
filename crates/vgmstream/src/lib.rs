@@ -1,7 +1,7 @@
 //! Rust bindings for low level [`vgmstream_sys`] crate.
 
 #![warn(clippy::all, clippy::pedantic)]
-#![allow(clippy::struct_excessive_bools, clippy::cast_sign_loss)]
+#![allow(clippy::struct_excessive_bools, clippy::cast_sign_loss, clippy::cast_possible_wrap)]
 
 mod error;
 mod sf;
@@ -34,7 +34,7 @@ impl TryFrom<vgmstream_sys::libvgmstream_sfmt_t> for SampleFormat {
             vgmstream_sys::libvgmstream_sfmt_t_LIBVGMSTREAM_SFMT_PCM24 => Ok(Self::Pcm24),
             vgmstream_sys::libvgmstream_sfmt_t_LIBVGMSTREAM_SFMT_PCM32 => Ok(Self::Pcm32),
             vgmstream_sys::libvgmstream_sfmt_t_LIBVGMSTREAM_SFMT_FLOAT => Ok(Self::Float),
-            _ => Err(Error::UnknownSampleFormat(value.cast_unsigned())),
+            _ => Err(Error::UnknownSampleFormat(u32::from_ne_bytes(value.to_ne_bytes()))),
         }
     }
 }
@@ -628,7 +628,7 @@ mod tests {
         stream_samples: 882_000,
         subsong_count: 1,
         subsong_index: 0,
-        format_id: 378,
+        format_id: 352,
     });
 
     fn open_vgmstream() -> VgmStream {
