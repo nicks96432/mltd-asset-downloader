@@ -1,5 +1,8 @@
 //! Rust bindings for low level [`vgmstream_sys`] crate.
 
+#![warn(clippy::all, clippy::pedantic)]
+#![allow(clippy::struct_excessive_bools, clippy::cast_sign_loss)]
+
 mod error;
 mod sf;
 
@@ -31,7 +34,7 @@ impl TryFrom<vgmstream_sys::libvgmstream_sfmt_t> for SampleFormat {
             vgmstream_sys::libvgmstream_sfmt_t_LIBVGMSTREAM_SFMT_PCM24 => Ok(Self::Pcm24),
             vgmstream_sys::libvgmstream_sfmt_t_LIBVGMSTREAM_SFMT_PCM32 => Ok(Self::Pcm32),
             vgmstream_sys::libvgmstream_sfmt_t_LIBVGMSTREAM_SFMT_FLOAT => Ok(Self::Float),
-            _ => Err(Error::UnknownSampleFormat(value as _)),
+            _ => Err(Error::UnknownSampleFormat(value.cast_unsigned())),
         }
     }
 }
@@ -197,7 +200,7 @@ pub struct Format {
     pub sample_rate: i32,
     /// output buffer's sample type
     pub sample_format: SampleFormat,
-    /// derived from sample_type (pcm16=0x02, float=0x04, etc)
+    /// derived from `sample_type` (pcm16=0x02, float=0x04, etc)
     pub sample_size: i32,
 
     /* extra info (may be 0 if not known or not relevant) */
@@ -206,8 +209,8 @@ pub struct Format {
 
     /// 0 = none, N = loaded subsong N (1=first)
     pub subsong_index: i32,
-    /// 0 = format has no concept of subsongs  
-    /// N = has N subsongs  
+    /// 0 = format has no concept of subsong
+    /// N = has N subsongs
     /// 1 = format has subsongs, and only 1 for current file
     pub subsong_count: i32,
 
@@ -235,7 +238,7 @@ pub struct Format {
     ///
     /// if `play_forever` is set this is still provided for reference based on non-forever config
     pub play_samples: i64,
-    /// average bitrate of the subsong (slightly bloated vs codec_bitrate; incorrect in rare cases)
+    /// average bitrate of the subsong (slightly bloated vs `codec_bitrate`; incorrect in rare cases)
     ///
     /// not possible / slow to calculate in most cases
     pub stream_bitrate: i32,
@@ -309,9 +312,8 @@ impl VgmStream {
     /// let vgmstream = VgmStream::new().unwrap();
     /// ```
     pub fn new() -> Result<Self, Error> {
-        let inner = match unsafe { vgmstream_sys::libvgmstream_init().as_mut() } {
-            Some(v) => v,
-            None => return Err(Error::VgmStream("libvgmstream_init".to_string())),
+        let Some(inner) = (unsafe { vgmstream_sys::libvgmstream_init().as_mut() }) else {
+            return Err(Error::VgmStream("libvgmstream_init".to_string()));
         };
 
         Ok(Self { inner: inner.into() })
@@ -332,13 +334,13 @@ impl VgmStream {
             Some(cfg) => unsafe {
                 vgmstream_sys::libvgmstream_setup(
                     self.inner.as_mut(),
-                    &mut cfg.clone().into() as *mut _,
+                    std::ptr::from_mut(&mut cfg.clone().into()),
                 );
             },
             None => unsafe {
-                vgmstream_sys::libvgmstream_setup(self.inner.as_mut(), std::ptr::null_mut())
+                vgmstream_sys::libvgmstream_setup(self.inner.as_mut(), std::ptr::null_mut());
             },
-        };
+        }
     }
 
     /// Opens file based on config and prepares it to play if supported.
@@ -350,12 +352,19 @@ impl VgmStream {
     /// * subsong can be 1..N or 0 = default/first
     /// * to check if a file has subsongs, [`Self::open`] default and check
     ///   [`Format::subsong_count`]
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if vgmstream fails to open the stream, or if `subsong` does not fit
+    /// in a `c_int`.
     pub fn open(&mut self, libsf: &mut StreamFile, subsong: usize) -> Result<(), Error> {
+        let subsong = c_int::try_from(subsong).map_err(|_| Error::OutOfRange("subsong"))?;
+
         if unsafe {
             vgmstream_sys::libvgmstream_open_stream(
                 self.inner.as_mut(),
                 libsf.inner.as_ptr(),
-                subsong as c_int,
+                subsong,
             )
         } != 0
         {
@@ -434,9 +443,8 @@ impl VgmStream {
             return Err(Error::VgmStream("libvgmstream_render".to_string()));
         }
 
-        let decoder = match unsafe { self.as_mut().decoder.as_ref() } {
-            Some(d) => d,
-            None => return Err(Error::NullPointer("vgmstream->decoder".to_string())),
+        let Some(decoder) = (unsafe { self.as_mut().decoder.as_ref() }) else {
+            return Err(Error::NullPointer("vgmstream->decoder".to_string()));
         };
 
         let vgmstream_sys::libvgmstream_decoder_t { buf, buf_bytes, .. } = decoder;
@@ -479,20 +487,18 @@ impl VgmStream {
     /// ```
     pub fn fill(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         let Format { sample_size, input_channels, .. } = self.format()?;
+        let frames = c_int::try_from(buf.len() / sample_size as usize / input_channels as usize)
+            .map_err(|_| Error::OutOfRange("buffer length"))?;
+
         if unsafe {
-            vgmstream_sys::libvgmstream_fill(
-                self.inner.as_mut(),
-                buf.as_mut_ptr() as *mut _,
-                (buf.len() / sample_size as usize / input_channels as usize) as c_int,
-            )
+            vgmstream_sys::libvgmstream_fill(self.inner.as_mut(), buf.as_mut_ptr().cast(), frames)
         } < 0
         {
             return Err(Error::VgmStream("libvgmstream_fill".to_string()));
         }
 
-        let decoder = match unsafe { self.as_mut().decoder.as_ref() } {
-            Some(d) => d,
-            None => return Err(Error::NullPointer("vgmstream->decoder".to_string())),
+        let Some(decoder) = (unsafe { self.as_mut().decoder.as_ref() }) else {
+            return Err(Error::NullPointer("vgmstream->decoder".to_string()));
         };
 
         let vgmstream_sys::libvgmstream_decoder_t { buf_bytes, .. } = decoder;
@@ -558,12 +564,13 @@ pub fn set_log(level: LogLevel, callback: Option<unsafe extern "C" fn(c_int, *co
 
 /// Returns a list of supported extensions, such as "adx", "dsp", etc.
 /// Mainly for plugins that want to know which extensions are supported.
+#[must_use]
 pub fn extensions() -> &'static [&'static str] {
     static EXTENSIONS: std::sync::LazyLock<Vec<&'static str>> = std::sync::LazyLock::new(|| {
         let mut ext_count = 0;
 
         unsafe {
-            let exts = vgmstream_sys::libvgmstream_get_extensions(&mut ext_count);
+            let exts = vgmstream_sys::libvgmstream_get_extensions(&raw mut ext_count);
             std::slice::from_raw_parts(exts, ext_count as usize)
         }
         .iter()
@@ -576,13 +583,14 @@ pub fn extensions() -> &'static [&'static str] {
 
 /// Same as [`extensions`], but returns a list what vgmstream considers "common" formats,
 /// such as "wav", "ogg", which usually one doesn't want to associate to vgmstream.
+#[must_use]
 pub fn common_extensions() -> &'static [&'static str] {
     static COMMON_EXTENSIONS: std::sync::LazyLock<Vec<&'static str>> =
         std::sync::LazyLock::new(|| {
             let mut ext_count = 0;
 
             unsafe {
-                let exts = vgmstream_sys::libvgmstream_get_common_extensions(&mut ext_count);
+                let exts = vgmstream_sys::libvgmstream_get_common_extensions(&raw mut ext_count);
                 std::slice::from_raw_parts(exts, ext_count as usize)
             }
             .iter()
@@ -605,7 +613,7 @@ mod tests {
         codec_name: "CRI HCA".to_string(),
         input_channels: 2,
         channels: 2,
-        play_samples: 882000,
+        play_samples: 882_000,
         play_forever: false,
         loop_start: 0,
         loop_end: 0,
@@ -615,9 +623,9 @@ mod tests {
         sample_format: SampleFormat::Float,
         sample_rate: 44100,
         sample_size: 4,
-        stream_bitrate: 117615,
+        stream_bitrate: 117_615,
         stream_name: "song3_00test_bgm".to_string(),
-        stream_samples: 882000,
+        stream_samples: 882_000,
         subsong_count: 1,
         subsong_index: 0,
         format_id: 378,
@@ -679,10 +687,10 @@ mod tests {
         }
 
         assert_eq!(
-            size,
-            ACB_FORMAT.sample_size as usize
-                * ACB_FORMAT.channels as usize
-                * ACB_FORMAT.stream_samples as usize
+            size as u64,
+            ACB_FORMAT.stream_samples.cast_unsigned()
+                * u64::from(ACB_FORMAT.sample_size.cast_unsigned())
+                * u64::from(ACB_FORMAT.channels.cast_unsigned())
         );
     }
 
@@ -703,10 +711,10 @@ mod tests {
         }
 
         assert_eq!(
-            total_size,
-            ACB_FORMAT.sample_size as usize
-                * ACB_FORMAT.channels as usize
-                * ACB_FORMAT.stream_samples as usize
+            total_size as u64,
+            ACB_FORMAT.stream_samples.cast_unsigned()
+                * u64::from(ACB_FORMAT.sample_size.cast_unsigned())
+                * u64::from(ACB_FORMAT.channels.cast_unsigned())
         );
     }
 }

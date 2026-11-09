@@ -52,10 +52,16 @@ pub(crate) async fn fetch_manifest(
 
     tracing::info!(?manifest_info.version,
         "downloaded manifest, total asset size {}",
-        human_bytes(manifest.asset_size() as f64)
+        format_size(manifest.asset_size())
     );
 
     Ok((manifest, manifest_info))
+}
+
+#[inline]
+pub fn format_size(bytes: usize) -> String {
+    #[allow(clippy::cast_precision_loss)]
+    human_bytes(bytes as f64)
 }
 
 /// A manifest given on the command line, either an asset version or a manifest file.
@@ -136,9 +142,10 @@ pub(crate) fn glob_files(patterns: &[String]) -> impl Iterator<Item = PathBuf> +
                 None
             }
         })
-        .filter(|p| match p.is_file() {
-            true => true,
-            false => {
+        .filter(|p| {
+            if p.is_file() {
+                true
+            } else {
                 tracing::warn!(path = %p.display(), "input path is not a file");
                 false
             }

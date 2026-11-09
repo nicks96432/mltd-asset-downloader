@@ -1,3 +1,6 @@
+#![warn(unsafe_code, clippy::all, clippy::pedantic)]
+#![allow(clippy::uninlined_format_args)] // I think uninlined args are more readable
+
 #[cfg(feature = "decode-audio")]
 mod audio;
 #[cfg(any(feature = "decrypt-text", feature = "decode-audio"))]
