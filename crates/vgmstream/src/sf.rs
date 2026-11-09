@@ -22,7 +22,7 @@ impl StreamFile {
     /// ```no_run
     /// use vgmstream::StreamFile;
     ///
-    /// let stream = StreamFile::open(&vgmstream, "path/to/file").unwrap();
+    /// let stream = StreamFile::open("path/to/file").unwrap();
     /// ```
     pub fn open<P>(path: P) -> Result<Self, Error>
     where
