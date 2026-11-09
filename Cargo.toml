@@ -2,6 +2,7 @@
 name = "mltd"
 version = "3.0.0-beta.1"
 edition = { workspace = true }
+rust-version = "1.96"
 description = "A CLI made for assets in THE iDOLM@STER® MILLION LIVE! THEATER DAYS (MLTD)"
 readme = "README.md"
 homepage = { workspace = true }
@@ -93,9 +94,11 @@ cli = [
   "dep:indicatif",
   "dep:tracing-subscriber",
 ]
-debug = []
+decode = [
+  "decode-audio",
+  "decrypt-text",
+]
 download = []
-
 unpack = [
   "asset-ripper",
   "dep:rayon",
@@ -103,6 +106,9 @@ unpack = [
   "process-image",
   "rabex",
 ]
+
+debug = []
+
 asset-ripper = [
   "dep:scraper",
   "dep:serde_json",
@@ -111,6 +117,10 @@ asset-ripper = [
   "reqwest/blocking",
   "reqwest/form",
 ]
+process-image = [
+  "dep:image",
+  "dep:regex",
+]
 rabex = [
   "dep:rabex",
   "dep:serde_json",
@@ -118,15 +128,7 @@ rabex = [
   "dep:texture2ddecoder",
   "process-image",
 ]
-process-image = [
-  "dep:image",
-  "dep:regex",
-]
 
-decode = [
-  "decode-audio",
-  "decrypt-text",
-]
 decode-audio = [
   "dep:ffmpeg-next",
   "dep:rayon",
