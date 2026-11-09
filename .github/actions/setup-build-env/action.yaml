@@ -15,6 +15,29 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Select FFmpeg build
+      if: inputs.ffmpeg == 'true' && runner.os == 'Windows'
+      id: ffmpeg
+      shell: bash
+      run: |
+        if [ "${{ runner.arch }}" = "ARM64" ]; then
+          name=ffmpeg-n9.0.2-37-gae19868753-winarm64-lgpl-shared-9.0
+        else
+          name=ffmpeg-n9.0.2-37-gae19868753-win64-lgpl-shared-9.0
+        fi
+
+        echo "name=$name" >> "$GITHUB_OUTPUT"
+        echo "url=https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-28-19-47/$name.zip" >> "$GITHUB_OUTPUT"
+
+    # the GitHub release CDN sometimes fails, so the build is downloaded once for each name
+    - name: Cache FFmpeg
+      if: inputs.ffmpeg == 'true' && runner.os == 'Windows'
+      id: ffmpeg-cache
+      uses: actions/cache@v6.1.0
+      with:
+        path: ${{ steps.ffmpeg.outputs.name }}
+        key: ${{ steps.ffmpeg.outputs.name }}
+
     - name: Install FFmpeg
       if: inputs.ffmpeg == 'true'
       shell: bash
@@ -25,15 +48,15 @@ runs:
         elif [ "${{ runner.os }}" = "macOS" ]; then
           brew install ffmpeg
         elif [ "${{ runner.os }}" = "Windows" ]; then
-          if [ "${{ runner.arch }}" = "ARM64" ]; then
-            ffmpeg=ffmpeg-n9.0.2-37-gae19868753-winarm64-lgpl-shared-9.0
-          else
-            ffmpeg=ffmpeg-n9.0.2-37-gae19868753-win64-lgpl-shared-9.0
+          if [ "${{ steps.ffmpeg-cache.outputs.cache-hit }}" != "true" ]; then
+            # --fail makes curl retry on HTTP errors, instead of saving the error page as the zip
+            curl --fail --location --retry 5 --retry-all-errors --retry-delay 10 \
+              --connect-timeout 30 --output ffmpeg.zip "${{ steps.ffmpeg.outputs.url }}"
+            unzip -q ffmpeg.zip
+            rm ffmpeg.zip
           fi
 
-          curl --location "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-28-19-47/$ffmpeg.zip" --output ffmpeg.zip
-          unzip -q ffmpeg.zip
-          echo "FFMPEG_DIR=$(cygpath -m "$PWD")/$ffmpeg" >> "$GITHUB_ENV"
+          echo "FFMPEG_DIR=$(cygpath -m "$PWD")/${{ steps.ffmpeg.outputs.name }}" >> "$GITHUB_ENV"
         fi
 
     - name: Install Rust
