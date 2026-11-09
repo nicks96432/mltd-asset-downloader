@@ -1974,8 +1974,8 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "rabex"
-version = "0.2.1"
-source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor?rev=df11b296b6732fa4763422ddd1cb94746ac6ac62#df11b296b6732fa4763422ddd1cb94746ac6ac62"
+version = "0.2.2"
+source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor?rev=1b3290c7e7f536d436efe6ddc62584240cb96b24#1b3290c7e7f536d436efe6ddc62584240cb96b24"
 dependencies = [
  "bitflags",
  "byteorder",

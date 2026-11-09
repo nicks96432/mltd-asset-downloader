@@ -141,7 +141,7 @@ decrypt-text = [
 
 # UnityFS v6 header fix (jakobhellermann/RustyAssetBundleEXtractor#1)
 [patch.crates-io]
-rabex = { git = "https://github.com/jakobhellermann/RustyAssetBundleEXtractor", rev = "df11b296b6732fa4763422ddd1cb94746ac6ac62" }
+rabex = { git = "https://github.com/jakobhellermann/RustyAssetBundleEXtractor", rev = "1b3290c7e7f536d436efe6ddc62584240cb96b24" }
 
 [profile.dev]
 split-debuginfo = "unpacked"
